@@ -17,6 +17,7 @@ import os
 import queue
 import sys
 import threading
+import time
 import traceback
 from datetime import datetime
 
@@ -27,6 +28,7 @@ import analisi as A
 import confronto
 import flashrom as fr
 import mappa as M
+import pico
 import schema
 import serprog
 import tema as T
@@ -149,6 +151,8 @@ class App(tk.Tk):
         self.inizio_fase = None
         self.intervallo_scritto = None
         self.intervallo_lettura = (0, 16 * 1024 * 1024 - 1)
+        self.scheda_bootsel = None       # RP2040 in attesa di firmware
+        self.attesa_bootsel = None
 
         self.flash = None
         percorso = self.conf.get("flashrom")
@@ -169,6 +173,7 @@ class App(tk.Tk):
         self.rileva_porte()
         T.titolo_scuro(self)
         self.after(60, self._pompa)
+        self.after(400, self._guarda_bootsel)
         self.protocol("WM_DELETE_WINDOW", self._chiudi)
 
     # ------------------------------------------------------------ config
@@ -221,6 +226,10 @@ class App(tk.Tk):
         if hasattr(self, "legenda"):
             self.legenda.traduci()
             self._riposo_mappa()
+        # ⚠️ Va chiamata anche all'avvio: _guarda_bootsel aggiorna solo quando
+        # lo stato CAMBIA, e all'inizio "nessuna scheda" non e' un cambiamento.
+        if hasattr(self, "msg_firmware"):
+            self._aggiorna_firmware()
         self._disegna_testata()
         self._aggiorna_stato_flashrom()
         self._aggiorna_scrittura()
@@ -445,8 +454,27 @@ class App(tk.Tk):
         self.b_qualifica.pack(side="left", padx=(6, 0))
         self._nota(cornice_v, "qualifica_nota", 0.5).pack(side="left", padx=8)
 
+        # --- firmware del programmatore
+        filetto = tk.Frame(s, background=T.LINE, height=1)
+        filetto.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(10, 8))
+
+        self._micro(s, "firmware").grid(row=3, column=0, sticky="w")
+        cornice_f = tk.Frame(s, background=T.PANEL)
+        cornice_f.grid(row=3, column=1, columnspan=2, sticky="ew", padx=(6, 0))
+        self.b_firmware = self._etichetta(
+            ttk.Button(cornice_f, style="Secondario.TButton",
+                       command=self.installa_firmware), "fw_installa")
+        self.b_firmware.pack(side="left")
+        self.b_azzera = self._etichetta(
+            ttk.Button(cornice_f, style="Ghost.TButton",
+                       command=self.azzera_scheda), "fw_azzera")
+        self.b_azzera.pack(side="left", padx=6)
+        self.msg_firmware = Messaggio(self, s)
+        self.msg_firmware.widget.grid(row=4, column=0, columnspan=3, sticky="w",
+                                      pady=(7, 0))
+
         self.msg_collegamento = Messaggio(self, s)
-        self.msg_collegamento.widget.grid(row=2, column=0, columnspan=3, sticky="w",
+        self.msg_collegamento.widget.grid(row=5, column=0, columnspan=3, sticky="w",
                                           pady=(7, 0))
         if not serprog.SERIALE:
             self.msg_collegamento.mostra("seriale_assente", AMBRA)
@@ -733,6 +761,122 @@ class App(tk.Tk):
         for bottone in (self.b_identifica, self.b_leggi, self.b_qualifica):
             bottone.state(["!disabled"] if self.flash and not self.occupato
                           else ["disabled"])
+
+
+    # ------------------------------------------------- firmware del Pico
+    def _percorso_firmware(self):
+        """pico_serprog.uf2: dentro l'eseguibile, accanto, in firmware\\."""
+        for radice in (getattr(sys, "_MEIPASS", None), cartella_app()):
+            if not radice:
+                continue
+            for candidato in (os.path.join(radice, "firmware", pico.NOME_FIRMWARE),
+                              os.path.join(radice, pico.NOME_FIRMWARE)):
+                if os.path.isfile(candidato):
+                    return candidato
+        return None
+
+    def _guarda_bootsel(self):
+        """Ogni due secondi: c'e' una scheda che aspetta il firmware?"""
+        if not self.occupato:
+            try:
+                schede = pico.schede_in_bootsel()
+            except Exception:                          # noqa: BLE001
+                schede = []
+            nuova = schede[0] if schede else None
+            prima = self.scheda_bootsel.unita if self.scheda_bootsel else None
+            adesso = nuova.unita if nuova else None
+            if adesso != prima:
+                self.scheda_bootsel = nuova
+                if nuova:
+                    self.registro("   RP2040 in BOOTSEL su %s (%s)" % (
+                        nuova.lettera, nuova.identificativo), "io")
+                self._aggiorna_firmware()
+        self.attesa_bootsel = self.after(2000, self._guarda_bootsel)
+
+    def _aggiorna_firmware(self):
+        scheda = self.scheda_bootsel
+        if scheda is None:
+            self.msg_firmware.mostra("fw_nessuna", GRIGIO)
+            self.b_firmware.state(["disabled"])
+            self.b_azzera.state(["disabled"])
+            return
+        firmware = self._percorso_firmware()
+        if firmware:
+            self.msg_firmware.mostra("fw_trovata", VERDE, modello=scheda.modello,
+                                     unita=scheda.lettera)
+        else:
+            self.msg_firmware.mostra("fw_assente", AMBRA)
+        acceso = ["!disabled"] if not self.occupato else ["disabled"]
+        self.b_azzera.state(acceso)
+        self.b_firmware.state(acceso if firmware else ["disabled"])
+
+    def _programma(self, percorso_uf2, chiave_avvio, chiave_fine, aspetta_porta):
+        """Copia un .uf2 sulla scheda e racconta com'e' andata."""
+        scheda = self.scheda_bootsel
+        if scheda is None or not percorso_uf2:
+            return
+
+        def lavoro():
+            self._messaggio_da_thread(self.msg_firmware, chiave_avvio, AMBRA)
+            fatto, motivo = pico.installa(percorso_uf2, scheda,
+                                          su_riga=self._riga_da_thread)
+            if not fatto:
+                return ("errore", motivo, None)
+            if not aspetta_porta:
+                return ("fatto", None, None)
+            self._messaggio_da_thread(self.msg_firmware, "fw_attendo", GRIGIO)
+            # la scheda riparte come porta seriale: le si da' tempo
+            for _ in range(30):
+                time.sleep(0.5)
+                for dispositivo, _descrizione, sospetto in serprog.elenca_porte():
+                    if not sospetto:
+                        continue
+                    diagnostica = serprog.interroga(dispositivo, BAUD)
+                    if diagnostica.ok and diagnostica.parla_spi:
+                        return ("pronto", dispositivo, diagnostica)
+            return ("muto", None, None)
+
+        def fine(risultato):
+            stato, dato, diagnostica = risultato
+            self.scheda_bootsel = None
+            if stato == "errore":
+                self.msg_firmware.mostra("fw_errore", ROSSO, motivo=dato)
+            elif stato == "pronto":
+                self.msg_firmware.mostra("fw_pronto", VERDE, porta=dato)
+                self.registro("   %s, iface v%s, bus %s" % (
+                    diagnostica.nome, diagnostica.versione,
+                    diagnostica.bus_leggibile), "bene")
+                self.rileva_porte()
+            elif stato == "muto":
+                self.msg_firmware.mostra("fw_non_riappare", AMBRA)
+            else:
+                self.msg_firmware.mostra(chiave_fine, VERDE)
+            self._aggiorna_firmware()
+
+        self._avvia(lavoro, fine, "firmware")
+
+    def installa_firmware(self):
+        self._programma(self._percorso_firmware(), "fw_installando",
+                        "fw_pronto", aspetta_porta=True)
+
+    def azzera_scheda(self):
+        """Riporta la scheda allo stato di fabbrica. Il .uf2 lo generiamo noi."""
+        scheda = self.scheda_bootsel
+        if scheda is None:
+            return
+        testo = self.L("fw_azzera_testo", modello=scheda.modello,
+                       unita=scheda.lettera, byte=A.leggibile(pico.FLASH_PICO))
+        if not Conferma(self, self.L, testo, self.tema).confermato:
+            return
+        percorso = os.path.join(cartella_config(), "azzera.uf2")
+        try:
+            os.makedirs(cartella_config(), exist_ok=True)
+            pico.genera_cancellazione(percorso)
+        except OSError as e:
+            self.msg_firmware.mostra("fw_errore", ROSSO, motivo="%s" % e)
+            return
+        self._programma(percorso, "fw_azzerando", "fw_azzerato",
+                        aspetta_porta=False)
 
     # ------------------------------------------------------------ porte
     def rileva_porte(self):
@@ -1415,6 +1559,7 @@ class App(tk.Tk):
                         al_termine(risultato)
                     self._salva_registro_automatico(nome)
                     self._aggiorna_scrittura()
+                    self._aggiorna_firmware()
                     self._salva_config()
         except queue.Empty:
             pass

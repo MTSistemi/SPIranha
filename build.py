@@ -99,6 +99,13 @@ def costruisci_exe():
         args += ["--add-binary", "%s%sflashrom" % (flashrom, os.pathsep)]
     else:
         print("⚠️ flashrom/flashrom.exe non c'e': l'eseguibile NON sara' portatile")
+    # anche il firmware del programmatore viaggia dentro, se c'e'
+    fw = os.path.join(QUI, "firmware", "pico_serprog.uf2")
+    if os.path.isfile(fw):
+        args += ["--add-data", "%s%sfirmware" % (fw, os.pathsep)]
+    else:
+        print("⚠️ firmware/pico_serprog.uf2 non c'e': niente installazione del "
+              "firmware dall'eseguibile")
     args.append(os.path.join(QUI, "SPIranha.pyw"))
     if esegui(args) != 0:
         sys.exit("PyInstaller ha fallito")

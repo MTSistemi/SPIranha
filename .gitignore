@@ -1,4 +1,4 @@
-# costruzione
+# build output
 build/
 dist/
 .venv/
@@ -6,19 +6,23 @@ dist/
 __pycache__/
 *.pyc
 
-# generati
+# generated
 programmatore.ico
 tests/lavoro/
+tests/lavoro-gui/
 tests/corto.rom
 
-# ⚠️ flashrom si compila, non si committa: vedi flashrom/PROVENIENZA.md
+# Built, not committed: both are GPL, and shipping the binary would mean
+# shipping the corresponding source. See flashrom/PROVENANCE.md and
+# firmware/README.md.
 flashrom/flashrom.exe
+firmware/*.uf2
 
-# immagini di BIOS: sono il dump di una scheda precisa, 16 MiB l'una
+# BIOS images: the dump of one specific board, 16 MiB each
 *.rom
 *.bin
 *.fd
 
-# roba di sistema
+# system clutter
 Thumbs.db
 desktop.ini

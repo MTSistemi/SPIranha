@@ -12,7 +12,7 @@ They open and close the window by themselves; there is nothing to click.
 
 *Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
 
-## `test_gui.py` — 21 checks
+## `test_gui.py` — 29 checks
 
 The window and its rules, without touching flashrom: construction, live
 IT↔EN switching, everything disabled when flashrom is missing, layout file
@@ -21,6 +21,10 @@ including an image of the wrong size, which must be rejected.
 
 It also checks the **dry-run rule**: without one the write button stays off, and
 changing the image makes a previous dry run lapse by itself.
+
+It also covers the UF2 handling in `pico.py`: the generated reset image is
+read back and checked block by block, and both a corrupted file and a
+non-UF2 file must be refused before they could ever reach a board.
 
 **This test fabricates its own fixtures** — a layout file and two 16 MiB images
 — so it needs nothing from outside and runs in CI on every push.

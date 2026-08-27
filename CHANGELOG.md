@@ -27,10 +27,15 @@ First public release.
   (`_FVH`, `NVAR`, `APCB`, `$PSP`) and flashrom layout generation.
 - **Wiring diagram** drawn in code, showing both the RP2040 and the target
   header, with the pin-1 marker.
+- **Programmer firmware installation.** A board held in BOOTSEL is detected
+  within seconds; SPIranha validates the `.uf2`, copies it, then waits for the
+  serial port and queries the firmware before declaring the programmer ready.
+- **Reset to factory** for an RP2040 board, using a `.uf2` SPIranha generates
+  itself rather than a downloaded binary.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 58 automated checks, including an end-to-end write against an emulated
+- 66 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Notes

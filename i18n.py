@@ -231,6 +231,58 @@ T = {
               "written. Close anyway?",
     },
 
+    # --- firmware del programmatore ----------------------------------------
+    "firmware": {"it": "Firmware", "en": "Firmware"},
+    "fw_nessuna": {
+        "it": "Nessuna scheda in BOOTSEL. Per programmarne una: staccarla, "
+              "tenere premuto BOOTSEL, riattaccarla.",
+        "en": "No board in BOOTSEL. To program one: unplug it, hold BOOTSEL, "
+              "plug it back in.",
+    },
+    "fw_trovata": {
+        "it": "{modello} su {unita} — pronta per il firmware",
+        "en": "{modello} on {unita} — ready for firmware",
+    },
+    "fw_installa": {"it": "Rendila programmatore", "en": "Make it a programmer"},
+    "fw_azzera": {"it": "Riporta a nuovo", "en": "Reset to factory"},
+    "fw_assente": {
+        "it": "firmware/pico_serprog.uf2 non c\u0027e\u0027: vedi firmware/README.md",
+        "en": "firmware/pico_serprog.uf2 is missing: see firmware/README.md",
+    },
+    "fw_installando": {"it": "Copio il firmware\u2026", "en": "Copying the firmware\u2026"},
+    "fw_attendo": {
+        "it": "Firmware copiato. La scheda si riavvia: aspetto la porta seriale\u2026",
+        "en": "Firmware copied. The board reboots: waiting for the serial port\u2026",
+    },
+    "fw_pronto": {
+        "it": "Programmatore pronto su {porta}.",
+        "en": "Programmer ready on {porta}.",
+    },
+    "fw_non_riappare": {
+        "it": "Firmware copiato, ma la porta seriale non \u00e8 comparsa. Staccare e "
+              "riattaccare la scheda.",
+        "en": "Firmware copied, but no serial port appeared. Unplug the board and "
+              "plug it back in.",
+    },
+    "fw_errore": {"it": "{motivo}", "en": "{motivo}"},
+    "fw_azzera_titolo": {
+        "it": "Riportare la scheda a nuovo",
+        "en": "Reset the board to factory",
+    },
+    "fw_azzera_testo": {
+        "it": "Sto per cancellare tutta la flash di {modello} su {unita}: "
+              "{byte}.\n\nLa scheda torner\u00e0 come appena comprata e ricomparir\u00e0 "
+              "come disco RPI-RP2. Il firmware si potr\u00e0 rimettere da qui.",
+        "en": "About to erase the whole flash of {modello} on {unita}: {byte}.\n\n"
+              "The board goes back to as-bought and will show up again as the "
+              "RPI-RP2 drive. The firmware can be put back from here.",
+    },
+    "fw_azzerando": {"it": "Cancello la flash\u2026", "en": "Erasing the flash\u2026"},
+    "fw_azzerato": {
+        "it": "Scheda riportata a nuovo: ricomparir\u00e0 come disco RPI-RP2.",
+        "en": "Board reset: it will show up again as the RPI-RP2 drive.",
+    },
+
     # --- mappa del chip ----------------------------------------------------
     "sez_mappa": {"it": "Mappa del chip", "en": "Chip map"},
     "leg_ignoto": {"it": "da fare", "en": "pending"},

@@ -40,10 +40,12 @@ Name: "desktopicon"; Description: "{cm:CreaIcona}"; GroupDescription: "{cm:Addit
 
 [Files]
 Source: "dist\{#Eseguibile}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "LEGGIMI.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
-Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
-; flashrom, se e' stato messo accanto al progetto, viene portato dentro.
+Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
+Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "docs\it\LEGGIMI.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+; flashrom and the programmer firmware, if they were put next to the project
 Source: "flashrom\*"; DestDir: "{app}\flashrom"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "firmware\*"; DestDir: "{app}\firmware"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#Nome}"; Filename: "{app}\{#Eseguibile}"

@@ -146,6 +146,45 @@ def prova(finestra):
         finestra.registro("prova di registro")
         controlla("registro popolato", len(finestra.righe_registro) == 1)
 
+
+        # 12. il modulo pico: formato UF2, senza bisogno di hardware
+        import pico
+        nuke = os.path.join(LAVORO, "azzera.uf2")
+        pico.genera_cancellazione(nuke, byte=64 * 1024)
+        blocchi, primo, ultimo, famiglie = pico.leggi_uf2(nuke)
+        controlla("uf2 generato: 256 blocchi", blocchi == 256, str(blocchi))
+        controlla("uf2 generato: parte dalla flash",
+                  primo == pico.BASE_FLASH, hex(primo))
+        controlla("uf2 generato: copre i 64 KiB chiesti",
+                  ultimo == pico.BASE_FLASH + 64 * 1024 - 1, hex(ultimo))
+        controlla("uf2 generato: famiglia RP2040",
+                  famiglie == {pico.FAMIGLIA_RP2040})
+        with open(nuke, "rb") as f:
+            testa = f.read(pico.BLOCCO)
+        controlla("uf2 generato: carico tutto 0xFF",
+                  testa[32:32 + pico.CARICO] == b"\xff" * pico.CARICO)
+
+        # un file rovinato dev'essere rifiutato PRIMA di arrivare alla scheda
+        rotto = os.path.join(LAVORO, "rotto.uf2")
+        with open(nuke, "rb") as f:
+            dati = bytearray(f.read())
+        dati[4] = (dati[4] + 1) % 256          # sporca la seconda magia
+        with open(rotto, "wb") as f:
+            f.write(dati)
+        try:
+            pico.leggi_uf2(rotto)
+            controlla("uf2 rovinato rifiutato", False, "non ha protestato")
+        except ValueError as e:
+            controlla("uf2 rovinato rifiutato", True, "%s" % e)
+        try:
+            pico.leggi_uf2(os.path.join(LAVORO, "layout.txt"))
+            controlla("file non-uf2 rifiutato", False, "non ha protestato")
+        except ValueError:
+            controlla("file non-uf2 rifiutato", True)
+
+        controlla("nessuna scheda in BOOTSEL adesso",
+                  isinstance(pico.schede_in_bootsel(), list))
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

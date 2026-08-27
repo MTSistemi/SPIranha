@@ -69,6 +69,27 @@ and what is inside — and writes the flashrom layout file for you.
 inside the executable. It shows both ends: which Pico pin goes to which header
 pad, with the pin-1 marker and the warnings that matter.
 
+## Turning a bare RP2040 into the programmer
+
+You do not need to find a UF2 and drag it around yourself. Hold **BOOTSEL**,
+plug the board in, and SPIranha notices it within a couple of seconds and
+offers to program it. It validates the firmware file first — magic numbers,
+block numbering, payload size, RP2040 family ID — then copies it, waits for the
+board to come back as a serial port, and **asks the firmware who it is**. Only
+then does it say the programmer is ready.
+
+There is also **Reset to factory**, which puts a board back to as-bought. That
+one needs no downloaded file: SPIranha builds the `.uf2` itself, writing `0xFF`
+across the flash. The bootloader erases each sector before writing it, so the
+flash ends up erased and the board returns to BOOTSEL on its own.
+
+Nothing here can brick a board: the RP2040 bootloader lives in ROM, and a board
+with an empty flash always comes back as `RPI-RP2`.
+
+⚠️ `firmware/pico_serprog.uf2` is **not in this repository** — it is GPL and has
+to be built. [`firmware/README.md`](firmware/README.md) has the exact commit,
+the toolchain, and the one-line patch needed to compile it with GCC 15 or newer.
+
 ## Hardware
 
 | | |
@@ -132,8 +153,8 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py        # 21 checks, no hardware needed
-python tests\test_full.py   # 37 checks, needs flashrom with 'dummy'
+python tests\test_gui.py     # 29 checks, no hardware needed
+python tests\test_full.py    # 37 checks, needs flashrom built with 'dummy'
 ```
 
 `test_full.py` drives the real window and the real flashrom against an
