@@ -123,10 +123,10 @@ BSS138 and never turns on with its gate at 1.8 V, because what counts is the
 gate threshold, not the current. And the pull-ups are 1 kΩ, not the textbook
 10 kΩ: those come from 100 kHz I²C, and here the rising edge is made by the
 resistor — 10 kΩ gives a 700 ns rise and the two reads already disagree at
-1 MHz. It also says
-what the drawing cannot: the MOSFET version needs the speed dropped to 1 MHz
-because the rising edge comes from the resistor, and a 74LVC8T245 holds 12 MHz
-if you would rather buy one part than eight.
+1 MHz. With 1 kΩ the MOSFET version holds 4 MHz; to keep the full 12 MHz it
+takes a fixed-direction translator (`SN74LVC8T245`), and not a `TXS0108E`, which
+is built for open-drain buses and misbehaves on SPI. Ready-made boards are
+listed too, for anyone who would rather buy one part than solder twelve.
 
 **When flashrom does not know the chip, SPIranha asks the chip itself.**
 It sends the JEDEC id command over the programmer and, if the chip has one,
