@@ -25,6 +25,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 import analisi as A
+import anagrafica
 import confronto
 import flashrom as fr
 import mappa as M
@@ -151,6 +152,7 @@ class App(tk.Tk):
         self.inizio_fase = None
         self.intervallo_scritto = None
         self.intervallo_lettura = (0, 16 * 1024 * 1024 - 1)
+        self.schede_note = anagrafica.Anagrafica(self.conf.get("schede"))
         self.scheda_bootsel = None       # RP2040 in attesa di firmware
         self.attesa_bootsel = None
 
@@ -196,6 +198,7 @@ class App(tk.Tk):
             "layout": self.var_layout.get(),
             "atteso": self.var_atteso.get(),
             "dettagli": bool(self.var_dettagli.get()),
+            "schede": self.schede_note.come_elenco(),
         })
         try:
             os.makedirs(cartella_config(), exist_ok=True)
@@ -473,12 +476,25 @@ class App(tk.Tk):
             ttk.Button(cornice_f, style="Ghost.TButton",
                        command=self.rientra_in_bootsel), "fw_bootsel")
         self.b_bootsel.pack(side="left")
+
+        self.et_nome = self._micro(s, "nome_scheda")
+        self.et_nome.grid(row=4, column=0, sticky="w", pady=(7, 0))
+        cornice_n = tk.Frame(s, background=T.PANEL)
+        cornice_n.grid(row=4, column=1, columnspan=2, sticky="ew", padx=(6, 0),
+                       pady=(7, 0))
+        self.var_nome_scheda = tk.StringVar()
+        self.campo_nome = ttk.Entry(cornice_n, textvariable=self.var_nome_scheda,
+                                    width=26, font=self.tema.f_testo)
+        self.campo_nome.pack(side="left")
+        self.campo_nome.bind("<Return>", lambda _e: self.battezza_scheda())
+        self.campo_nome.bind("<FocusOut>", lambda _e: self.battezza_scheda())
+        self._nota(cornice_n, "nome_scheda_nota", 0.5).pack(side="left", padx=8)
         self.msg_firmware = Messaggio(self, s)
-        self.msg_firmware.widget.grid(row=4, column=0, columnspan=3, sticky="w",
+        self.msg_firmware.widget.grid(row=5, column=0, columnspan=3, sticky="w",
                                       pady=(7, 0))
 
         self.msg_collegamento = Messaggio(self, s)
-        self.msg_collegamento.widget.grid(row=5, column=0, columnspan=3, sticky="w",
+        self.msg_collegamento.widget.grid(row=6, column=0, columnspan=3, sticky="w",
                                           pady=(7, 0))
         if not serprog.SERIALE:
             self.msg_collegamento.mostra("seriale_assente", AMBRA)
@@ -790,6 +806,8 @@ class App(tk.Tk):
             prima = self.scheda_bootsel.unita if self.scheda_bootsel else None
             adesso = nuova.unita if nuova else None
             if adesso != prima:
+                if nuova is None:
+                    pico.dimentica_seriali()
                 self.scheda_bootsel = nuova
                 if nuova:
                     self.registro("   RP2040 in BOOTSEL su %s (%s)" % (
@@ -802,6 +820,14 @@ class App(tk.Tk):
         porta = self._porta_programmatore()
         self.b_bootsel.state(["!disabled"] if porta and not self.occupato
                              else ["disabled"])
+
+        # il campo del nome segue la scheda che si sta guardando
+        run, boot, _etichetta = self._scheda_corrente()
+        nome = self.schede_note.nome(run=run, boot=boot) or ""
+        if not self.campo_nome.focus_get() is self.campo_nome:
+            self.var_nome_scheda.set(nome)
+        self.campo_nome.state(["!disabled"] if (run or boot) else ["disabled"])
+
         scheda = self.scheda_bootsel
         if scheda is None:
             self.msg_firmware.mostra("fw_nessuna", GRIGIO)
@@ -809,14 +835,38 @@ class App(tk.Tk):
             self.b_azzera.state(["disabled"])
             return
         firmware = self._percorso_firmware()
-        if firmware:
-            self.msg_firmware.mostra("fw_trovata", VERDE, modello=scheda.modello,
-                                     unita=scheda.lettera)
-        else:
+        if not firmware:
             self.msg_firmware.mostra("fw_assente", AMBRA)
+        elif nome:
+            self.msg_firmware.mostra("fw_trovata_nome", VERDE, nome=nome,
+                                     modello=scheda.modello,
+                                     unita=scheda.lettera,
+                                     seriale=scheda.seriale or "?")
+        else:
+            self.msg_firmware.mostra("fw_trovata_anonima", VERDE,
+                                     modello=scheda.modello,
+                                     unita=scheda.lettera,
+                                     seriale=scheda.seriale or "?")
         acceso = ["!disabled"] if not self.occupato else ["disabled"]
         self.b_azzera.state(acceso)
         self.b_firmware.state(acceso if firmware else ["disabled"])
+
+    def battezza_scheda(self):
+        """Da' un nome alla scheda che si sta guardando. Vuoto = la dimentica."""
+        run, boot, _e = self._scheda_corrente()
+        if not (run or boot):
+            return
+        nome = self.var_nome_scheda.get().strip()
+        prima = self.schede_note.nome(run=run, boot=boot) or ""
+        if nome == prima:
+            return
+        self.schede_note.imposta_nome(nome, run=run, boot=boot)
+        self._salva_config()
+        self.rileva_porte()
+        if nome:
+            self.msg_firmware.mostra("fw_battezzata", VERDE, nome=nome)
+        else:
+            self.msg_firmware.mostra("fw_dimenticata", GRIGIO)
 
     def _programma(self, percorso_uf2, chiave_avvio, chiave_fine, aspetta_porta):
         """Copia un .uf2 sulla scheda e racconta com'e' andata."""
@@ -827,7 +877,7 @@ class App(tk.Tk):
         # ⚠️ Le porte serprog gia' presenti si annotano PRIMA: dopo si aspetta
         # una porta NUOVA. Cercandone una qualunque, con un programmatore gia'
         # collegato si direbbe "fatto" anche a copia fallita.
-        prima = set(d for d, _n, sospetto in serprog.elenca_porte() if sospetto)
+        prima = set(d for d, _n, sospetto, _s in serprog.elenca_porte() if sospetto)
 
         def lavoro():
             self._messaggio_da_thread(self.msg_firmware, chiave_avvio, AMBRA)
@@ -841,7 +891,7 @@ class App(tk.Tk):
             # la scheda riparte come porta seriale: le si da' tempo
             for _ in range(30):
                 time.sleep(0.5)
-                adesso = set(d for d, _n, sospetto in serprog.elenca_porte()
+                adesso = set(d for d, _n, sospetto, _s in serprog.elenca_porte()
                              if sospetto)
                 for dispositivo in sorted(adesso - prima):
                     diagnostica = serprog.interroga(dispositivo, BAUD)
@@ -855,6 +905,13 @@ class App(tk.Tk):
             if stato == "errore":
                 self.msg_firmware.mostra("fw_errore", ROSSO, motivo=dato)
             elif stato == "pronto":
+                # ⚠️ Qui e' l'unico momento in cui i due identificativi della
+                # stessa scheda si toccano: era in BOOTSEL, ora e' quella porta.
+                if scheda.seriale:
+                    seriale_run = self._seriale_di_porta(dato)
+                    if seriale_run:
+                        self.schede_note.collega(seriale_run, scheda.seriale)
+                        self._salva_config()
                 self.msg_firmware.mostra("fw_pronto", VERDE, porta=dato)
                 self.registro("   %s, iface v%s, bus %s" % (
                     diagnostica.nome, diagnostica.versione,
@@ -870,16 +927,39 @@ class App(tk.Tk):
 
     def _porta_programmatore(self):
         """La porta di un programmatore collegato adesso, se c'e'."""
-        for dispositivo, _descrizione, sospetto in serprog.elenca_porte():
+        for dispositivo, _descrizione, sospetto, _seriale in serprog.elenca_porte():
             if sospetto:
                 return dispositivo
         return None
+
+    def _seriale_di_porta(self, porta):
+        for dispositivo, _d, _s, seriale in serprog.elenca_porte():
+            if dispositivo == porta:
+                return seriale
+        return None
+
+    def _scheda_corrente(self):
+        """(chiave_run, chiave_boot, etichetta) di cio' che si sta guardando.
+
+        In BOOTSEL comanda la scheda-disco; altrimenti il programmatore
+        collegato. Sono due identificativi diversi della stessa cosa, vedi
+        anagrafica.py.
+        """
+        if self.scheda_bootsel is not None:
+            boot = self.scheda_bootsel.seriale
+            return None, boot, boot
+        porta = self._porta_programmatore()
+        if porta:
+            run = self._seriale_di_porta(porta)
+            return run, None, run
+        return None, None, None
 
     def rientra_in_bootsel(self):
         """Rimette il programmatore in modalita' aggiornamento, da software."""
         porta = self._porta_programmatore()
         if not porta:
             return
+        seriale_prima = self._seriale_di_porta(porta)
 
         def lavoro():
             self._messaggio_da_thread(self.msg_firmware, "fw_bootsel_provo",
@@ -897,6 +977,10 @@ class App(tk.Tk):
         def fine(risultato):
             stato, scheda, _ = risultato
             if stato == "bootsel":
+                # stessa cosa al contrario: era quella porta, ora e' quel disco
+                if seriale_prima and scheda.seriale:
+                    self.schede_note.collega(seriale_prima, scheda.seriale)
+                    self._salva_config()
                 self.scheda_bootsel = scheda
                 self.msg_firmware.mostra("fw_bootsel_ok", VERDE,
                                          unita=scheda.lettera)
@@ -912,13 +996,34 @@ class App(tk.Tk):
                         "fw_pronto", aspetta_porta=True)
 
     def azzera_scheda(self):
-        """Riporta la scheda allo stato di fabbrica. Il .uf2 lo generiamo noi."""
+        """Riporta la scheda allo stato di fabbrica. Il .uf2 lo generiamo noi.
+
+        ⚠️ DUE CONSENSI, e il secondo e' legato al SERIALE: con tre schede
+        identiche sul tavolo, la domanda «sei sicuro?» non dice niente su QUALE
+        stai cancellando. Ribattere le ultime quattro cifre obbliga a guardare
+        quella giusta.
+        """
         scheda = self.scheda_bootsel
         if scheda is None:
             return
-        testo = self.L("fw_azzera_testo", modello=scheda.modello,
-                       unita=scheda.lettera, byte=A.leggibile(pico.FLASH_PICO))
-        if not Conferma(self, self.L, testo, self.tema).confermato:
+        nome = self.schede_note.nome(boot=scheda.seriale)
+        chi = "%s · %s" % (nome, scheda.seriale) if nome else (
+            scheda.seriale or "%s su %s" % (scheda.modello, scheda.lettera))
+
+        primo = self.L("fw_azzera_uno", chi=chi, byte=A.leggibile(pico.FLASH_PICO))
+        if not Conferma(self, self.L, primo, self.tema,
+                        parola=self.L("parola_cancella")).confermato:
+            return
+
+        if scheda.seriale:
+            secondo = self.L("fw_azzera_due", unita=scheda.lettera,
+                             seriale=scheda.seriale)
+            parola = anagrafica.coda(scheda.seriale)
+        else:
+            secondo = self.L("fw_azzera_due_senza", unita=scheda.lettera)
+            parola = self.L("parola_cancella")
+        if not Conferma(self, self.L, secondo, self.tema,
+                        parola=parola).confermato:
             return
         percorso = os.path.join(cartella_config(), "azzera.uf2")
         try:
@@ -933,12 +1038,27 @@ class App(tk.Tk):
     # ------------------------------------------------------------ porte
     def rileva_porte(self):
         porte = serprog.elenca_porte()
-        valori = ["%s — %s" % (d, descrizione) for d, descrizione, _ in porte]
+        valori = []
+        for dispositivo, descrizione, sospetto, seriale in porte:
+            # il nome dato alla scheda vale piu' della descrizione di Windows
+            nome = self.schede_note.nome(run=seriale) if seriale else None
+            if nome:
+                valori.append("%s — %s · %s" % (dispositivo, nome, seriale))
+            elif sospetto and seriale:
+                valori.append("%s — %s · %s" % (dispositivo, descrizione, seriale))
+            else:
+                valori.append("%s — %s" % (dispositivo, descrizione))
         self.combo_porta.configure(values=valori)
         if porte:
             attuale = self._porta_scelta()
-            candidata = next((v for v, (d, _, s) in zip(valori, porte) if s), valori[0])
-            if not attuale or attuale not in [p[0] for p in porte]:
+            candidata = next((v for v, p in zip(valori, porte) if p[2]), valori[0])
+            programmatori = [p[0] for p in porte if p[2]]
+            # ⚠️ Non basta che la porta salvata esista ancora: se quella scelta
+            # NON e' un programmatore e uno collegato c'e', si passa a quello.
+            # Altrimenti, dopo che il Pico sparisce e torna, resta selezionata
+            # una porta qualunque (Bluetooth, seriale di sistema).
+            if (not attuale or attuale not in [p[0] for p in porte]
+                    or (programmatori and attuale not in programmatori)):
                 self.var_porta.set(candidata)
         elif serprog.SERIALE:
             self.msg_collegamento.mostra("nessuna_porta", AMBRA)
@@ -1662,7 +1782,7 @@ class Messaggio(object):
 class Conferma(tk.Toplevel):
     """Non basta un «sì»: la parola va scritta a mano."""
 
-    def __init__(self, padre, L, testo, tm=None):
+    def __init__(self, padre, L, testo, tm=None, parola=None):
         tk.Toplevel.__init__(self, padre, background=T.INK)
         self.confermato = False
         self.L = L
@@ -1681,7 +1801,7 @@ class Conferma(tk.Toplevel):
                  background=T.CRIT_BG, foreground="#F0C9CB",
                  font=tm.f_testo if tm else None).pack(anchor="w", padx=12, pady=10)
 
-        self.parola = L("parola_conferma")
+        self.parola = parola or L("parola_conferma")
         tk.Label(cornice, text=L("conferma_digita", parola=self.parola),
                  background=T.INK, foreground=T.FG,
                  font=tm.f_testo if tm else None).pack(anchor="w", pady=(14, 5))

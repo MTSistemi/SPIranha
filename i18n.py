@@ -243,6 +243,55 @@ T = {
         "it": "{modello} su {unita} — pronta per il firmware",
         "en": "{modello} on {unita} — ready for firmware",
     },
+    "nome_scheda": {"it": "Nome", "en": "Name"},
+    "nome_scheda_nota": {
+        "it": "un nome per riconoscerla fra le altre",
+        "en": "a name to tell it from the others",
+    },
+    "fw_seriale": {"it": "seriale {seriale}", "en": "serial {seriale}"},
+    "fw_trovata_nome": {
+        "it": "{nome} \u00b7 {modello} su {unita} \u00b7 {seriale}",
+        "en": "{nome} \u00b7 {modello} on {unita} \u00b7 {seriale}",
+    },
+    "fw_trovata_anonima": {
+        "it": "{modello} su {unita} \u00b7 {seriale} \u00b7 senza nome",
+        "en": "{modello} on {unita} \u00b7 {seriale} \u00b7 unnamed",
+    },
+    "fw_battezzata": {
+        "it": "Scheda registrata come \u00ab{nome}\u00bb.",
+        "en": "Board registered as \u201c{nome}\u201d.",
+    },
+    "fw_dimenticata": {
+        "it": "Nome tolto: la scheda torna anonima.",
+        "en": "Name removed: the board is unnamed again.",
+    },
+    "parola_cancella": {"it": "CANCELLA", "en": "ERASE"},
+    "fw_azzera_uno": {
+        "it": "Primo consenso su due.\n\nSto per cancellare tutta la flash di "
+              "{chi}: {byte}.\n\nLa scheda smette di essere un programmatore e "
+              "torna come appena comprata. Il firmware si potr\u00e0 rimettere da "
+              "qui, ma finch\u00e9 non lo fai quella scheda non serve a niente.",
+        "en": "First of two confirmations.\n\nAbout to erase the whole flash of "
+              "{chi}: {byte}.\n\nThe board stops being a programmer and goes "
+              "back to as-bought. The firmware can be put back from here, but "
+              "until you do, that board is of no use.",
+    },
+    "fw_azzera_due": {
+        "it": "Secondo consenso.\n\nControlla di avere in mano la scheda "
+              "giusta: quella collegata su {unita} ha il seriale\n\n"
+              "    {seriale}\n\nPer procedere ribatti le ultime quattro cifre.",
+        "en": "Second confirmation.\n\nMake sure you are holding the right "
+              "board: the one on {unita} has serial\n\n    {seriale}\n\n"
+              "To proceed, retype its last four characters.",
+    },
+    "fw_azzera_due_senza": {
+        "it": "Secondo consenso.\n\nDi questa scheda non si legge il seriale. "
+              "Verifica di persona che quella collegata su {unita} sia quella "
+              "che vuoi cancellare.",
+        "en": "Second confirmation.\n\nThis board\u2019s serial cannot be read. "
+              "Check by hand that the one on {unita} is the one you mean to "
+              "erase.",
+    },
     "fw_bootsel": {"it": "Riporta in BOOTSEL", "en": "Send to BOOTSEL"},
     "fw_bootsel_provo": {
         "it": "Chiedo alla scheda su {porta} di riavviarsi nel bootloader\u2026",

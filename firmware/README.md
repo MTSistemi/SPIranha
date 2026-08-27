@@ -127,6 +127,20 @@ serial open — check whether the board came back as a drive.
 ⚠️ This only works with firmware built from the source here. A board carrying
 an older build ignores 1200 baud, and the button is still the only way.
 
+## Telling boards apart
+
+A board reports **two different serial numbers**, and they do not match:
+
+| state | where it comes from | example |
+|---|---|---|
+| running the firmware | flash unique id, over USB CDC | `5303284738DE6E1C` |
+| in BOOTSEL | the bootloader's own id, on the mass-storage device | `E0C9125B0D9B` |
+
+Verified on one physical board. There is no way to compute one from the other,
+so SPIranha stores both and links them the first time it watches a board move
+between the two states — during an install, or a send-to-BOOTSEL. From then on
+the name you gave it shows up either way.
+
 ## How the reset works
 
 The `.uf2` SPIranha generates writes `0xFF` over the whole flash. The bootloader

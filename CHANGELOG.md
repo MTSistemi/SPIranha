@@ -37,16 +37,24 @@ First public release.
   GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
   be put back into update mode without touching the button.
 - **Send to BOOTSEL**, which uses it.
+- **Board names.** Each programmer can be given a name that follows it
+  everywhere. A board shows a different serial while running than it does in
+  BOOTSEL, so SPIranha links the two the first time it sees the board move
+  between states, and recognises it from either side afterwards.
+- Erasing a board now takes **two confirmations**, the second one requiring the
+  last four characters of that board's serial.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 69 automated checks, including an end-to-end write against an emulated
+- 80 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Verified on hardware
 - Firmware installation on a factory-fresh Raspberry Pi Pico: detected in
-  BOOTSEL, programmed, and answering serprog on a new COM port one second
-  later.
+  BOOTSEL, programmed, and answering serprog on a new COM port one second later.
+- Factory reset, and the 1200-baud return to BOOTSEL, on the same board.
+- Naming: a board named while running is still recognised by name after being
+  sent to BOOTSEL, where its serial is a different number.
 
 ### Notes
 - The first target is the AMD BC-250 (`J4004` header). The wiring diagram,

@@ -195,6 +195,57 @@ def prova(finestra):
         controlla("scarta un disco qualunque",
                   not pico.e_rp2040("SanDisk Cruzer", "USB-DISK"))
 
+
+        # 13. anagrafica: i due identificativi della stessa scheda
+        import anagrafica
+        a = anagrafica.Anagrafica()
+        a.imposta_nome("banco 1", run="5303284738DE6E1C")
+        controlla("nome ritrovato dal seriale in esecuzione",
+                  a.nome(run="5303284738DE6E1C") == "banco 1")
+        controlla("in BOOTSEL non lo conosce ancora",
+                  a.nome(boot="E0C9125B0D9B") is None)
+        # ⚠️ i due seriali sono DIVERSI sulla stessa scheda: si imparano solo
+        # vedendola passare da uno stato all'altro
+        a.collega("5303284738DE6E1C", "E0C9125B0D9B")
+        controlla("dopo il collegamento lo riconosce anche in BOOTSEL",
+                  a.nome(boot="E0C9125B0D9B") == "banco 1")
+        controlla("una scheda sola in elenco", len(a.come_elenco()) == 1,
+                  str(a.come_elenco()))
+
+        # due voci separate che si rivelano la stessa scheda: si fondono
+        b = anagrafica.Anagrafica()
+        b.imposta_nome("visto acceso", run="AAAA")
+        b.imposta_nome("visto in bootsel", boot="BBBB")
+        b.collega("AAAA", "BBBB")
+        controlla("le due voci si fondono in una", len(b.come_elenco()) == 1,
+                  str(b.come_elenco()))
+        controlla("tiene il nome gia' dato", b.nome(boot="BBBB") == "visto acceso")
+
+        vuota = anagrafica.Anagrafica()
+        vuota.imposta_nome("tolgo", run="CCCC")
+        vuota.imposta_nome("", run="CCCC")
+        controlla("nome vuoto dimentica la scheda", vuota.come_elenco() == [])
+        controlla("coda del seriale per la conferma",
+                  anagrafica.coda("5303284738DE6E1C") == "6E1C")
+
+        # 14. la conferma accetta SOLO la parola chiesta
+        vera_attesa = finestra.wait_window
+        finestra.wait_window = lambda *a, **k: None
+        d = modulo.Conferma(finestra, finestra.L, "prova", finestra.tema,
+                            parola="6E1C")
+        finestra.wait_window = vera_attesa
+        controlla("conferma a parola scelta: parte spenta",
+                  "disabled" in d.ok.state())
+        d.var.set("CANCELLA")
+        finestra.update()
+        controlla("non basta un'altra parola giusta altrove",
+                  "disabled" in d.ok.state())
+        d.var.set("6e1c")
+        finestra.update()
+        controlla("accetta le cifre del seriale, anche minuscole",
+                  "disabled" not in d.ok.state())
+        d.destroy()
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

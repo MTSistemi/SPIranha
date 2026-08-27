@@ -70,7 +70,11 @@ class Diagnostica(object):
 
 
 def elenca_porte():
-    """[(dispositivo, descrizione, e_probabilmente_il_pico)] ordinate."""
+    """[(dispositivo, descrizione, e_probabilmente_il_pico, seriale)] ordinate.
+
+    ⚠️ Il seriale e' quello che la scheda espone MENTRE GIRA il firmware (16
+    cifre): non e' lo stesso che mostra in BOOTSEL. Vedi anagrafica.py.
+    """
     if not SERIALE:
         return []
     trovate = []
@@ -80,7 +84,8 @@ def elenca_porte():
         descrizione = p.description or ""
         if vid is not None and pid is not None:
             descrizione = "%s (%04X:%04X)" % (descrizione, vid, pid)
-        trovate.append((p.device, descrizione, sospetto))
+        trovate.append((p.device, descrizione, sospetto,
+                        (p.serial_number or "").upper() or None))
     # prima i candidati, poi in ordine di nome
     trovate.sort(key=lambda t: (not t[2], _chiave_com(t[0])))
     return trovate

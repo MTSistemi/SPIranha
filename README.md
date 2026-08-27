@@ -88,6 +88,21 @@ firmware can be put back into update mode over the wire, so after the first
 time the button is never needed again. Upstream `pico-serprog` has no such
 path — it is one of the two patches in `firmware/`.
 
+**Name your boards.** With three identical Picos on the bench, "are you sure?"
+tells you nothing about *which* one you are about to erase. Give each a name and
+it follows the board everywhere: the port dropdown, the firmware row, the
+confirmations.
+
+⚠️ A board has **two different serial numbers**: one while the firmware runs
+(16 hex digits, the flash unique id) and another in BOOTSEL (12 digits, from the
+bootloader). Neither can be derived from the other — verified on the same board.
+SPIranha learns the pairing by itself the first time it sees a board move between
+the two states, and recognises it from either side afterwards.
+
+**Erasing takes two consents**, and the second is bound to the identity: it
+shows the serial of the board on that drive and asks you to retype its last four
+characters. That forces a look at the board actually connected.
+
 Nothing here can brick a board: the RP2040 bootloader lives in ROM, and a board
 with an empty flash always comes back as `RPI-RP2`.
 
@@ -162,7 +177,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 32 checks, no hardware needed
+python tests\test_gui.py     # 43 checks, no hardware needed
 python tests\test_full.py    # 37 checks, needs flashrom built with 'dummy'
 ```
 

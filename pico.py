@@ -34,8 +34,10 @@ from __future__ import unicode_literals
 
 import ctypes
 import os
+import re
 import shutil
 import struct
+import subprocess
 
 MAGIA0 = 0x0A324655
 MAGIA1 = 0x9E5D5157
@@ -49,6 +51,7 @@ BASE_FLASH = 0x10000000
 FLASH_PICO = 2 * 1024 * 1024        # il Pico originale ne ha 2 MiB
 
 BAUD_BOOTSEL = 1200                 # aprire a questa velocita' = torna in BOOTSEL
+SENZA_FINESTRA = 0x08000000 if os.name == "nt" else 0   # CREATE_NO_WINDOW
 ETICHETTA = "RPI-RP2"
 NOME_FIRMWARE = "pico_serprog.uf2"
 INFORMAZIONI = "INFO_UF2.TXT"
@@ -58,11 +61,16 @@ DRIVE_REMOVIBILE = 2
 class Scheda(object):
     """Una scheda RP2040 in BOOTSEL, vista come disco."""
 
-    def __init__(self, unita, modello=None, identificativo=None, byte_liberi=0):
+    def __init__(self, unita, modello=None, identificativo=None, byte_liberi=0,
+                 seriale=None):
         self.unita = unita                      # "E:\\"
         self.modello = modello or "RP2040"
         self.identificativo = identificativo or "?"
         self.byte_liberi = byte_liberi
+        # ⚠️ Questo NON e' il numero di serie che la stessa scheda mostra
+        # quando gira il firmware: il bootloader ne espone uno suo, piu' corto.
+        # Verificato sulla stessa scheda: 12 cifre qui, 16 di la'.
+        self.seriale = seriale
 
     @property
     def lettera(self):
@@ -134,8 +142,64 @@ def schede_in_bootsel():
             liberi = shutil.disk_usage(unita).free
         except OSError:
             pass
-        trovate.append(Scheda(unita, modello, identificativo, liberi))
+        trovate.append(Scheda(unita, modello, identificativo, liberi,
+                              seriale=seriale_di_unita(unita)))
     return trovate
+
+
+# il seriale che il bootloader espone e' dentro il percorso del dispositivo:
+#   USBSTOR\DISK&VEN_RPI&PROD_RP2&REV_3\9&25F25AF4&0&E0C9125B0D9B&0
+_RE_SERIALE = re.compile(r"&([0-9A-F]{8,20})&\d+$", re.IGNORECASE)
+_CACHE_SERIALI = {}
+
+
+def seriale_di_unita(unita):
+    """Il numero di serie della scheda in BOOTSEL, dalla lettera di unita'.
+
+    ⚠️ Costa una chiamata a PowerShell, quindi il risultato si tiene da parte:
+    la sorveglianza guarda le unita' ogni due secondi e non puo' pagarla ogni
+    volta. Una lettera di unita' non cambia scheda sotto i piedi senza che la
+    scheda sparisca prima, e in quel caso la voce viene ributtata via.
+    """
+    lettera = (unita or "")[:1].upper()
+    if not lettera:
+        return None
+    if lettera in _CACHE_SERIALI:
+        return _CACHE_SERIALI[lettera]
+    seriale = None
+    if os.name == "nt":
+        comando = (
+            "$ErrorActionPreference='SilentlyContinue';"
+            "Get-CimInstance Win32_DiskDrive | ForEach-Object { $d=$_;"
+            " Get-CimAssociatedInstance -InputObject $d"
+            " -ResultClassName Win32_DiskPartition | ForEach-Object {"
+            " Get-CimAssociatedInstance -InputObject $_"
+            " -ResultClassName Win32_LogicalDisk } | ForEach-Object {"
+            " \"$($_.DeviceID)|$($d.PNPDeviceID)\" } }")
+        try:
+            uscita = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", comando],
+                capture_output=True, timeout=20,
+                creationflags=SENZA_FINESTRA).stdout.decode("utf-8", "replace")
+        except Exception:                            # noqa: BLE001
+            uscita = ""
+        for riga in uscita.splitlines():
+            if "|" not in riga:
+                continue
+            disco, percorso = riga.split("|", 1)
+            if disco.strip().upper().startswith(lettera + ":"):
+                trovato = _RE_SERIALE.search(percorso.strip())
+                if trovato:
+                    seriale = trovato.group(1).upper()
+                break
+    _CACHE_SERIALI[lettera] = seriale
+    return seriale
+
+
+def dimentica_seriali():
+    """Da chiamare quando una scheda se ne va: la lettera potrebbe tornare
+    addosso a un'altra."""
+    _CACHE_SERIALI.clear()
 
 
 # ------------------------------------------------------------ formato UF2
