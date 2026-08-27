@@ -9,9 +9,11 @@ firmware. It can also **reset a board to factory state**.
 | | |
 |---|---|
 | `pico_serprog.uf2` | the firmware, built from the source next to it |
-| `pico-serprog/` | the complete source it was built from, both patches applied |
+| `pico-serprog/` | the complete source it was built from, all patches applied |
+| `VERSION` | the version of the binary here, which the board reports back |
 | `0001-enable_spi-gcc15.patch` | build fix for GCC 15 and newer |
 | `0002-bootsel-1200-baud.patch` | reboot into BOOTSEL on a 1200-baud open |
+| `0003-report-version.patch` | say which firmware version this is |
 
 The firmware is **GPLv3** and it ships here **with its corresponding source**,
 which is what the licence asks for. It is a separate program that runs on the
@@ -30,7 +32,8 @@ that `.uf2` itself (see `pico.py`), so there is no third-party binary involved.
 | | |
 |---|---|
 | file | `pico_serprog.uf2`, 44,544 bytes — 87 UF2 blocks |
-| sha256 | `a3cc23db714f2dce7ab8f146dc16b3ca70b159069c4a42dbcf5bcda829ae7236` |
+| version | **1.1** |
+| sha256 | `05a24665a85e7116ee25b90ed53e0cbcda76d57b0aee810f4c383d6a666bbdc4` |
 | covers | `0x10000000`–`0x100056FF` |
 | family | `0xE48BFF56` (RP2040) |
 
@@ -38,6 +41,25 @@ Tested on real hardware: copied onto a factory-fresh Pico, the board rebooted
 and answered the serprog protocol one second later — `pico-serprog`,
 interface 1, bus `0x08 = SPI`. Then reset to factory, reprogrammed, and sent
 back to BOOTSEL over the wire, all without touching the button.
+
+## Which version a board is running
+
+Nothing on an RP2040 says which firmware it holds. The flash carries no version,
+the USB serial number is the chip's unique id — the same before and after any
+update — and the descriptors do not change between builds. Asking the board is
+the only way, so `0003-report-version.patch` makes it answer.
+
+The serprog name is a fixed 16-byte field and the host reads all sixteen, so the
+version travels inside it, with no new command and no compatibility cost:
+
+| firmware | reports |
+|---|---|
+| 1.1 and later | `pico-serprog1.1` |
+| 1.0 and earlier | `pico-serprog` |
+
+A bare name is therefore not "unknown": it is a board older than 1.1, which is
+the distinction that matters — those boards cannot be sent back to BOOTSEL over
+the wire, so updating them still needs the button, once.
 
 ## Rebuilding it
 

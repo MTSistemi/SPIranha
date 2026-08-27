@@ -33,11 +33,13 @@ Formato UF2 (blocchi da 512 byte, 256 di carico utile):
 from __future__ import unicode_literals
 
 import ctypes
+import io
 import os
 import re
 import shutil
 import struct
 import subprocess
+import time
 
 MAGIA0 = 0x0A324655
 MAGIA1 = 0x9E5D5157
@@ -48,6 +50,9 @@ FAMIGLIA_RP2040 = 0xE48BFF56
 BLOCCO = 512
 CARICO = 256
 BASE_FLASH = 0x10000000
+
+# quante volte riprovare una copia che non riesce nemmeno a cominciare
+TENTATIVI_COPIA = 6
 FLASH_PICO = 2 * 1024 * 1024        # il Pico originale ne ha 2 MiB
 
 BAUD_BOOTSEL = 1200                 # aprire a questa velocita' = torna in BOOTSEL
@@ -204,6 +209,17 @@ def dimentica_seriali():
 
 # ------------------------------------------------------------ formato UF2
 
+def versione_disponibile(cartella):
+    """La versione dell'UF2 che spediamo, dal file VERSION accanto."""
+    try:
+        percorso = os.path.join(cartella, "VERSION")
+        with io.open(percorso, encoding="utf-8") as f:
+            versione = f.read().strip()
+        return versione or None
+    except Exception:                                  # noqa: BLE001
+        return None
+
+
 def blocco_uf2(indirizzo, dati, numero, totale, famiglia=FAMIGLIA_RP2040):
     """Un blocco da 512 byte, come lo vuole il bootloader."""
     if len(dati) > CARICO:
@@ -325,18 +341,39 @@ def installa(percorso_uf2, scheda, su_riga=None):
             servono, scheda.byte_liberi)
 
     destinazione = os.path.join(scheda.unita, os.path.basename(percorso_uf2))
-    try:
-        with open(percorso_uf2, "rb") as sorgente:
-            with open(destinazione, "wb") as uscita:
-                shutil.copyfileobj(sorgente, uscita, 64 * 1024)
-                try:
-                    uscita.flush()
-                    os.fsync(uscita.fileno())
-                except OSError:
-                    pass          # la scheda si e' gia' staccata: va bene cosi'
-    except OSError as e:
-        # ⚠️ Errori in chiusura sono attesi: il disco sparisce sotto i piedi
-        # nel momento in cui il bootloader ha finito di ricevere.
-        dillo("la scheda si e' staccata durante la copia (e' normale): %s" % e)
+    # ⚠️ Un errore a copia iniziata e un errore PRIMA di scrivere un byte
+    # sembrano uguali (sono entrambi OSError) e non lo sono affatto: il primo
+    # e' la scheda che riparte, il secondo e' una copia mai avvenuta. A
+    # confonderli si dice "fatto" a un firmware che non e' stato scritto.
+    # Succede sul serio: una scheda appena entrata in BOOTSEL risponde
+    # "Permission denied" finche' Windows non ha finito di montare il disco.
+    for tentativo in range(TENTATIVI_COPIA):
+        scritti = 0
+        try:
+            with open(percorso_uf2, "rb") as sorgente:
+                with open(destinazione, "wb") as uscita:
+                    while True:
+                        pezzo = sorgente.read(64 * 1024)
+                        if not pezzo:
+                            break
+                        uscita.write(pezzo)
+                        scritti += len(pezzo)
+                    try:
+                        uscita.flush()
+                        os.fsync(uscita.fileno())
+                    except OSError:
+                        pass      # la scheda si e' gia' staccata: va bene cosi'
+        except OSError as e:
+            if scritti:
+                # il disco sparisce sotto i piedi appena il bootloader ha
+                # ricevuto tutto: questo e' l'andamento normale
+                dillo("la scheda si e' staccata durante la copia "
+                      "(e' normale): %s" % e)
+                return True, None
+            if tentativo + 1 < TENTATIVI_COPIA:
+                dillo("il disco non accetta ancora la copia, riprovo: %s" % e)
+                time.sleep(0.7)
+                continue
+            return False, "la copia non e' mai partita: %s" % e
         return True, None
-    return True, None
+    return False, "la copia non e' mai partita"

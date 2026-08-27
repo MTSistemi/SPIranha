@@ -1,0 +1,32 @@
+From: SPIranha <https://github.com/MTSistemi/SPIranha>
+Subject: [PATCH] report a firmware version in the programmer name
+
+A board gives the host no way to say which firmware it is running. The flash
+holds no version, the USB serial number is the chip's unique id, and the
+descriptors are the same across builds. So a host tool cannot know whether the
+programmer in front of it predates a fix.
+
+The serprog name is a fixed 16-byte field and the host reads all sixteen, so a
+version fits in it without a terminator and without a new command. Hosts that
+do not care print it verbatim, which is what flashrom already does:
+
+    Programmer name is "pico-serprog1.1"
+
+1.1 is the first build that says so; anything reporting a bare "pico-serprog"
+is 1.0 or older, which is exactly the distinction the host needs.
+---
+diff --git a/main.c b/main.c
+--- a/main.c
++++ b/main.c
+@@ -33,7 +33,10 @@ uint cs_pin = SPI_CS_0;
+
+ uint baud = 12000000; /* Default to 12MHz */
+
+-static const char progname[16] = "pico-serprog";
++/* The name is a 16-byte field and the host reads all 16 of them, so a version
++ * fits without terminator. It is the only way for the host to tell which
++ * firmware a board is running: the board reports it, nothing else does. */
++static const char progname[16] = "pico-serprog1.1";
+
+ /* Map of supported serprog commands */
+ static const uint32_t cmdmap[8] = {

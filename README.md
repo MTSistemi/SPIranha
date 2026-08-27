@@ -88,6 +88,25 @@ firmware can be put back into update mode over the wire, so after the first
 time the button is never needed again. Upstream `pico-serprog` has no such
 path — it is one of the two patches in `firmware/`.
 
+**The programmer says which firmware it runs**, and SPIranha compares it
+with the one it carries. If the board is behind, an **Update** button appears
+and does the whole thing over the wire: back to BOOTSEL, copy, wait for the
+board to come up again — then asks it again, because a copy that went through
+is not the same as a board running the new code.
+
+⚠️ Nothing else on an RP2040 can tell you this. The USB serial number is the
+chip's unique id and never changes; the descriptors are identical across builds.
+So the firmware reports its version inside the 16-byte serprog name, which
+flashrom prints too:
+
+```
+serprog: Programmer name is "pico-serprog1.1"
+```
+
+A board answering with a bare `pico-serprog` is not unknown — it is older than
+1.1, and it needs the BOOTSEL button once, because returning to BOOTSEL over the
+wire is exactly what 1.1 added.
+
 **Write protection is checked, not assumed.** Right after the chip is
 identified, SPIranha asks it for its status register lock: the protected range,
 and whether it is held by software or by hardware. If that range overlaps what
@@ -190,7 +209,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 52 checks, no hardware needed
+python tests\test_gui.py     # 64 checks, no hardware needed
 python tests\test_full.py    # 39 checks, needs flashrom built with 'dummy'
 ```
 

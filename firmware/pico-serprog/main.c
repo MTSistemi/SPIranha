@@ -33,7 +33,10 @@ uint cs_pin = SPI_CS_0;
 
 uint baud = 12000000; /* Default to 12MHz */
 
-static const char progname[16] = "pico-serprog";
+/* The name is a 16-byte field and the host reads all 16 of them, so a version
+ * fits without terminator. It is the only way for the host to tell which
+ * firmware a board is running: the board reports it, nothing else does. */
+static const char progname[16] = "pico-serprog1.1";
 
 /* Map of supported serprog commands */
 static const uint32_t cmdmap[8] = {

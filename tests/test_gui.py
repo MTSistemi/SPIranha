@@ -164,6 +164,19 @@ def prova(finestra):
         controlla("uf2 generato: carico tutto 0xFF",
                   testa[32:32 + pico.CARICO] == b"\xff" * pico.CARICO)
 
+        # ⚠️ Una copia che non parte NON e' una copia riuscita. Prima
+        # bastava un OSError qualunque per dire "fatto", e una scheda appena
+        # entrata in BOOTSEL lo produce davvero: risultato, firmware mai
+        # scritto e messaggio verde. Visto sull'hardware.
+        tentativi = pico.TENTATIVI_COPIA
+        pico.TENTATIVI_COPIA = 1
+        finta = pico.Scheda(os.path.join(LAVORO, "disco-che-non-c-e") + os.sep,
+                            "RP2040", "RPI-RP2", 0)
+        fatto, motivo = pico.installa(nuke, finta)
+        pico.TENTATIVI_COPIA = tentativi
+        controlla("copia mai partita: fallisce, non dice 'fatto'",
+                  not fatto and motivo, str(motivo))
+
         # un file rovinato dev'essere rifiutato PRIMA di arrivare alla scheda
         rotto = os.path.join(LAVORO, "rotto.uf2")
         with open(nuke, "rb") as f:
@@ -291,6 +304,42 @@ def prova(finestra):
                   str(finestra._requisiti_mancanti()))
         finestra.protezione = libero
         finestra._aggiorna_scrittura()
+
+
+        # 16. versione del firmware: letta dal nome, confrontata con la nostra
+        import serprog as _sp
+        controlla("versione estratta dal nome",
+                  _sp.separa_versione("pico-serprog1.1") == ("pico-serprog", "1.1"))
+        controlla("nome nudo: nessuna versione",
+                  _sp.separa_versione("pico-serprog") == ("pico-serprog", None))
+        controlla("regge anche la forma con spazio e v",
+                  _sp.separa_versione("pico-serprog v2.0")[1] == "2.0")
+        # ⚠️ Nessuna versione NON vuol dire ignota: vuol dire anteriore alla
+        # 1.1, che e' la prima che la dichiara. Va trattata come vecchia.
+        controlla("firmware muto = firmware vecchio",
+                  _sp.piu_vecchia(None, "1.1"))
+        controlla("stessa versione: niente aggiornamento",
+                  not _sp.piu_vecchia("1.1", "1.1"))
+        controlla("1.0 e' piu' vecchia di 1.1", _sp.piu_vecchia("1.0", "1.1"))
+        # confronto numerico, non alfabetico: "1.10" > "1.9"
+        controlla("1.10 non e' piu' vecchia di 1.9",
+                  not _sp.piu_vecchia("1.10", "1.9"))
+        controlla("senza un firmware nostro non si propone niente",
+                  not _sp.piu_vecchia("1.0", None))
+
+        import pico as _pk
+        controlla("la versione spedita si legge dalla cartella firmware",
+                  _pk.versione_disponibile(
+                      os.path.join(CARTELLA, "firmware")) == "1.1",
+                  str(_pk.versione_disponibile(os.path.join(CARTELLA, "firmware"))))
+        controlla("cartella senza VERSION: nessuna versione, senza esplodere",
+                  _pk.versione_disponibile(LAVORO) is None)
+
+        # il tasto Aggiorna compare solo quando c'e' qualcosa da aggiornare
+        finestra.fw_scheda = "1.1"
+        finestra._aggiorna_firmware()
+        controlla("firmware aggiornato: nessun tasto Aggiorna",
+                  not finestra.b_aggiorna.winfo_ismapped())
 
         # 11. elenco porte
         finestra.rileva_porte()

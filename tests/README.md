@@ -12,7 +12,7 @@ They open and close the window by themselves; there is nothing to click.
 
 *Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
 
-## `test_gui.py` — 52 checks
+## `test_gui.py` — 64 checks
 
 The window and its rules, without touching flashrom: construction, live
 IT↔EN switching, everything disabled when flashrom is missing, layout file
@@ -27,6 +27,13 @@ read back and checked block by block, and both a corrupted file and a
 non-UF2 file must be refused before they could ever reach a board. And it
 pins down the board recognition against the real `Board-ID: RPI-RP2` string,
 which an earlier version got wrong.
+
+It covers the firmware version too: reading it out of the name the board
+reports, comparing versions numerically (so `1.10` is newer than `1.9`), and
+treating a board that reports no version as *older*, not unknown. And it checks
+that a copy which never started is reported as a failure — that one came from
+the bench, where a board fresh into BOOTSEL refused the copy and the old code
+called it a success.
 
 It covers write protection without a chip: the three answers flashrom can
 give (no protection, a range, no answer at all), whether a protected range

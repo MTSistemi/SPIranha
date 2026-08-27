@@ -67,6 +67,44 @@ T = {
         "en": "pyserial missing: type the port by hand.",
     },
 
+    # --- versione del firmware ----------------------------------------------
+    "fw_versione_ok": {
+        "it": "Firmware {versione}, \u00e8 l\u0027ultimo che abbiamo.",
+        "en": "Firmware {versione}, the latest one we carry.",
+    },
+    "fw_versione_vecchia": {
+        "it": "Firmware {versione} sulla scheda, qui c\u0027\u00e8 la {nuova}.",
+        "en": "Firmware {versione} on the board, we carry {nuova}.",
+    },
+    "fw_versione_muta": {
+        "it": "Firmware anteriore alla 1.1: non dice quale sia. Qui c\u0027"
+              "\u00e8 la {nuova}.",
+        "en": "Firmware older than 1.1: it does not say which. We carry "
+              "{nuova}.",
+    },
+    "fw_aggiorna": {"it": "Aggiorna", "en": "Update"},
+    "fw_aggiorno": {
+        "it": "Aggiornamento: rimando la scheda in BOOTSEL\u2026",
+        "en": "Updating: sending the board back to BOOTSEL\u2026",
+    },
+    "fw_aggiorna_no_bootsel": {
+        "it": "La scheda non torna in BOOTSEL da sola: il suo firmware "
+              "\u00e8 anteriore alla 1.1, che \u00e8 la versione che ha "
+              "aggiunto quel rientro. Serve il pulsante BOOTSEL, una volta "
+              "sola: da qui in poi si aggiorna via cavo.",
+        "en": "The board will not go back to BOOTSEL by itself: its firmware "
+              "predates 1.1, which is the version that added that. The BOOTSEL "
+              "button is needed once; after that it updates over the wire.",
+    },
+    "fw_aggiornato": {
+        "it": "Aggiornata alla {versione} su {porta}.",
+        "en": "Updated to {versione} on {porta}.",
+    },
+    "fw_aggiorna_dubbio": {
+        "it": "Copia riuscita, ma la scheda dichiara ancora {versione}.",
+        "en": "Copy went through, but the board still reports {versione}.",
+    },
+
     # --- 2. chip ---------------------------------------------------------
     "sez_chip": {"it": "2 · Chip", "en": "2 · Chip"},
     "identifica": {"it": "Identifica", "en": "Identify"},

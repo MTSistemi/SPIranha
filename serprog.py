@@ -18,6 +18,8 @@ Comandi usati (specifica serprog):
 """
 from __future__ import unicode_literals
 
+import re
+
 try:
     import serial
     from serial.tools import list_ports
@@ -44,6 +46,45 @@ PID_TINYUSB = 0x4001
 VID_RASPBERRY = 0x2E8A
 
 
+# Il nome che il programmatore dichiara porta anche la versione, perche' e'
+# l'unico posto dove ci sta senza inventare comandi nuovi: "pico-serprog1.1".
+# Un nome nudo non e' "sconosciuto", e' una scheda anteriore alla 1.1.
+_RE_VERSIONE = re.compile(r"^(.*?)[\s_-]*v?(\d+(?:\.\d+)+)$")
+
+
+def separa_versione(nome):
+    """'pico-serprog1.1' -> ('pico-serprog', '1.1'). Senza versione, None."""
+    if not nome:
+        return nome, None
+    trovato = _RE_VERSIONE.match(nome.strip())
+    if not trovato:
+        return nome.strip(), None
+    return trovato.group(1).strip(), trovato.group(2)
+
+
+def _numeri(versione):
+    fuori = []
+    for pezzo in (versione or "").split("."):
+        try:
+            fuori.append(int(pezzo))
+        except ValueError:
+            fuori.append(0)
+    return fuori
+
+
+def piu_vecchia(quella, di_questa):
+    """La versione della scheda e' anteriore a quella che abbiamo qui?
+
+    ⚠️ Nessuna versione = firmware anteriore alla 1.1, quindi si', e'
+    vecchio. E' proprio il caso che interessa.
+    """
+    if not di_questa:
+        return False
+    if not quella:
+        return True
+    return _numeri(quella) < _numeri(di_questa)
+
+
 class Diagnostica(object):
     """L'esito dell'interrogazione."""
 
@@ -56,6 +97,15 @@ class Diagnostica(object):
     @property
     def ok(self):
         return self.errore is None
+
+    @property
+    def firmware(self):
+        """La versione che la scheda dichiara, o None se non ne dichiara."""
+        return separa_versione(self.nome)[1]
+
+    @property
+    def nome_nudo(self):
+        return separa_versione(self.nome)[0]
 
     @property
     def parla_spi(self):

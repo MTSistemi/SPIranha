@@ -142,6 +142,8 @@ class App(tk.Tk):
         # stato della procedura: ogni requisito e' una condizione per scrivere
         self.chip = None                 # fr.Chip identificato
         self.protezione = None           # fr.Protezione, letta col chip
+        self.fw_scheda = None            # versione dichiarata dal programmatore
+        self.fw_chiesto = set()          # seriali a cui l'abbiamo gia' chiesta
         self.lettura_verificata = None   # md5 dell'ultima lettura doppia riuscita
         self.righe_registro = []
         self.regioni = []                # (nome, inizio, fine) dal file di layout
@@ -477,6 +479,10 @@ class App(tk.Tk):
             ttk.Button(cornice_f, style="Ghost.TButton",
                        command=self.rientra_in_bootsel), "fw_bootsel")
         self.b_bootsel.pack(side="left")
+        # compare solo se c'e' davvero qualcosa da aggiornare
+        self.b_aggiorna = self._etichetta(
+            ttk.Button(cornice_f, style="Secondario.TButton",
+                       command=self.aggiorna_firmware), "fw_aggiorna")
 
         self.et_nome = self._micro(s, "nome_scheda")
         self.et_nome.grid(row=4, column=0, sticky="w", pady=(7, 0))
@@ -824,11 +830,15 @@ class App(tk.Tk):
                     self.registro("   RP2040 in BOOTSEL su %s (%s)" % (
                         nuova.lettera, nuova.identificativo), "io")
                 self._aggiorna_firmware()
+            self._chiedi_versione_se_serve()
         self.attesa_bootsel = self.after(2000, self._guarda_bootsel)
 
-    def _aggiorna_firmware(self):
+    def _aggiorna_firmware(self, con_messaggio=True):
         # il rientro in BOOTSEL si offre solo se c'e' un programmatore collegato
         porta = self._porta_programmatore()
+        if porta is None:
+            # niente programmatore, niente versione: quella di prima non vale
+            self.fw_scheda = None
         self.b_bootsel.state(["!disabled"] if porta and not self.occupato
                              else ["disabled"])
 
@@ -841,10 +851,32 @@ class App(tk.Tk):
 
         scheda = self.scheda_bootsel
         if scheda is None:
-            self.msg_firmware.mostra("fw_nessuna", GRIGIO)
+            spedita = self._versione_spedita()
+            vecchia = (porta is not None and spedita
+                       and serprog.piu_vecchia(self.fw_scheda, spedita))
+            if con_messaggio:
+                if porta is None or self.fw_scheda is None:
+                    self.msg_firmware.mostra("fw_nessuna", GRIGIO)
+                elif not vecchia:
+                    self.msg_firmware.mostra("fw_versione_ok", VERDE,
+                                             versione=self.fw_scheda or "?")
+                elif self.fw_scheda:
+                    self.msg_firmware.mostra("fw_versione_vecchia", AMBRA,
+                                             versione=self.fw_scheda,
+                                             nuova=spedita)
+                else:
+                    self.msg_firmware.mostra("fw_versione_muta", AMBRA,
+                                             nuova=spedita)
+            if vecchia:
+                self.b_aggiorna.pack(side="left", padx=(6, 0))
+                self.b_aggiorna.state(["!disabled"] if not self.occupato
+                                      else ["disabled"])
+            else:
+                self.b_aggiorna.pack_forget()
             self.b_firmware.state(["disabled"])
             self.b_azzera.state(["disabled"])
             return
+        self.b_aggiorna.pack_forget()
         firmware = self._percorso_firmware()
         if not firmware:
             self.msg_firmware.mostra("fw_assente", AMBRA)
@@ -932,9 +964,45 @@ class App(tk.Tk):
                 self.msg_firmware.mostra("fw_non_riappare", AMBRA)
             else:
                 self.msg_firmware.mostra(chiave_fine, VERDE)
-            self._aggiorna_firmware()
+            # ⚠️ senza questo, il riepilogo cancellerebbe l'esito appena letto
+            self._aggiorna_firmware(con_messaggio=False)
 
         self._avvia(lavoro, fine, "firmware")
+
+    def _versione_spedita(self):
+        """La versione dell'UF2 che abbiamo qui dentro."""
+        percorso = self._percorso_firmware()
+        if not percorso:
+            return None
+        return pico.versione_disponibile(os.path.dirname(percorso))
+
+    def _annota_firmware(self, diagnostica, seriale=None):
+        """Registra cosa dichiara la scheda interrogata."""
+        if diagnostica is None or not diagnostica.ok:
+            return
+        self.fw_scheda = diagnostica.firmware or ""
+        if seriale:
+            self.fw_chiesto.add(seriale)
+
+    def _chiedi_versione_se_serve(self):
+        """Una volta per scheda, non a ogni giro: apre e chiude la porta.
+
+        ⚠️ Nessuno puo' dire da fuori che firmware c'e' su un RP2040: il
+        seriale USB e' quello del chip e non cambia mai. Va chiesto alla
+        scheda, e la scheda risponde solo dalla 1.1 in poi.
+        """
+        if self.occupato:
+            return
+        porta = self._porta_programmatore()
+        if not porta:
+            return
+        seriale = self._seriale_di_porta(porta)
+        if seriale and seriale in self.fw_chiesto:
+            return
+        diagnostica = serprog.interroga(porta, BAUD)
+        if diagnostica.ok:
+            self._annota_firmware(diagnostica, seriale)
+            self._aggiorna_firmware()
 
     def _porta_programmatore(self):
         """La porta di un programmatore collegato adesso, se c'e'."""
@@ -1001,6 +1069,85 @@ class App(tk.Tk):
             self._aggiorna_firmware()
 
         self._avvia(lavoro, fine, "bootsel")
+
+    def aggiorna_firmware(self):
+        """Rientro in BOOTSEL, copia, e ricontrollo: tre passi, un tasto.
+
+        ⚠️ Il rientro da software esiste solo dalla 1.1. Una scheda piu'
+        vecchia non torna in BOOTSEL da sola e va premuto il pulsante, una
+        volta: dopo quell\u0027aggiornamento non serve piu'.
+        """
+        porta = self._porta_programmatore()
+        percorso = self._percorso_firmware()
+        if not (porta and percorso):
+            return
+        seriale_prima = self._seriale_di_porta(porta)
+        # la porta della scheda che stiamo aggiornando sparisce e torna: non
+        # va contata fra quelle "gia' presenti", o non la vedremmo tornare
+        prima = set(d for d, _n, sospetto, _s in serprog.elenca_porte()
+                    if sospetto)
+        prima.discard(porta)
+
+        def lavoro():
+            self._messaggio_da_thread(self.msg_firmware, "fw_aggiorno", AMBRA)
+            pico.rientra_in_bootsel(porta)
+            scheda = None
+            for _ in range(20):
+                time.sleep(0.5)
+                schede = pico.schede_in_bootsel()
+                if schede:
+                    scheda = schede[0]
+                    break
+            if scheda is None:
+                return ("no_bootsel", None, None)
+            self._messaggio_da_thread(self.msg_firmware, "fw_installando",
+                                      AMBRA)
+            fatto, motivo = pico.installa(percorso, scheda,
+                                          su_riga=self._riga_da_thread)
+            if not fatto:
+                return ("errore", motivo, scheda)
+            self._messaggio_da_thread(self.msg_firmware, "fw_attendo", GRIGIO)
+            for _ in range(30):
+                time.sleep(0.5)
+                adesso = set(d for d, _n, sospetto, _s in serprog.elenca_porte()
+                             if sospetto)
+                for dispositivo in sorted(adesso - prima):
+                    diagnostica = serprog.interroga(dispositivo, BAUD)
+                    if diagnostica.ok and diagnostica.parla_spi:
+                        return ("pronto", (dispositivo, diagnostica), scheda)
+            return ("muto", None, scheda)
+
+        def fine(risultato):
+            stato, dato, scheda = risultato
+            if scheda is not None and seriale_prima and scheda.seriale:
+                self.schede_note.collega(seriale_prima, scheda.seriale)
+                self._salva_config()
+            self.scheda_bootsel = None
+            if stato == "no_bootsel":
+                self.msg_firmware.mostra("fw_aggiorna_no_bootsel", AMBRA)
+            elif stato == "errore":
+                self.msg_firmware.mostra("fw_errore", ROSSO, motivo=dato)
+            elif stato == "muto":
+                self.msg_firmware.mostra("fw_non_riappare", AMBRA)
+            else:
+                dispositivo, diagnostica = dato
+                self._annota_firmware(diagnostica,
+                                      self._seriale_di_porta(dispositivo))
+                spedita = self._versione_spedita()
+                # ⚠️ Non basta che la copia sia riuscita: la versione la deve
+                # dichiarare la scheda, dopo essere ripartita.
+                if diagnostica.firmware == spedita:
+                    self.msg_firmware.mostra("fw_aggiornato", VERDE,
+                                             versione=diagnostica.firmware,
+                                             porta=dispositivo)
+                else:
+                    self.msg_firmware.mostra("fw_aggiorna_dubbio", ROSSO,
+                                             versione=diagnostica.firmware
+                                             or diagnostica.nome)
+                self.rileva_porte()
+            self._aggiorna_firmware(con_messaggio=False)
+
+        self._avvia(lavoro, fine, "aggiornamento firmware")
 
     def installa_firmware(self):
         self._programma(self._percorso_firmware(), "fw_installando",
@@ -1095,6 +1242,8 @@ class App(tk.Tk):
             bus=diagnostica.bus_leggibile)
         self.registro("   %s, iface v%s, bus %s" % (
             diagnostica.nome, diagnostica.versione, diagnostica.bus_leggibile))
+        self._annota_firmware(diagnostica, self._seriale_di_porta(porta))
+        self._aggiorna_firmware(con_messaggio=False)
         if not diagnostica.parla_spi:
             self.msg_collegamento.mostra("pico_no_spi", ROSSO)
 
@@ -1784,7 +1933,8 @@ class App(tk.Tk):
 
     def _blocca(self, occupato):
         for bottone in (self.b_identifica, self.b_leggi, self.b_prova,
-                        self.b_qualifica, self.b_secco, self.b_bootsel):
+                        self.b_qualifica, self.b_secco, self.b_bootsel,
+                        self.b_aggiorna):
             bottone.state(["disabled"] if occupato else ["!disabled"])
         self.b_interrompi.state(["!disabled"] if occupato else ["disabled"])
         if occupato:

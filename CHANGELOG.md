@@ -37,6 +37,17 @@ First public release.
   GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
   be put back into update mode without touching the button.
 - **Send to BOOTSEL**, which uses it.
+- **Firmware version.** The programmer now reports its version in the
+  serprog name (`pico-serprog1.1`), SPIranha compares it with the firmware it
+  carries, and offers a one-button update that goes back to BOOTSEL, copies,
+  and then asks the board again — a copy going through is not proof the board
+  is running the new code.
+- **A copy that never started is no longer reported as done.** Any `OSError`
+  used to count as the normal end-of-copy detach; a board fresh into BOOTSEL
+  answers `Permission denied` until Windows finishes mounting it, so the
+  firmware was never written and the program said it was. Now the copy is
+  retried while nothing has been written, and reported as failed if it never
+  starts.
 - **Write protection.** The chip's lock is read together with its
   identification, shown with its range and mode, and blocks the write when it
   covers the target region — a protected chip accepts an erase and a write
@@ -51,7 +62,7 @@ First public release.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 91 automated checks, including an end-to-end write against an emulated
+- 103 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Verified on hardware
@@ -60,6 +71,9 @@ First public release.
 - Factory reset, and the 1200-baud return to BOOTSEL, on the same board.
 - Naming: a board named while running is still recognised by name after being
   sent to BOOTSEL, where its serial is a different number.
+- Updating a board over the wire, with no button: 1.0 → 1.1, verified by asking
+  the board afterwards. flashrom reads the new name back as
+  `pico-serprog1.1`.
 
 ### Notes
 - The first target is the AMD BC-250 (`J4004` header). The wiring diagram,
