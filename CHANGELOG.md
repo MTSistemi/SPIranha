@@ -37,6 +37,6 @@ First public release.
 - The first target is the AMD BC-250 (`J4004` header). The wiring diagram,
   known fingerprints and default layout are specific to it.
 - `flashrom.exe` is not distributed in this repository; see
-  `flashrom/PROVENIENZA.md`.
+  `flashrom/PROVENANCE.md`.
 
 [1.1.0]: https://github.com/MTSistemi/SPIranha/releases/tag/v1.1.0

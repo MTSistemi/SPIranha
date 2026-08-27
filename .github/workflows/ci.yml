@@ -63,7 +63,7 @@ jobs:
           print("motore di analisi: a posto")
 
       - name: Window and safety rails
-        run: python prove\prova_gui.py
+        run: python tests\test_gui.py
 
       - name: Full run against an emulated chip
-        run: python prove\prova_completa.py
+        run: python tests\test_full.py

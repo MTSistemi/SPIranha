@@ -1,17 +1,16 @@
 # -*- coding: utf-8 -*-
-"""Costruisce SPIranha.exe (e, se c'e' Inno Setup, l'installatore).
+"""Build SPIranha.exe, and the Inno Setup installer if Inno Setup is present.
 
-Si fa un ambiente virtuale TUTTO SUO dentro questa cartella: il Python di
-sistema non viene toccato. Serve la rete solo la prima volta, per scaricare
-pyserial e pyinstaller.
+It makes its own virtualenv inside this folder: the system Python is left
+alone. Network access is needed only the first time, to fetch pyserial and
+pyinstaller.
 
-    python costruisci.py            # exe
-    python costruisci.py --setup    # exe + installatore
-    python costruisci.py --setup --firma   # e li firma (vedi firma.ps1)
-    python costruisci.py --pulisci  # butta via build/ dist/ .venv/
+    python build.py                    # the executable
+    python build.py --setup            # executable + installer
+    python build.py --setup --sign     # and sign them both (see sign.ps1)
+    python build.py --clean            # throw away build/ dist/ .venv/
 
-Builds SPIranha.exe in a self-contained virtualenv; add --setup for
-the Inno Setup installer.
+NOTE: the module below is written in Italian, like the rest of the codebase.
 """
 from __future__ import unicode_literals
 
@@ -109,15 +108,15 @@ def costruisci_exe():
 
 
 def firma(percorsi):
-    """Firma con firma.ps1. ⚠️ L'ORDINE CONTA: prima l'eseguibile, poi
+    """Firma con sign.ps1. ⚠️ L'ORDINE CONTA: prima l'eseguibile, poi
     l'installatore che se lo porta dentro. Firmando solo alla fine, l'exe
     dentro il setup resterebbe non firmato."""
-    script = os.path.join(QUI, "firma.ps1")
+    script = os.path.join(QUI, "sign.ps1")
     if not os.path.isfile(script):
-        print("firma.ps1 non c'e': salto la firma")
+        print("sign.ps1 non c'e': salto la firma")
         return
     args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-            "-File", script, "-File"] + list(percorsi)
+            "-File", script, "-Path"] + list(percorsi)
     esegui(args)
 
 
@@ -142,12 +141,12 @@ def pulisci():
 
 
 def main():
-    if "--pulisci" in sys.argv:
+    if "--clean" in sys.argv:
         pulisci()
         return 0
     prepara_venv()
     exe = costruisci_exe()
-    vuole_firma = "--firma" in sys.argv
+    vuole_firma = "--sign" in sys.argv
     if vuole_firma:
         firma([exe])
     if "--setup" in sys.argv:

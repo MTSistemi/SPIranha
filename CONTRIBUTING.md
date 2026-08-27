@@ -18,11 +18,11 @@ Convenience is not a good enough reason.
 Run both test suites on Windows:
 
 ```bash
-python prove\prova_gui.py        # 21 checks, no hardware
-python prove\prova_completa.py   # 37 checks, needs flashrom built with 'dummy'
+python tests\test_gui.py        # 21 checks, no hardware
+python tests\test_full.py   # 37 checks, needs flashrom built with 'dummy'
 ```
 
-`prova_completa.py` drives the real window and the real flashrom against an
+`test_full.py` drives the real window and the real flashrom against an
 emulated chip. If your change touches the write path, the map, the dry run or
 the verification, **add a check there** rather than describing the behaviour in
 the pull request. A check that fails before your fix and passes after is worth

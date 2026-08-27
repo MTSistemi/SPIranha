@@ -57,22 +57,22 @@ def backup_o_salta():
     cartella = trova_backup()
     if cartella:
         return cartella
-    print("SALTATA: non trovo le immagini della BC-250.")
-    print("Servono, nella stessa cartella:")
+    print("SKIPPED: cannot find the BC-250 images.")
+    print("These are needed, in one folder:")
     for gruppo in NECESSARI:
         print("   " + " oppure ".join(gruppo))
-    print("Indicarla con la variabile d'ambiente SPIRANHA_BIOS_BACKUP,")
-    print("oppure metterle in una cartella 'bios-backup' accanto al progetto.")
+    print("Point SPIRANHA_BIOS_BACKUP at it,")
+    print("or put them in a 'bios-backup' folder next to the project.")
     sys.exit(0)
 
 
 def flashrom_o_salta():
     """flashrom.exe, oppure esce: nel repository non c'e' (vedi
-    flashrom/PROVENIENZA.md per compilarlo)."""
+    flashrom/PROVENANCE.md per compilarlo)."""
     percorso = os.path.join(RADICE, "flashrom", "flashrom.exe")
     if os.path.isfile(percorso):
         return percorso
-    print("SALTATA: non trovo flashrom/flashrom.exe.")
-    print("Non e' nel repository: si compila seguendo flashrom/PROVENIENZA.md,")
-    print("con il programmatore 'dummy' attivo (serve a queste prove).")
+    print("SKIPPED: cannot find flashrom/flashrom.exe.")
+    print("Not in the repository: build it following flashrom/PROVENANCE.md,")
+    print("with the 'dummy' programmer enabled (these tests drive it).")
     sys.exit(0)

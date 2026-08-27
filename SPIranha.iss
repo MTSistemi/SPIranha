@@ -1,6 +1,6 @@
-; Installatore per Programmatore BIOS — BC-250
-; Si costruisce con:  python costruisci.py --setup
-; Installer for the BIOS Programmer tool. Build with: python costruisci.py --setup
+; Installer for SPIranha — BC-250
+; Build it with:  python build.py --setup
+; Inno Setup script for SPIranha.
 
 #define Nome "SPIranha"
 #define Versione "1.1.0"

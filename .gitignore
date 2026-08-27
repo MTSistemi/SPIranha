@@ -8,8 +8,8 @@ __pycache__/
 
 # generati
 programmatore.ico
-prove/lavoro/
-prove/corto.rom
+tests/lavoro/
+tests/corto.rom
 
 # ⚠️ flashrom si compila, non si committa: vedi flashrom/PROVENIENZA.md
 flashrom/flashrom.exe

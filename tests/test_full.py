@@ -25,7 +25,7 @@ CARTELLA = os.path.dirname(QUI)
 sys.path.insert(0, QUI)
 sys.path.insert(0, CARTELLA)
 
-import comune  # noqa: E402
+import common as comune  # noqa: E402
 
 BACKUP = comune.backup_o_salta()
 EXE = comune.flashrom_o_salta()

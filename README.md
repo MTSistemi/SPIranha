@@ -108,7 +108,7 @@ To build the single-file executable — it creates its own virtualenv and leaves
 the system Python alone:
 
 ```bash
-python costruisci.py --setup
+python build.py --setup
 ```
 
 That produces `dist\SPIranha.exe` (portable, flashrom embedded) and, if Inno
@@ -117,7 +117,7 @@ Setup 6 is installed, `dist\SPIranha-Setup-<version>.exe`.
 ### flashrom
 
 `flashrom.exe` is **not in this repository**. flashrom.org publishes source
-only, so it has to be built — [`flashrom/PROVENIENZA.md`](flashrom/PROVENIENZA.md)
+only, so it has to be built — [`flashrom/PROVENANCE.md`](flashrom/PROVENANCE.md)
 documents exactly how, including the two options that matter:
 
 - `-Dprogrammer=serprog,dummy` — `dummy` emulates a chip in memory and is what
@@ -132,11 +132,11 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python prove\prova_gui.py        # 21 checks, no hardware needed
-python prove\prova_completa.py   # 37 checks, needs flashrom with 'dummy'
+python tests\test_gui.py        # 21 checks, no hardware needed
+python tests\test_full.py   # 37 checks, needs flashrom with 'dummy'
 ```
 
-`prova_completa.py` drives the real window and the real flashrom against an
+`test_full.py` drives the real window and the real flashrom against an
 **emulated 16 MiB chip**: it starts from a stock BIOS image, writes one region
 through a layout, and checks the result is byte-identical to the expected image
 — dry run, block map, final verification and coherence check included. It also
