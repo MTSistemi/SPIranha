@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: flashrom itself
+    url: https://flashrom.org/contact.html
+    about: Chip support and flashing bugs belong upstream — we invoke flashrom, we do not patch it.
+  - name: Security report
+    url: https://github.com/MTSistemi/SPIranha/security/advisories/new
+    about: Anything that could damage hardware or hide a bad write. Please do not open a public issue.
