@@ -37,6 +37,12 @@ First public release.
   GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
   be put back into update mode without touching the button.
 - **Send to BOOTSEL**, which uses it.
+- **Regions read out of the image.** Intel descriptor, FMAP and the AMD
+  firmware structure are parsed straight from the dump, turned into a flashrom
+  layout, and the region list fills itself. On the BC-250 — which has neither a
+  descriptor nor an FMAP — the AMD structure yields the memory configuration
+  and the 2 MiB BIOS image, and the full test has flashrom read that region
+  back from the emulated chip and compares the bytes.
 - **Firmware version.** The programmer now reports its version in the
   serprog name (`pico-serprog1.1`), SPIranha compares it with the firmware it
   carries, and offers a one-button update that goes back to BOOTSEL, copies,
@@ -62,7 +68,7 @@ First public release.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 103 automated checks, including an end-to-end write against an emulated
+- 123 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Verified on hardware

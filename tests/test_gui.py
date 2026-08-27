@@ -341,6 +341,99 @@ def prova(finestra):
         controlla("firmware aggiornato: nessun tasto Aggiorna",
                   not finestra.b_aggiorna.winfo_ismapped())
 
+
+        # 17. regioni ricavate dall'immagine: IFD, FMAP, AMD
+        import struct as _st
+        import regioni as _rg
+
+        # --- descrittore Intel: firma a 0x10, FRBA e numero regioni in FLMAP0
+        intel = bytearray(b"\xff" * (2 * 1024 * 1024))
+        _st.pack_into("<I", intel, 0x10, _rg.FIRMA_IFD)
+        frba = 0x40
+        _st.pack_into("<I", intel, 0x14, (2 << 24) | (frba >> 4 << 16))
+        def _voce(inizio, fine):
+            return ((fine >> 12) << 16) | (inizio >> 12)
+        _st.pack_into("<I", intel, frba + 0, _voce(0x000000, 0x000FFF))  # fd
+        _st.pack_into("<I", intel, frba + 4, _voce(0x100000, 0x1FFFFF))  # bios
+        _st.pack_into("<I", intel, frba + 8, 0x00007FFF)                 # assente
+        origine, trovate = _rg.trova(bytes(intel))
+        nomi = [r.nome for r in trovate]
+        controlla("descrittore Intel riconosciuto", origine == "ifd", str(nomi))
+        controlla("regioni fd e bios lette", nomi == ["fd", "bios"], str(nomi))
+        controlla("la regione bios ha gli estremi giusti",
+                  trovate[1].inizio == 0x100000 and trovate[1].fine == 0x1FFFFF,
+                  "%06X-%06X" % (trovate[1].inizio, trovate[1].fine))
+        # ⚠️ base > limite vuol dire "regione non presente", non e' un errore
+        # da segnalare: va semplicemente saltata.
+        controlla("regione dichiarata assente: saltata", len(trovate) == 2)
+
+        # --- FMAP
+        fmap = bytearray(b"\x00" * (1024 * 1024))
+        dove = 0x1000                      # allineata a 64, come vuole la specifica
+        _rg.TESTA_FMAP.pack_into(fmap, dove, b"__FMAP__", 1, 1, 0, len(fmap),
+                                 b"prova", 2)
+        base = dove + _rg.TESTA_FMAP.size
+        _rg.AREA_FMAP.pack_into(fmap, base, 0, 0x8000, b"BOOT_STUB", 0)
+        _rg.AREA_FMAP.pack_into(fmap, base + _rg.AREA_FMAP.size,
+                                0x8000, 0x8000, b"RW_SECTION", 0)
+        origine, trovate = _rg.trova(bytes(fmap))
+        controlla("FMAP riconosciuta", origine == "fmap", str(origine))
+        controlla("aree FMAP con i loro nomi",
+                  [r.nome for r in trovate] == ["BOOT_STUB", "RW_SECTION"],
+                  str([r.nome for r in trovate]))
+        controlla("dimensione dell'area rispettata",
+                  trovate[0].fine == 0x7FFF, hex(trovate[0].fine))
+
+        # una FMAP che punta fuori dall'immagine non e' la sua: si scarta
+        corta = bytearray(b"\x00" * 0x20000)
+        _rg.TESTA_FMAP.pack_into(corta, 0x1000, b"__FMAP__", 1, 1, 0,
+                                 0x1000000, b"altra", 1)
+        _rg.AREA_FMAP.pack_into(corta, 0x1000 + _rg.TESTA_FMAP.size,
+                                0, 0x1000000, b"TUTTO", 0)
+        controlla("FMAP di un'altra immagine: rifiutata",
+                  _rg.regioni_fmap(bytes(corta)) == [])
+
+        # --- struttura AMD: EFS con direttorio BIOS
+        amd = bytearray(b"\xff" * (16 * 1024 * 1024))
+        efs = 0x820000
+        _st.pack_into("<I", amd, efs, _rg.FIRMA_EFS)
+        _st.pack_into("<I", amd, efs + 0x1C, 0xFFAB0000)      # bios1_entry
+        amd[0xAB0000:0xAB0004] = b"$BHD"
+        _st.pack_into("<I", amd, 0xAB0008, 2)                 # due voci
+        _rg.__dict__["_VOCE_BHD"].pack_into(
+            amd, 0xAB0010, 0x60, 0, 0, 0x2000, 0xFFAB1000, 0)
+        _rg.__dict__["_VOCE_BHD"].pack_into(
+            amd, 0xAB0010 + 24, 0x62, 0, 0, 0x1FE000, 0xFFE02000, 0)
+        origine, trovate = _rg.trova(bytes(amd))
+        nomi = [r.nome for r in trovate]
+        controlla("struttura AMD riconosciuta", origine == "amd", str(nomi))
+        controlla("apcb e immagine BIOS trovate",
+                  "apcb" in nomi and "bios" in nomi, str(nomi))
+        # ⚠️ Gli indirizzi AMD sono quelli visti dalla CPU (0xFFE02000): se non
+        # si riportano dentro l'immagine, la regione finisce fuori dal chip.
+        bios = [r for r in trovate if r.nome == "bios"][0]
+        controlla("indirizzo AMD riportato nell'immagine",
+                  bios.inizio == 0xE02000 and bios.fine == 0xFFFFFF,
+                  "%06X-%06X" % (bios.inizio, bios.fine))
+        controlla("il direttorio copre la tabella, non cio' a cui punta",
+                  [r for r in trovate if r.nome == "bios_dir"][0].fine
+                  == 0xAB0010 + 2 * 24 - 1)
+
+        # --- un'immagine che non dice niente di se' non deve inventare nulla
+        muta = b"\x00" * (1024 * 1024)
+        controlla("immagine senza mappa: nessuna regione",
+                  _rg.trova(muta) == (None, []))
+
+        # --- il layout generato e' quello che flashrom si aspetta
+        testo = _rg.come_layout(trovate, len(amd))
+        controlla("layout con nomi veri",
+                  "00e02000:00ffffff bios" in testo, repr(testo))
+        doppie = _rg.come_layout([_rg.Regione("bios", 0, 0xFF),
+                                  _rg.Regione("bios", 0x100, 0x1FF)], 0x200)
+        controlla("nomi ripetuti resi unici",
+                  doppie.split()[1] == "bios" and "bios_1" in doppie,
+                  repr(doppie))
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

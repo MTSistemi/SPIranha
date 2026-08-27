@@ -88,6 +88,27 @@ firmware can be put back into update mode over the wire, so after the first
 time the button is never needed again. Upstream `pico-serprog` has no such
 path — it is one of the two patches in `firmware/`.
 
+**Regions come out of the image itself.** A BIOS dump is not one block:
+it carries a map saying where each piece lives. SPIranha reads that map and
+turns it into a flashrom layout, so the region list fills itself in instead of
+being typed by hand. Three maps cover nearly everything on a bench:
+
+| map | where it comes from | what it gives |
+|---|---|---|
+| Intel descriptor | the first 4 KiB of any Intel-chipset flash | `fd`, `bios`, `me`, `gbe`, `ec` |
+| FMAP | coreboot and its derivatives | every named area |
+| AMD firmware structure | AMD boards, at one of six fixed offsets | `psp`, `apcb`, and the BIOS image |
+
+It reads the **image**, not the chip: the dump you just took is already on disk,
+and reading it costs nothing on the wire. The AMD side is why this is not a
+paper feature here — the BC-250 has neither a descriptor nor an FMAP, and on its
+real dump this finds the memory configuration and the 2 MiB BIOS image at
+`0x00E02000`. The end-to-end test does exactly that and then has flashrom read
+that region back byte for byte.
+
+An image that says nothing about itself is reported as saying nothing. Nothing
+is guessed.
+
 **The programmer says which firmware it runs**, and SPIranha compares it
 with the one it carries. If the board is behind, an **Update** button appears
 and does the whole thing over the wire: back to BOOTSEL, copy, wait for the
@@ -209,8 +230,8 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 64 checks, no hardware needed
-python tests\test_full.py    # 39 checks, needs flashrom built with 'dummy'
+python tests\test_gui.py     # 79 checks, no hardware needed
+python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 
 `test_full.py` drives the real window and the real flashrom against an

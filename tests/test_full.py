@@ -259,6 +259,38 @@ def prova(finestra):
         controlla("layout generato accettato da flashrom",
                   len(fr.leggi_layout(_scrivi_temp(testo))) == 3)
 
+        # ---- 10. regioni ricavate dal dump vero, e usate davvero -----
+        # ⚠️ Qui non si fabbrica niente: e' il dump di una BC-250, che non ha
+        # ne' descrittore Intel ne' FMAP. Se il riconoscimento AMD si rompe,
+        # su questa scheda la funzione smette di servire a qualcosa.
+        import regioni as _rg
+        dati_stock = A.leggi(STOCK)
+        origine, trovate = _rg.trova(dati_stock)
+        nomi = dict((r.nome, r) for r in trovate)
+        controlla("dump vero: struttura AMD riconosciuta", origine == "amd",
+                  str(origine))
+        controlla("dump vero: immagine BIOS individuata",
+                  "bios" in nomi and nomi["bios"].inizio == 0xE02000,
+                  str(sorted(nomi)))
+        controlla("dump vero: configurazione memoria individuata",
+                  "apcb" in nomi, str(sorted(nomi)))
+
+        percorso_regioni = os.path.join(LAVORO, "regioni.layout")
+        with open(percorso_regioni, "wb") as f:
+            f.write(_rg.come_layout(trovate, len(dati_stock)).encode("ascii"))
+        estratto = os.path.join(LAVORO, "solo-bios.rom")
+        esito = finestra.flash.leggi_regione(percorso_regioni, "bios",
+                                             estratto, "dummy")
+        controlla("flashrom legge la regione ricavata", esito.ok,
+                  " ".join(esito.righe[-2:]))
+        if esito.ok:
+            with open(estratto, "rb") as f:
+                letto = f.read()
+            regione = nomi["bios"]
+            controlla("i byte estratti sono quelli della regione",
+                      letto == dati_stock[regione.inizio:regione.fine + 1],
+                      "%d byte, attesi %d" % (len(letto), regione.byte))
+
     except Exception:
         traceback.print_exc()
         esiti.append(("eccezione", False))

@@ -204,6 +204,31 @@ T = {
         "en": "unknown fingerprint",
     },
 
+    # --- regioni ricavate dall'immagine -------------------------------------
+    "reg_ricava": {"it": "Ricava", "en": "Derive"},
+    "reg_trovate": {
+        "it": "{quante} regioni ({origine}). Layout scritto: {file}",
+        "en": "{quante} regions ({origine}). Layout written: {file}",
+    },
+    "reg_niente": {
+        "it": "L\u0027immagine non dichiara regioni: niente descrittore Intel, "
+              "niente FMAP, niente struttura AMD. Il layout va scritto a mano.",
+        "en": "The image declares no regions: no Intel descriptor, no FMAP, no "
+              "AMD structure. The layout has to be written by hand.",
+    },
+    "reg_senza_immagine": {
+        "it": "Serve un\u0027immagine da cui ricavarle: leggere il chip, "
+              "oppure indicare il file atteso.",
+        "en": "An image is needed to derive them from: read the chip, or point "
+              "at the expected file.",
+    },
+    "reg_origine_ifd": {"it": "descrittore Intel", "en": "Intel descriptor"},
+    "reg_origine_fmap": {"it": "FMAP", "en": "FMAP"},
+    "reg_origine_amd": {"it": "struttura AMD", "en": "AMD structure"},
+    "reg_non_scrivo": {
+        "it": "Non riesco a scrivere il layout: {motivo}",
+        "en": "Cannot write the layout: {motivo}",
+    },
     # --- 4. scrittura ----------------------------------------------------
     "sez_scrittura": {"it": "4 · Scrittura", "en": "4 · Writing"},
     "modo": {"it": "Ambito", "en": "Scope"},

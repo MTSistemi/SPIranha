@@ -12,7 +12,7 @@ They open and close the window by themselves; there is nothing to click.
 
 *Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
 
-## `test_gui.py` — 64 checks
+## `test_gui.py` — 79 checks
 
 The window and its rules, without touching flashrom: construction, live
 IT↔EN switching, everything disabled when flashrom is missing, layout file
@@ -27,6 +27,11 @@ read back and checked block by block, and both a corrupted file and a
 non-UF2 file must be refused before they could ever reach a board. And it
 pins down the board recognition against the real `Board-ID: RPI-RP2` string,
 which an earlier version got wrong.
+
+It covers region detection on images it builds itself — an Intel descriptor,
+an FMAP, an AMD structure — including the cases that must *not* produce a
+result: a region the descriptor marks as absent, an FMAP belonging to a
+different image, and an image carrying no map at all.
 
 It covers the firmware version too: reading it out of the name the board
 reports, comparing versions numerically (so `1.10` is newer than `1.9`), and
@@ -49,7 +54,7 @@ erase consent ask for the serial's last four characters.
 **This test fabricates its own fixtures** — a layout file and two 16 MiB images
 — so it needs nothing from outside and runs in CI on every push.
 
-## `test_full.py` — 39 checks
+## `test_full.py` — 44 checks
 
 **This is the one that matters.** It drives the real window and the real
 flashrom; the only difference is the programmer, which is `dummy` instead of

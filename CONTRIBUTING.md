@@ -18,8 +18,8 @@ Convenience is not a good enough reason.
 Run both test suites on Windows:
 
 ```bash
-python tests\test_gui.py        # 64 checks, no hardware
-python tests\test_full.py   # 39 checks, needs flashrom built with 'dummy'
+python tests\test_gui.py        # 79 checks, no hardware
+python tests\test_full.py   # 44 checks, needs flashrom built with 'dummy'
 ```
 
 `test_full.py` drives the real window and the real flashrom against an

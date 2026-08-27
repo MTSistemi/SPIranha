@@ -30,6 +30,7 @@ import confronto
 import flashrom as fr
 import mappa as M
 import pico
+import regioni as reg
 import schema
 import serprog
 import tema as T
@@ -606,6 +607,10 @@ class App(tk.Tk):
         self.combo_regione = ttk.Combobox(s, textvariable=self.var_regione, width=18,
                                           state="readonly", font=self.tema.f_testo)
         self.combo_regione.grid(row=5, column=1, sticky="w", padx=(6, 0), pady=(6, 0))
+        self.b_regioni = self._etichetta(
+            ttk.Button(s, style="Ghost.TButton", command=self.ricava_regioni),
+            "reg_ricava")
+        self.b_regioni.grid(row=5, column=2, sticky="w", pady=(6, 0))
         self.combo_regione.bind("<<ComboboxSelected>>",
                                 lambda _e: self._aggiorna_scrittura())
 
@@ -1657,6 +1662,55 @@ class App(tk.Tk):
         else:
             self.msg_scrittura.pulisci()
 
+    def _immagine_di_riferimento(self):
+        """Da quale file si guardano le regioni, e in quest\u0027ordine.
+
+        ⚠️ Prima la lettura del chip: le regioni che contano sono quelle di
+        cio\u0027 che c\u0027e\u0027 adesso sul chip, non quelle dell\u0027immagine nuova.
+        Se non si e\u0027 ancora letto, si ripiega su cosa ci si aspetta.
+        """
+        for percorso in (getattr(self, "lettura_file", None),
+                         self.var_atteso.get().strip(),
+                         self.var_immagine.get().strip()):
+            if percorso and os.path.isfile(percorso):
+                return percorso
+        return None
+
+    def ricava_regioni(self):
+        """Legge la mappa che l\u0027immagine si porta dentro e ne fa un layout."""
+        percorso = self._immagine_di_riferimento()
+        if not percorso:
+            self.msg_scrittura.mostra("reg_senza_immagine", AMBRA)
+            return
+        try:
+            with open(percorso, "rb") as f:
+                dati = f.read()
+        except OSError as e:                           # noqa: BLE001
+            self.msg_scrittura.mostra("reg_non_scrivo", ROSSO, motivo="%s" % e)
+            return
+        origine, trovate = reg.trova(dati)
+        self.registro("→ %s" % A.nome_file(percorso), "io")
+        if not trovate:
+            self.msg_scrittura.mostra("reg_niente", AMBRA)
+            self.registro("   %s" % self.L("reg_niente"))
+            return
+        radice = os.path.splitext(percorso)[0] + "-regioni.layout"
+        try:
+            with open(radice, "wb") as f:
+                f.write(reg.come_layout(trovate, len(dati)).encode("ascii"))
+        except OSError as e:                           # noqa: BLE001
+            self.msg_scrittura.mostra("reg_non_scrivo", ROSSO, motivo="%s" % e)
+            return
+        for regione in trovate:
+            self.registro("   %08x:%08x %s" % (regione.inizio, regione.fine,
+                                               regione.nome))
+        self.var_layout.set(radice)
+        self._ricarica_regioni()
+        self._salva_config()
+        self.msg_scrittura.mostra("reg_trovate", VERDE, quante=len(trovate),
+                                  origine=self.L("reg_origine_%s" % origine),
+                                  file=A.nome_file(radice))
+
     def _ricarica_regioni(self):
         percorso = self.var_layout.get().strip()
         self.regioni = []
@@ -1934,6 +1988,7 @@ class App(tk.Tk):
     def _blocca(self, occupato):
         for bottone in (self.b_identifica, self.b_leggi, self.b_prova,
                         self.b_qualifica, self.b_secco, self.b_bootsel,
+                        self.b_regioni,
                         self.b_aggiorna):
             bottone.state(["disabled"] if occupato else ["!disabled"])
         self.b_interrompi.state(["!disabled"] if occupato else ["disabled"])
