@@ -22,6 +22,11 @@ python tests\test_gui.py        # 124 checks, no hardware
 python tests\test_full.py   # 44 checks, needs flashrom built with 'dummy'
 ```
 
+The tests build the **real** window, so they point `SPIRANHA_CONFIG` at a
+throw-away folder before importing `app`. Without it they save over the settings
+of whoever is using the program — profile, paths and board names included. Keep
+that line at the top of any new test that constructs `App()`.
+
 ⚠️ `test_gui.py` runs in CI on a machine with **no `flashrom.exe`**, and that is
 a different code path: the window falls back to placeholders. If you touch
 anything that reads the flashrom object, run the suite once with the binary

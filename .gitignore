@@ -28,3 +28,5 @@ flashrom/flashrom.exe
 # system clutter
 Thumbs.db
 desktop.ini
+config-di-prova/
+tests/config-di-prova/

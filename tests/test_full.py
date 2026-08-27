@@ -24,6 +24,11 @@ QUI = os.path.dirname(os.path.abspath(__file__))
 CARTELLA = os.path.dirname(QUI)
 sys.path.insert(0, QUI)
 sys.path.insert(0, CARTELLA)
+# ⚠️ Le impostazioni vanno in una cartella usa-e-getta: queste prove
+# costruiscono la finestra VERA e salvano, e senza questo riscrivevano la
+# configurazione di chi stava usando il programma.
+os.environ["SPIRANHA_CONFIG"] = os.path.join(QUI, "config-di-prova")
+
 
 import common as comune  # noqa: E402
 

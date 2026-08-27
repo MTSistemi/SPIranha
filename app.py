@@ -80,6 +80,16 @@ def cartella_app():
 
 
 def cartella_config():
+    """Dove stanno le impostazioni.
+
+    ⚠️ SPIRANHA_CONFIG esiste per le prove, e non e' un vezzo: le prove
+    costruiscono la finestra vera, cambiano profilo e salvano -- cioe'
+    riscrivevano le impostazioni di chi stava usando il programma. Chi le
+    lanciava se lo ritrovava con un altro profilo e i percorsi delle prove.
+    """
+    forzata = os.environ.get("SPIRANHA_CONFIG")
+    if forzata:
+        return forzata
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
     return os.path.join(base, APPNOME)
 
@@ -500,10 +510,6 @@ class App(tk.Tk):
             ttk.Button(cornice_f, style="Ghost.TButton",
                        command=self.rientra_in_bootsel), "fw_bootsel")
         self.b_bootsel.pack(side="left")
-        self.b_adattatore = self._etichetta(
-            ttk.Button(cornice_f, style="Ghost.TButton",
-                       command=self.apri_adattatore), "tens_schema")
-        self.b_adattatore.pack(side="left", padx=(6, 0))
         # compare solo se c'e' davvero qualcosa da aggiornare
         self.b_aggiorna = self._etichetta(
             ttk.Button(cornice_f, style="Secondario.TButton",
@@ -560,6 +566,10 @@ class App(tk.Tk):
         cornice_p.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(7, 0))
         self.msg_protezione = Messaggio(self, cornice_p)
         self.msg_protezione.widget.pack(side="left")
+        self.b_adattatore = self._etichetta(
+            ttk.Button(cornice_p, style="Ghost.TButton",
+                       command=self.apri_adattatore), "tens_schema")
+        self.b_adattatore.pack(side="right")
         self.b_sblocca = self._etichetta(
             ttk.Button(cornice_p, style="Secondario.TButton",
                        command=self.sblocca_chip), "prot_sblocca")
@@ -1463,7 +1473,7 @@ class App(tk.Tk):
             self.msg_protezione.mostra("prot_libera", VERDE)
             self.b_sblocca.pack_forget()
             return
-        self.b_sblocca.pack(side="right", padx=(10, 0))
+        self.b_sblocca.pack(side="right", padx=(10, 8))
         intervallo = self._intervallo_regione()
         scontro = intervallo and p.tocca(intervallo[0], intervallo[1])
         if scontro:

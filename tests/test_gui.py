@@ -14,6 +14,11 @@ CARTELLA = os.path.dirname(QUI)
 sys.path.insert(0, QUI)
 sys.path.insert(0, CARTELLA)
 
+# ⚠️ Le impostazioni vanno in una cartella usa-e-getta: queste prove
+# costruiscono la finestra VERA e salvano, e senza questo riscrivevano la
+# configurazione di chi stava usando il programma.
+os.environ["SPIRANHA_CONFIG"] = os.path.join(QUI, "config-di-prova")
+
 import app as modulo  # noqa: E402
 
 # â ï¸ Questa prova NON dipende da nessuna immagine vera: si fabbrica i suoi file.
