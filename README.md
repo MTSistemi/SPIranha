@@ -67,7 +67,10 @@ and what is inside — and writes the flashrom layout file for you.
 
 **Wiring diagram.** Drawn in code, so it scales without blurring and travels
 inside the executable. It shows both ends: which Pico pin goes to which header
-pad, with the pin-1 marker and the warnings that matter.
+pad, with the pin-1 marker and the warnings that matter. The Pico is drawn with
+the parts you actually look at to orient it — USB, the BOOTSEL button, the
+RP2040 square with its pin-1 dot, the debug pads — because pin numbers alone do
+not tell you which way up the board is, and upside down they are mirrored.
 
 ## Turning a bare RP2040 into the programmer
 
@@ -317,7 +320,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 162 checks, no hardware needed
+python tests\test_gui.py     # 165 checks, no hardware needed
 python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 

@@ -98,6 +98,12 @@ failure that did not announce itself.
   the file it came from byte for byte.
 
 ### Fixed
+- **Naming a board now shows up in the port list straight away.** The port was
+  the same, so the label was left alone — and the name you had just typed
+  looked lost.
+- **Overlapping text in the diagrams.** The notes under the small headings were
+  anchored at their centre, so the first line of a wrapped note climbed on top
+  of the heading.
 - **A write-protected chip no longer looks like a successful write.** It
   accepts the erase and the write and stays as it was; the protection is now
   read with the chip and blocks the write when it covers the target.

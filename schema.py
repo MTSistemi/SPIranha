@@ -292,16 +292,19 @@ class Schema(tk.Toplevel):
 
         self._testo(PX0, TITOLO_Y, T.micro(self.L("sch_pico")), T.MUT,
                     self._car(7, True))
-        self._testo(PX0, NOTA_Y, self.L("sch_pico_nota"), "#5E7488", self._car(7),
-                    larghezza=230)
+        # ⚠️ ancora "nw": col centraggio verticale la prima riga di una nota
+        # che va a capo sale SOPRA il punto dato, cioe' addosso al titolo.
+        self._testo(PX0, NOTA_Y - 4, self.L("sch_pico_nota"), "#5E7488",
+                    self._car(7), ancora="nw", larghezza=230)
 
         # circuito stampato
         self._rett(PX0, PY0, x1, y1, "#0E3428", "#1C5943")
-        # connettore USB, l'unico riferimento di verso che conta
+        # connettore USB, in cima
         self._rett(PX0 + 63, PY0 - 9, x1 - 63, PY0 + 13, "#8C93A0", "#B9C1CC")
         self._rett(PX0 + 71, PY0 - 4, x1 - 71, PY0 + 8, "#4E5561", "#4E5561")
         self._testo((PX0 + x1) / 2.0, PY0 - 19, "USB", T.MUT, self._car(7, True),
                     ancora="center")
+        self._componenti_pico(x1, y1)
 
         usati = {c[1]: c[0] for c in COLLEGAMENTI}
 
@@ -334,6 +337,48 @@ class Schema(tk.Toplevel):
                             colore or "#7E9C8C", self._car(7, bool(colore)),
                             ancora=ancora)
 
+    def _componenti_pico(self, x1, y1):
+        """I pezzi che si vedono sulla scheda vera, per capire il verso.
+
+        ⚠️ Il connettore USB da solo non bastava: chi guarda il disegno non
+        sa se sta vedendo la scheda da sopra o da sotto, e i piedini sono
+        specchiati. Il chip quadrato in mezzo, il pulsante BOOTSEL sotto
+        l'USB e i contatti di servizio in fondo danno il verso che si ha
+        davanti tenendo la scheda in mano.
+
+        ⚠️ Tutto sta nella STRISCIA CENTRALE libera. I nomi dei piedini sono
+        scritti dentro la scheda e, dove c'e' anche il segnale ("GP2 · SCLK",
+        "3V3 OUT · VCC"), arrivano quasi a meta': i pezzi vanno messi dove
+        quei nomi sono corti, o ci finiscono sopra. E' gia' successo.
+        """
+        cx = (PX0 + x1) / 2.0
+
+        # il pulsante BOOTSEL, subito sotto l'USB: righe 1-3 e 38-40, nomi corti
+        bx, by = cx, PY0 + 26
+        self._rett(bx - 13, by - 8, bx + 13, by + 8, "#20262E", "#3A4652")
+        self._rett(bx - 8, by - 4, bx + 8, by + 4, "#313943", "#4B5967")
+        self._testo(cx, by + 17, "BOOTSEL", "#7E9C8C", self._car(6, True),
+                    ancora="center")
+
+        # il chip: quadrato, in mezzo, dove i nomi accanto sono corti
+        lato = 62
+        qx0, qy0 = cx - lato / 2.0, PY0 + 150
+        self._rett(qx0, qy0, qx0 + lato, qy0 + lato, "#12171D", "#39434E")
+        # il puntino del piedino 1, in alto a sinistra come sul chip vero
+        px, py = self._s(qx0 + 9, qy0 + 9)
+        r = self._s(3)
+        self.tela.create_oval(px - r, py - r, px + r, py + r, fill="#8FA2B2",
+                              outline="")
+        self._testo(cx, qy0 + lato / 2.0, "RP2040", "#B9C7D3",
+                    self._car(7, True), ancora="center")
+
+        # i contatti di servizio (SWD) sul bordo di sotto
+        for indice in range(3):
+            sx = cx - 26 + indice * 26
+            self._rett(sx - 7, y1 - 16, sx + 7, y1 - 6, "#C9A227", "#8A6F1B")
+        self._testo(cx, y1 - 26, "SWD", "#5E8A72", self._car(6),
+                    ancora="center")
+
     # -- il connettore -----------------------------------------------------
     def _connettore(self):
         x0, x1 = CX[0] - CPAD - 9, CX[3] + CPAD + 9
@@ -341,8 +386,8 @@ class Schema(tk.Toplevel):
 
         self._testo(x0, TITOLO_Y, T.micro(self.L("sch_conn")), T.MUT,
                     self._car(7, True))
-        self._testo(x0, NOTA_Y, self.L("sch_conn_nota"), "#5E7488", self._car(7),
-                    larghezza=210)
+        self._testo(x0, NOTA_Y - 4, self.L("sch_conn_nota"), "#5E7488",
+                    self._car(7), ancora="nw", larghezza=210)
 
         self._rett(x0, y0, x1, y1, "#171E26", "#2E3A46")
         self._rett(x0 + 3, y0 + 3, x1 - 3, y1 - 3, "", "#0D131A")
@@ -397,8 +442,8 @@ class Schema(tk.Toplevel):
         y_fine = CHY0 + 3 * CHPASSO
         self._testo(CHX0 - CHPAD, TITOLO_Y, T.micro(self.L("sch_chip")), T.MUT,
                     self._car(7, True))
-        self._testo(CHX0 - CHPAD, NOTA_Y, self.L("sch_chip_nota"), "#5E7488",
-                    self._car(7), larghezza=230)
+        self._testo(CHX0 - CHPAD, NOTA_Y - 4, self.L("sch_chip_nota"),
+                    "#5E7488", self._car(7), ancora="nw", larghezza=230)
 
         # corpo del contenitore
         self._rett(CHX0, CHY0 - 30, CHX1, y_fine + 30, "#12171D", "#39434E")
@@ -438,7 +483,7 @@ class Schema(tk.Toplevel):
         # ⚠️ /WP e /HOLD bassi = il chip accetta i comandi e non scrive niente.
         # E' lo stesso modo silenzioso di fallire della protezione in scrittura.
         self._testo(CHX0 - CHPAD, y_fine + 58, self.L("sch_wp_nota"), "#93A5B4",
-                    self._car(7), ancora="nw", larghezza=250)
+                    self._car(7), ancora="nw", larghezza=210)
 
     # -- i cavetti ---------------------------------------------------------
     def _fili(self):

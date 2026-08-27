@@ -12,7 +12,7 @@ They open and close the window by themselves; there is nothing to click.
 
 *Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
 
-## `test_gui.py` — 162 checks
+## `test_gui.py` — 165 checks
 
 The window and its rules, without touching flashrom: construction, live
 IT↔EN switching, everything disabled when flashrom is missing, layout file

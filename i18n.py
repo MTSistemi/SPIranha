@@ -148,6 +148,7 @@ T = {
         "it": "Raspberry Pi Pico (RP2040) \u2192 pinza sul chip",
         "en": "Raspberry Pi Pico (RP2040) \u2192 clip on the chip",
     },
+    "sch_chip_scheda": {"it": "il chip", "en": "the chip"},
     "sch_chip": {"it": "Chip \u00b7 SOIC-8", "en": "Chip \u00b7 SOIC-8"},
     "sch_chip_nota": {
         "it": "Visto da sopra. La tacca \u00e8 dalla parte del piedino 1: "

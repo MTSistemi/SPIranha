@@ -77,7 +77,10 @@ class Ricerca(tk.Toplevel):
                                           ("misura", 80, "e"),
                                           ("volt", 70, "e"),
                                           ("prove", 70, "center")):
-            self.lista.heading(chiave, text=T.micro(L("cerca_col_" + chiave)))
+            # ⚠️ l'intestazione si allinea come la sua colonna: centrata su una
+            # colonna larga sembrava riferita a quella di fianco
+            self.lista.heading(chiave, text=T.micro(L("cerca_col_" + chiave)),
+                               anchor=ancora)
             self.lista.column(chiave, width=larghezza, anchor=ancora,
                               stretch=(chiave == "modello"))
         self.lista.grid(row=0, column=0, sticky="nsew")
@@ -140,9 +143,7 @@ class Ricerca(tk.Toplevel):
             self.lista.insert(
                 "", "end", iid=str(indice),
                 values=(chip.produttore, chip.nome, _misura(chip.kb),
-                        "1,8 V" if volt == V.BASSA
-                        else ("3,3 V" if volt else "?"),
-                        chip.prove or "—"),
+                        _volt(volt, self.L.codice), chip.prove or "—"),
                 tags=(etichetta,) if etichetta else ())
         self.var_conteggio.set(self.L("cerca_conteggio",
                                       quanti=len(self.mostrati),
@@ -171,6 +172,14 @@ class Ricerca(tk.Toplevel):
         chip = self.mostrati[indice]
         self.al_scegliere(chip)
         self.destroy()
+
+
+def _volt(volt, lingua="it"):
+    """1,8 V in italiano, 1.8 V in inglese: il separatore decimale cambia."""
+    if volt is None:
+        return "?"
+    testo = "%.1f V" % volt
+    return testo.replace(".", ",") if lingua == "it" else testo
 
 
 def _misura(kb):

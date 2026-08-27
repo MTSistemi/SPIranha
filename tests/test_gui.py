@@ -900,6 +900,31 @@ def prova(finestra):
         controlla("due fogli, non uno", pagina.count('class="foglio"') == 2)
         finestra_ad.destroy()
 
+
+        # 27. battezzata una scheda, la tendina lo deve MOSTRARE
+        # ⚠️ La porta resta la stessa, ma la scritta no: prima restava esposta
+        # la vecchia descrizione di Windows e il nome dato sembrava perso.
+        vere_porte = modulo.serprog.elenca_porte
+        modulo.serprog.elenca_porte = lambda: [
+            ("COM9", "Dispositivo seriale USB (CAFE:4001)", True, "AABBCCDD")]
+        try:
+            finestra.rileva_porte()
+            prima_scritta = finestra.var_porta.get()
+            controlla("senza nome si vede la descrizione del sistema",
+                      "Dispositivo" in prima_scritta, prima_scritta)
+            finestra.schede_note.imposta_nome("banco di prova", run="AABBCCDD")
+            finestra.rileva_porte()
+            dopo = finestra.var_porta.get()
+            controlla("dato il nome, la tendina lo mostra subito",
+                      "banco di prova" in dopo, dopo)
+            controlla("e la porta scelta non cambia",
+                      finestra._porta_scelta() == "COM9",
+                      finestra._porta_scelta())
+            finestra.schede_note.imposta_nome("", run="AABBCCDD")
+        finally:
+            modulo.serprog.elenca_porte = vere_porte
+            finestra.rileva_porte()
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

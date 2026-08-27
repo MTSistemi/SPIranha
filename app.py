@@ -1393,6 +1393,14 @@ class App(tk.Tk):
             if (not attuale or attuale not in [p[0] for p in porte]
                     or (programmatori and attuale not in programmatori)):
                 self.var_porta.set(candidata)
+            else:
+                # ⚠️ La porta e' la stessa ma la SCRITTA puo' essere cambiata:
+                # dopo aver battezzato una scheda restava esposta la vecchia
+                # descrizione di Windows, e il nome dato sembrava perso.
+                for valore, porta in zip(valori, porte):
+                    if porta[0] == attuale and valore != self.var_porta.get():
+                        self.var_porta.set(valore)
+                        break
         elif serprog.SERIALE:
             self.msg_collegamento.mostra("nessuna_porta", AMBRA)
 
