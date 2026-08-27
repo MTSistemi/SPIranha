@@ -13,10 +13,14 @@ jobs:
   controlli:
     name: Checks (Windows)
     runs-on: windows-latest
+    # ⚠️ Gli script "shell: python" girano da una cartella temporanea: senza
+    # questo non trovano i moduli del progetto.
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
