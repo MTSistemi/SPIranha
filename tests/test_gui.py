@@ -726,12 +726,120 @@ def prova(finestra):
         # 23. lo schema dell'adattatore si disegna
         import adattatore as _ad
         finestra_ad = _ad.Adattatore(finestra, finestra.tema, finestra.L)
-        finestra_ad.update_idletasks()
+        # ⚠️ La misura conta: senza geometria la tela e' larga un pixel, la
+        # scala finisce al minimo e i caratteri, che sotto i 6 punti non
+        # scendono, occupano il doppio dello spazio. Va provato alla misura
+        # per cui e' disegnato.
+        finestra_ad.geometry("1080x800")
+        finestra_ad.update()
         finestra_ad.disegna()
         quanti = len(finestra_ad.tela.find_all())
         controlla("schema dell'adattatore disegnato", quanti > 60,
                   "%d elementi" % quanti)
+
+        # ⚠️ La distinta deve restare CONCRETA. "Un MOSFET" e "un regolatore"
+        # non bastano a comprare i pezzi giusti, ed e' proprio il pezzo
+        # sbagliato (2N7002 al posto del BSS138) che non si vede a occhio.
+        distinta = " ".join("%s %s %s" % p for p in _ad.PEZZI)
+        for atteso in ("BSS138", "onsemi", "Yageo", "Microchip", "Murata",
+                       "SOT-23", "0603"):
+            controlla("distinta: c'e' %s" % atteso, atteso in distinta)
+        controlla("distinta: le resistenze sono da 1 kOhm, non 10",
+                  "1 k" in distinta and "10 k" not in distinta)
+        controlla("distinta: ogni pezzo ha sigla, valore e modelli",
+                  all(len(p) == 3 and all(p) for p in _ad.PEZZI))
+
+        # il disegno deve contenerli davvero, non solo la struttura dati
+        testi = [finestra_ad.tela.itemcget(i, "text")
+                 for i in finestra_ad.tela.find_all()
+                 if finestra_ad.tela.type(i) == "text"]
+        unito = " ".join(testi)
+        controlla("il disegno mostra i modelli, non solo le sigle",
+                  "BSS138LT1G" in unito and "MCP1700T-1802E/TT" in unito)
+        controlla("il disegno avverte del 2N7002",
+                  "2N7002" in unito)
+        # e tutto deve starci dentro: l'ultima nota non deve finire fuori
+        limiti = finestra_ad.tela.bbox("all")
+        alta = finestra_ad.tela.winfo_height()
+        controlla("il contenuto sta dentro la finestra",
+                  limiti and limiti[3] <= alta,
+                  "%d pixel su %d" % (limiti[3] if limiti else -1, alta))
         finestra_ad.destroy()
+
+
+        # 24. l'elenco dei chip di flashrom, e la ricerca del modello
+        FINTO_L = [
+            "flashrom v1.7.0 on Windows",
+            "",
+            "Supported flash chips (total: 4):",
+            "",
+            "Vendor                       Device                               "
+            "Test   Known   Size   Type",
+            "                                                                  "
+            "OK     Broken  [kB]",
+            "",
+            "(P = PROBE, R = READ, E = ERASE, W = WRITE, B = block-protect)",
+            "",
+            "AMD                          Am29F010                             "
+            "                    128  Parallel",
+            "Macronix                     MX25L12835F/                         "
+            "PREW            16384  SPI",
+            "                             MX25L12873F",
+            "Winbond                      W25Q128.JW.DTR                       "
+            "PREW            16384  SPI",
+            "Winbond                      W25Q64.V                             "
+            "PREW             8192  SPI",
+        ]
+        elenco = modulo.fr.leggi_elenco_chip(FINTO_L)
+        controlla("elenco: quattro chip letti", len(elenco) == 4, str(len(elenco)))
+        # ⚠️ Il nome vero e' quello INTERO: flashrom rifiuta la sola prima riga.
+        controlla("nome spezzato su piu' righe ricucito",
+                  elenco[1].nome == "MX25L12835F/MX25L12873F", elenco[1].nome)
+        controlla("dimensione e tipo letti",
+                  elenco[1].kb == 16384 and elenco[1].spi,
+                  "%s %s" % (elenco[1].kb, elenco[1].tipo))
+        controlla("il chip parallelo non e' SPI", not elenco[0].spi)
+        controlla("le prove dichiarate da flashrom si conservano",
+                  elenco[1].prove == "PREW" and elenco[1].sperimentato,
+                  elenco[1].prove)
+        controlla("un chip senza prove non si spaccia per provato",
+                  not elenco[0].sperimentato)
+
+        # la tendina: prima i modelli del profilo, poi tutti gli SPI, senza doppioni
+        finestra.chip_noti = elenco
+        finestra._riempi_modelli()
+        valori = list(finestra.combo_chip.cget("values"))
+        controlla("tendina: nessun chip parallelo",
+                  "Am29F010" not in valori, str(valori[:6]))
+        controlla("tendina: ci sono gli SPI dell'elenco",
+                  "W25Q128.JW.DTR" in valori and "W25Q64.V" in valori)
+        controlla("tendina: niente doppioni",
+                  len(valori) == len(set(valori)), str(len(valori)))
+        controlla("tendina: i modelli del profilo restano in cima",
+                  valori[1] == finestra.profilo.chip[0], str(valori[:3]))
+
+        # 25. la finestra di ricerca filtra e restituisce il chip scelto
+        import ricerca as _rc
+        scelti = []
+        finestra_r = _rc.Ricerca(finestra, finestra.tema, finestra.L, elenco,
+                                 scelti.append)
+        finestra_r.update_idletasks()
+        controlla("ricerca: mostra solo i chip SPI",
+                  len(finestra_r.mostrati) == 3, str(len(finestra_r.mostrati)))
+        finestra_r.var_cerca.set("winbond 64")
+        finestra_r.update_idletasks()
+        controlla("ricerca: il filtro incrocia produttore e modello",
+                  [c.nome for c in finestra_r.mostrati] == ["W25Q64.V"],
+                  str([c.nome for c in finestra_r.mostrati]))
+        finestra_r.var_cerca.set("jw")
+        finestra_r.update_idletasks()
+        finestra_r._al_primo()
+        finestra_r.scegli()
+        controlla("ricerca: restituisce il chip scelto",
+                  len(scelti) == 1 and scelti[0].nome == "W25Q128.JW.DTR",
+                  str(scelti))
+        controlla("ricerca: si chiude dopo la scelta",
+                  not finestra_r.winfo_exists())
 
         # 11. elenco porte
         finestra.rileva_porte()

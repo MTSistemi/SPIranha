@@ -29,9 +29,13 @@ REGOLE = (
     # Macronix: la U e' la serie a 1,8, la L quella a 3
     (r"MX25U", BASSA, "Macronix MX25U"),
     (r"MX25L", ALTA, "Macronix MX25L"),
-    # Winbond: ...JW / FW / NW a 1,8; ...BV / FV / JV a 3
-    (r"W25Q\d+\.?[JFN]W", BASSA, "Winbond W25Q..W"),
-    (r"W25Q\d+\.?[BFJ]?V", ALTA, "Winbond W25Q..V"),
+    # MX25R lavora da 1,65 a 3,6 V: a 3,3 sta bene
+    (r"MX25R", ALTA, "Macronix MX25R"),
+    # Winbond: in coda W = 1,8 V, V = 3,3 V, con o senza la lettera di
+    # generazione in mezzo (W25Q128.W, W25Q128.JW.DTR, W25Q32FW)
+    (r"W25Q\d+[._]?[A-Z]?W", BASSA, "Winbond W25Q..W"),
+    (r"W25Q\d+[._]?[A-Z]?V", ALTA, "Winbond W25Q..V"),
+    (r"W25X\d+", ALTA, "Winbond W25X"),
     # GigaDevice: LQ/LB/LE/LF a 1,8; Q a 3
     (r"GD25L[QBEF]", BASSA, "GigaDevice GD25L"),
     (r"GD25Q", ALTA, "GigaDevice GD25Q"),
@@ -41,10 +45,18 @@ REGOLE = (
     # Micron: MT25QU a 1,8; MT25QL a 3
     (r"MT25QU", BASSA, "Micron MT25QU"),
     (r"MT25QL", ALTA, "Micron MT25QL"),
-    (r"N25Q\d+A13", BASSA, "Micron N25Q 1.8V"),
+    # ⚠️ Nei nomi che usa flashrom la cifra dopo i due punti E' la tensione:
+    # N25Q128..1E = 1,8 V, N25Q128..3E = 3 V. Viene dalla sigla Micron.
+    (r"N25Q\w*\.\.1", BASSA, "Micron N25Q 1,8 V"),
+    (r"N25Q\w*\.\.3", ALTA, "Micron N25Q 3 V"),
+    (r"N25Q\d+A13", BASSA, "Micron N25Q 1,8 V"),
+    (r"N25Q\d+A11", ALTA, "Micron N25Q 3 V"),
     # XTX
     (r"XM25QU", BASSA, "XTX XM25QU"),
     (r"XM25QH", ALTA, "XTX XM25QH"),
+    # Spansion/Cypress e SST: le serie diffuse sono a 3 V
+    (r"S25FL", ALTA, "Spansion S25FL"),
+    (r"SST25VF", ALTA, "SST SST25VF"),
     # EON/ESMT
     (r"EN25S", BASSA, "EON EN25S"),
     (r"EN25[QFP]", ALTA, "EON EN25Q/F/P"),

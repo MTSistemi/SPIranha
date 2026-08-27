@@ -37,6 +37,14 @@ First public release.
   GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
   be put back into update mode without touching the button.
 - **Send to BOOTSEL**, which uses it.
+- **All 492 supported SPI chips in the model list, with a search.** Read from
+  `flashrom -L`, so it follows the binary in use; multi-line names are stitched
+  back together because that is the name flashrom accepts. The search shows
+  size, working voltage and what flashrom says it has tested on that part.
+- **The 1.8 V schematic carries a real bill of materials** — manufacturer part
+  numbers, values, packages — plus the two things that are easy to get wrong:
+  the 2N7002 that looks like a BSS138 and never turns on at 1.8 V, and the
+  10 kΩ pull-ups that are an I²C habit and are too slow for SPI.
 - **1.8 V chips are recognised from the model name** and block the write
   until a level shifter is confirmed — wiring one straight to the RP2040 puts
   nearly twice its rated voltage on the pins, and reads MISO at random anyway.
@@ -90,7 +98,7 @@ First public release.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 168 automated checks, including an end-to-end write against an emulated
+- 194 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Verified on hardware

@@ -302,8 +302,10 @@ T = {
         "en": "Level shifter for 1.8 V chips",
     },
     "ad_sotto": {
-        "it": "Un canale su quattro \u00b7 BSS138 \u00b7 regolatore 3,3 \u2192 1,8 V",
-        "en": "One channel of four \u00b7 BSS138 \u00b7 3.3 \u2192 1.8 V regulator",
+        "it": "Un canale su quattro identici \u00b7 BSS138 \u00b7 regolatore "
+              "3,3 \u2192 1,8 V \u00b7 massa in comune",
+        "en": "One of four identical channels \u00b7 BSS138 \u00b7 3.3 "
+              "\u2192 1.8 V regulator \u00b7 shared ground",
     },
     "ad_rail_alto": {"it": "3,3 V \u00b7 Pico", "en": "3.3 V \u00b7 Pico"},
     "ad_rail_basso": {"it": "1,8 V \u00b7 chip", "en": "1.8 V \u00b7 chip"},
@@ -324,8 +326,9 @@ T = {
               "side. Fitted the other way round it conducts always, the two "
               "sides stay connected and the chip gets 3.3 V anyway.",
     },
-    "ad_tabella": {"it": "Un canale per segnale, e i pezzi",
-                   "en": "One channel per signal, and the parts"},
+    "ad_tabella": {"it": "Un canale per segnale",
+                   "en": "One channel per signal"},
+    "ad_distinta": {"it": "Distinta", "en": "Bill of materials"},
     "ad_col_segnale": {"it": "Segnale", "en": "Signal"},
     "ad_note_titolo": {"it": "Da sapere", "en": "Worth knowing"},
     "ad_nota1": {
@@ -336,27 +339,71 @@ T = {
               "3V3. Translating the signals and leaving the supply at 3.3 V "
               "is the quickest way to destroy it.",
     },
-    "ad_nota2": {
-        "it": "Quattro canali identici: SCLK, MOSI, MISO, CS. La massa \u00e8 "
-              "in comune e non passa dall\u0027adattatore.",
-        "en": "Four identical channels: SCLK, MOSI, MISO, CS. Ground is shared "
-              "and does not go through the shifter.",
-    },
     "ad_nota3": {
-        "it": "Con i MOSFET la salita del segnale la fa la resistenza, non il "
-              "transistor: scendere a 1 MHz nella casella «Velocit\u00e0». "
-              "A 12 MHz i fronti si smussano e le letture non coincidono.",
-        "en": "With MOSFETs the rising edge is made by the resistor, not the "
-              "transistor: drop to 1 MHz under \u201cSpeed\u201d. At 12 MHz "
-              "the edges round off and the two reads disagree.",
+        "it": "La salita del segnale la fa la resistenza, non il transistor. "
+              "Con 1 k\u03a9 si tengono 4 MHz; con i 10 k\u03a9 dello schema "
+              "classico (che vengono dall\u0027I\u00b2C a 100 kHz) si va sui "
+              "700 ns di salita, e gi\u00e0 a 1 MHz le due letture non "
+              "coincidono.",
+        "en": "The rising edge is made by the resistor, not the transistor. "
+              "1 k\u03a9 holds 4 MHz; the textbook 10 k\u03a9 (which come "
+              "from 100 kHz I\u00b2C) give a 700 ns rise, and the two reads "
+              "already disagree at 1 MHz.",
     },
-    "ad_nota4": {
-        "it": "Alternativa senza compromessi: un 74LVC8T245 a direzione fissa "
-              "(SCLK, MOSI e CS verso il chip, MISO verso il Pico). Tiene i "
-              "12 MHz e non ha resistenze di tiraggio.",
-        "en": "The no-compromise alternative: a 74LVC8T245 with fixed "
-              "direction (SCLK, MOSI, CS towards the chip, MISO towards the "
-              "Pico). It holds 12 MHz and needs no pull-ups.",
+    "ad_nota5": {
+        "it": "Sul MOSFET conta la soglia, non la corrente: il gate sta a "
+              "1,8 V, serve Vgs(th) sotto 1,5 V. Il BSS138 ce l\u0027ha, il "
+              "2N7002 no (fino a 2,5 V) e non accende \u2014 stesso "
+              "contenitore, stesso prezzo, non funziona.",
+        "en": "On the MOSFET what matters is the threshold, not the current: "
+              "the gate sits at 1.8 V, so Vgs(th) must be under 1.5 V. The "
+              "BSS138 has it, the 2N7002 does not (up to 2.5 V) and never "
+              "turns on \u2014 same package, same price, does not work.",
+    },
+    "ad_gia_pronti": {
+        "it": "Già pronti: SparkFun BOB-12009 o Adafruit 757 "
+              "(quattro canali a BSS138), più il regolatore 1,8 V a parte.",
+        "en": "Off the shelf: SparkFun BOB-12009 or Adafruit 757 (four BSS138 "
+              "channels), plus the 1.8 V regulator separately.",
+    },
+    "ad_nota6": {
+        "it": "Per tenere i 12 MHz serve un traduttore a direzione fissa, "
+              "TI SN74LVC8T245PWR. Il TXS0108E no: è fatto per bus a "
+              "collettore aperto e sull'SPI non va.",
+        "en": "To keep 12 MHz you need a fixed-direction translator, TI "
+              "SN74LVC8T245PWR. Not the TXS0108E: it is made for open-drain "
+              "buses and does not work on SPI.",
+    },
+    # --- ricerca del modello ------------------------------------------------
+    "cerca": {"it": "Cerca\u2026", "en": "Search\u2026"},
+    "cerca_titolo": {
+        "it": "Modelli di chip che flashrom conosce",
+        "en": "Chip models flashrom knows",
+    },
+    "cerca_campo": {"it": "Filtro", "en": "Filter"},
+    "cerca_conteggio": {"it": "{quanti} di {totale}", "en": "{quanti} of {totale}"},
+    "cerca_col_produttore": {"it": "Produttore", "en": "Vendor"},
+    "cerca_col_modello": {"it": "Modello", "en": "Model"},
+    "cerca_col_misura": {"it": "Dimensione", "en": "Size"},
+    "cerca_col_volt": {"it": "Volt", "en": "Volts"},
+    "cerca_col_prove": {"it": "Provato", "en": "Tested"},
+    "cerca_nota": {
+        "it": "Solo chip SPI: gli altri bus, via serprog, non si raggiungono. "
+              "«Provato» \u00e8 quello che flashrom dichiara: P riconosce, "
+              "R legge, E cancella, W scrive. In arancione i chip a 1,8 V.",
+        "en": "SPI chips only: the other buses cannot be reached over serprog. "
+              "\u201cTested\u201d is what flashrom declares: P probes, R reads, "
+              "E erases, W writes. 1.8 V chips are in amber.",
+    },
+    "cerca_scegli": {"it": "Scegli", "en": "Pick"},
+    "cerca_annulla": {"it": "Annulla", "en": "Cancel"},
+    "cerca_vuoto": {
+        "it": "flashrom non ha restituito nessun elenco di chip.",
+        "en": "flashrom returned no chip list.",
+    },
+    "cerca_scelto": {
+        "it": "Modello scelto: {produttore} {chip}, {misura}.",
+        "en": "Model picked: {produttore} {chip}, {misura}.",
     },
     # --- 3. lettura ------------------------------------------------------
     "sez_lettura": {"it": "3 · Lettura e backup", "en": "3 · Read and backup"},

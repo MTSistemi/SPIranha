@@ -310,6 +310,23 @@ class Flashrom(object):
             return None
         return prima[0].strip()
 
+    def elenco_chip(self):
+        """Tutti i chip che questo flashrom conosce, letti da lui.
+
+        ⚠️ Non c\u0027e\u0027 una tabella scritta a mano da nessuna parte: chiedendolo
+        all\u0027eseguibile, l\u0027elenco e\u0027 sempre quello della versione che si sta
+        usando davvero. Una lista nostra invecchierebbe in silenzio.
+        """
+        try:
+            uscita = subprocess.check_output(
+                [self.percorso, "-L"],
+                stderr=subprocess.STDOUT,
+                creationflags=SENZA_FINESTRA,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            return []
+        return leggi_elenco_chip(uscita.decode("utf-8", "replace").splitlines())
+
     def identifica(self, porta, baud=115200, spispeed=None, chip=None,
                    dettagli=False, su_riga=None, su_evento=None):
         args = self.argomenti(porta, baud, spispeed, chip, dettagli,
@@ -410,6 +427,87 @@ def leggi_protezione(righe, esito_ok=True):
         descrizione=intervallo.group(3).strip() if intervallo else None,
         modo=modo.group(1).strip() if modo else None,
         sostenuta=esito_ok)
+
+
+class ChipNoto(object):
+    """Una riga dell\u0027elenco di flashrom."""
+
+    def __init__(self, produttore, nome, kb=None, tipo=None, prove=None):
+        self.produttore = produttore
+        self.nome = nome
+        self.kb = kb
+        self.tipo = tipo
+        self.prove = prove or ""      # P/R/E/W: cosa e\u0027 stato provato davvero
+
+    @property
+    def byte(self):
+        return self.kb * 1024 if self.kb else None
+
+    @property
+    def spi(self):
+        return (self.tipo or "").upper() == "SPI"
+
+    @property
+    def completo(self):
+        return "%s %s" % (self.produttore, self.nome)
+
+    @property
+    def sperimentato(self):
+        """flashrom dice di averci letto E scritto sopra?"""
+        return "R" in self.prove and "W" in self.prove
+
+    def __repr__(self):
+        return "<%s %s %s>" % (self.produttore, self.nome, self.tipo)
+
+
+# Le righe dell'elenco sono a colonne fisse, ma i nomi lunghi vanno a capo
+# e la continuazione ha la colonna del produttore VUOTA:
+#     Winbond      W25Q32BW/     PREW    4096  SPI
+#                  W25Q32CW/
+#                  W25Q32DW
+# ⚠️ Ricucirle non e' un vezzo: il nome che flashrom accetta e' quello
+# INTERO, "W25Q32BW/W25Q32CW/W25Q32DW". Prendendo solo la prima riga si
+# sceglierebbe un modello che poi flashrom rifiuta.
+_INIZIO_ELENCO = "Supported flash chips"
+_LARGHEZZA_PRODUTTORE = 29
+
+
+def leggi_elenco_chip(righe):
+    """Le righe di `flashrom -L` diventano ChipNoto."""
+    fuori = []
+    dentro = False
+    for riga in righe:
+        testo = riga.rstrip()
+        if not dentro:
+            if testo.startswith(_INIZIO_ELENCO):
+                dentro = True
+            continue
+        if not testo.strip():
+            continue
+        if testo.startswith(("Vendor", "(P =")) or testo.lstrip().startswith("OK "):
+            continue
+        produttore = testo[:_LARGHEZZA_PRODUTTORE].strip()
+        resto = testo[_LARGHEZZA_PRODUTTORE:]
+        if not produttore:
+            # continuazione del nome di sopra
+            if fuori and resto.strip():
+                fuori[-1].nome += resto.strip()
+            continue
+        campi = re.split(r"\s{2,}", resto.strip())
+        campi = [c for c in campi if c]
+        if len(campi) < 2:
+            # una riga senza dimensione ne' tipo non e' una riga di chip
+            continue
+        nome = campi[0]
+        tipo = campi[-1]
+        kb = None
+        try:
+            kb = int(campi[-2])
+        except (ValueError, IndexError):
+            kb = None
+        prove = "".join(campi[1:-2])
+        fuori.append(ChipNoto(produttore, nome, kb, tipo, prove))
+    return fuori
 
 
 def trova_eseguibile(cartella_app, extra=None):

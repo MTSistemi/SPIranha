@@ -88,6 +88,19 @@ firmware can be put back into update mode over the wire, so after the first
 time the button is never needed again. Upstream `pico-serprog` has no such
 path — it is one of the two patches in `firmware/`.
 
+**Every chip flashrom knows is in the list, and searchable.** The model
+dropdown carries all 492 SPI chips this flashrom supports — the board profile's
+own models first — and **Search…** opens a filter over them: type `winbond 128`
+and eight rows remain. Each row shows the size, the working voltage, and what
+flashrom claims to have actually done on that part (P probes, R reads, E erases,
+W writes), with 1.8 V models in amber.
+
+The list is read from `flashrom -L` at startup, so it is always the list of the
+binary in use rather than a table of ours going quietly stale. Long names that
+flashrom prints across several lines are stitched back together — the name it
+accepts is the whole `GD25LQ128E/GD25LB128E/GD25LR128E/…`, and taking the first
+line only would pick a model flashrom then refuses.
+
 **1.8 V chips are recognised before they are destroyed.** The RP2040
 speaks at 3.3 V and a 1.8 V chip is rated for 1.95 V on its pins: wired directly
 it gets nearly twice what it expects. The other direction does not work either —
@@ -102,8 +115,15 @@ the write stays blocked until you confirm a level shifter is in place. **A model
 it cannot place is reported as unknown, never as 3.3 V** — assuming the safe
 answer would be the opposite of safe.
 
-**1.8 V wiring** opens a schematic for the adapter: a BSS138 per signal with its
-two pull-ups, and a regulator for the 1.8 V the Pico does not have. It also says
+**1.8 V wiring** opens a schematic for the adapter, with a real bill of
+materials — manufacturer part numbers, values and packages, not "a MOSFET and a
+regulator". That matters more than it sounds here: the part that looks
+interchangeable is not. A 2N7002 is the same package at the same price as a
+BSS138 and never turns on with its gate at 1.8 V, because what counts is the
+gate threshold, not the current. And the pull-ups are 1 kΩ, not the textbook
+10 kΩ: those come from 100 kHz I²C, and here the rising edge is made by the
+resistor — 10 kΩ gives a 700 ns rise and the two reads already disagree at
+1 MHz. It also says
 what the drawing cannot: the MOSFET version needs the speed dropped to 1 MHz
 because the rising edge comes from the resistor, and a 74LVC8T245 holds 12 MHz
 if you would rather buy one part than eight.
@@ -280,7 +300,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 124 checks, no hardware needed
+python tests\test_gui.py     # 150 checks, no hardware needed
 python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 

@@ -26,6 +26,7 @@ di sopra passa sopra la scheda, chi va a quella di sotto passa sotto.
 from __future__ import unicode_literals
 
 import tkinter as tk
+from tkinter import ttk
 
 import tema as T
 
@@ -159,10 +160,29 @@ class Schema(tk.Toplevel):
         self.minsize(660, 420)
 
         self.tela = tk.Canvas(self, background=T.INK, highlightthickness=0, bd=0)
-        self.tela.pack(fill="both", expand=True)
+        # ⚠️ Sotto una certa misura il disegno non puo' rimpicciolirsi ancora:
+        # i caratteri hanno un minimo leggibile e il testo cresce rispetto al
+        # resto. Senza barra, le ultime note sparivano e basta.
+        self.barra = ttk.Scrollbar(self, orient="vertical",
+                                   command=self.tela.yview)
+        self.tela.configure(yscrollcommand=self._forse_barra)
+        self.tela.pack(side="left", fill="both", expand=True)
         self.tela.bind("<Configure>", self._forse_ridisegna)
+        self.bind("<MouseWheel>", self._rotella)
         self.bind("<Escape>", lambda _e: self.destroy())
         T.titolo_scuro(self)
+
+    # --------------------------------------------------------- scorrimento
+    def _forse_barra(self, primo, ultimo):
+        """La barra compare solo se serve davvero."""
+        if float(primo) <= 0.0 and float(ultimo) >= 1.0:
+            self.barra.pack_forget()
+        else:
+            self.barra.pack(side="right", fill="y")
+        self.barra.set(primo, ultimo)
+
+    def _rotella(self, evento):
+        self.tela.yview_scroll(-1 if evento.delta > 0 else 1, "units")
 
     # ------------------------------------------------------------- scala
     def _forse_ridisegna(self, _evento=None):
@@ -237,7 +257,6 @@ class Schema(tk.Toplevel):
         altezza = max(self.tela.winfo_height(), 240)
         self.k = max(0.52, min(larghezza / float(LARG), altezza / float(ALT), 1.7))
         self.tela.delete("all")
-        self.tela.configure(scrollregion=(0, 0, self._s(LARG), self._s(ALT)))
         self._testata(larghezza)
         self._scheda_pico()
         if self.pinza:
@@ -246,6 +265,14 @@ class Schema(tk.Toplevel):
             self._connettore()
             self._fili()
         self._colonna_destra()
+        self._misura_disegno()
+
+    def _misura_disegno(self):
+        """La regione di scorrimento e' quella che il disegno occupa davvero."""
+        limiti = self.tela.bbox("all")
+        if limiti:
+            self.tela.configure(scrollregion=(0, 0, limiti[2],
+                                              limiti[3] + self._s(12)))
 
     def _testata(self, larghezza_vera):
         alta = self._s(52)

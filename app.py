@@ -33,6 +33,7 @@ import mappa as M
 import pico
 import profili
 import regioni as reg
+import ricerca
 import schema
 import tensione as V
 import serprog
@@ -156,6 +157,7 @@ class App(tk.Tk):
         self.profilo = profili.prendi(self.conf.get("profilo"))
         self.fw_scheda = None            # versione dichiarata dal programmatore
         self.chip_a_18 = None            # il chip vuole 1,8 V? None = non si sa
+        self.chip_noti = []              # l'elenco che flashrom dichiara
         self.fw_chiesto = set()          # seriali a cui l'abbiamo gia' chiesta
         self.lettura_verificata = None   # md5 dell'ultima lettura doppia riuscita
         self.righe_registro = []
@@ -192,6 +194,9 @@ class App(tk.Tk):
         T.titolo_scuro(self)
         self.after(60, self._pompa)
         self.after(400, self._guarda_bootsel)
+        # l'elenco dei modelli si riempie da solo poco dopo l'apertura: la
+        # finestra deve comparire subito, non aspettare flashrom
+        self.after(600, self._carica_elenco_chip)
         self.protocol("WM_DELETE_WINDOW", self._chiudi)
 
     # ------------------------------------------------------------ config
@@ -549,10 +554,17 @@ class App(tk.Tk):
         self.b_identifica.grid(row=0, column=0, sticky="w")
         self._micro(s, "chip_forzato").grid(row=0, column=1, sticky="e", padx=(10, 6))
         self.var_chip = tk.StringVar(value=self.conf.get("chip", ""))
-        self.combo_chip = ttk.Combobox(s, textvariable=self.var_chip,
+        cornice_m = tk.Frame(s, background=T.PANEL)
+        cornice_m.grid(row=0, column=2, sticky="ew")
+        cornice_m.columnconfigure(0, weight=1)
+        self.combo_chip = ttk.Combobox(cornice_m, textvariable=self.var_chip,
                                        font=self.tema.f_testo,
                                        values=CHIP_SUGGERITI + self.profilo.chip)
-        self.combo_chip.grid(row=0, column=2, sticky="ew")
+        self.combo_chip.grid(row=0, column=0, sticky="ew")
+        self.b_cerca_chip = self._etichetta(
+            ttk.Button(cornice_m, style="Ghost.TButton",
+                       command=self.cerca_modello), "cerca")
+        self.b_cerca_chip.grid(row=0, column=1, padx=(6, 0))
         self.combo_chip.bind("<<ComboboxSelected>>", lambda _e: self._invalida_chip())
         self.combo_chip.bind("<KeyRelease>", lambda _e: self._invalida_chip())
 
@@ -897,6 +909,62 @@ class App(tk.Tk):
         righe += [self.L(chiave) for chiave in self.profilo.avvisi]
         self.et_promemoria.configure(text="  ".join(righe))
 
+    def _carica_elenco_chip(self, poi=None):
+        """Chiede a flashrom l\u0027elenco dei chip, in un thread a parte.
+
+        ⚠️ Sono seicento righe da spremere e costano mezzo secondo: farlo
+        all\u0027avvio, nel thread della finestra, si vedrebbe.
+        """
+        if self.chip_noti or not self.flash:
+            if poi:
+                poi()
+            return
+
+        def lavoro():
+            try:
+                return self.flash.elenco_chip()
+            except Exception:                          # noqa: BLE001
+                return []
+
+        def fine(elenco):
+            self.chip_noti = elenco
+            self._riempi_modelli()
+            if poi:
+                poi()
+
+        threading.Thread(
+            target=lambda: self.coda.put(("chiamata", fine, lavoro())),
+            daemon=True).start()
+
+    def _riempi_modelli(self):
+        """La tendina: prima i modelli del profilo, poi tutti gli SPI noti."""
+        valori = list(CHIP_SUGGERITI) + list(self.profilo.chip)
+        visti = set(v for v in valori)
+        for chip in self.chip_noti:
+            if chip.spi and chip.nome not in visti:
+                visti.add(chip.nome)
+                valori.append(chip.nome)
+        self.combo_chip.configure(values=valori)
+
+    def cerca_modello(self):
+        """Apre la ricerca fra i modelli, caricando l\u0027elenco se serve."""
+        def apri():
+            if not self.chip_noti:
+                self.msg_chip.mostra("cerca_vuoto", AMBRA)
+                return
+            ricerca.apri(self, self.tema, self.L, self.chip_noti,
+                         self._modello_scelto, self.var_chip.get().strip())
+
+        self._carica_elenco_chip(poi=apri)
+
+    def _modello_scelto(self, chip):
+        self.var_chip.set(chip.nome)
+        self._invalida_chip()
+        self._valuta_tensione(chip.nome)
+        self.registro("   %s" % self.L(
+            "cerca_scelto", produttore=chip.produttore, chip=chip.nome,
+            misura=A.leggibile(chip.byte) if chip.byte else "?"), "io")
+
     def _riempi_profili(self):
         nomi = profili.nomi(self.L.codice)
         self.combo_profilo.configure(values=[n for _c, n in nomi])
@@ -908,7 +976,7 @@ class App(tk.Tk):
             if nome == scelto:
                 self.profilo = profili.prendi(chiave)
                 break
-        self.combo_chip.configure(values=CHIP_SUGGERITI + self.profilo.chip)
+        self._riempi_modelli()
         self._invalida_chip()
         self._scrivi_promemoria()
         self._disegna_testata()
@@ -2209,6 +2277,7 @@ class App(tk.Tk):
     def _blocca(self, occupato):
         for bottone in (self.b_identifica, self.b_leggi, self.b_prova,
                         self.b_qualifica, self.b_secco, self.b_bootsel,
+                        self.b_cerca_chip,
                         self.b_regioni,
                         self.b_aggiorna):
             bottone.state(["disabled"] if occupato else ["!disabled"])
@@ -2242,6 +2311,11 @@ class App(tk.Tk):
                 elif voce[0] == "messaggio":
                     _, messaggio, chiave, colore, campi = voce
                     messaggio.mostra(chiave, colore, **campi)
+                elif voce[0] == "chiamata":
+                    # un lavoro di sfondo che non e' un'operazione sul chip:
+                    # non tocca lo stato «occupato», si limita a rientrare
+                    # nel thread della finestra
+                    voce[1](voce[2])
                 elif voce[0] == "fine":
                     _, al_termine, risultato, nome, errore = voce
                     self.occupato = False

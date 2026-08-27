@@ -12,7 +12,7 @@ They open and close the window by themselves; there is nothing to click.
 
 *Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
 
-## `test_gui.py` — 124 checks
+## `test_gui.py` — 150 checks
 
 The window and its rules, without touching flashrom: construction, live
 IT↔EN switching, everything disabled when flashrom is missing, layout file
@@ -27,6 +27,14 @@ read back and checked block by block, and both a corrupted file and a
 non-UF2 file must be refused before they could ever reach a board. And it
 pins down the board recognition against the real `Board-ID: RPI-RP2` string,
 which an earlier version got wrong.
+
+It covers the chip list parser on a fabricated `flashrom -L` — including a
+name split across three lines, which has to come back stitched — the dropdown
+that must not offer parallel chips, and the search window filtering and handing
+back the chip that was picked. It also guards the bill of materials against
+being watered down: the manufacturer part numbers have to be in the drawing, the
+2N7002 warning has to be there, and the whole thing has to fit inside the window
+at the size it is designed for.
 
 It covers the 1.8 V rules against eleven real chip names, both versions of
 each family, and checks that an unrecognised model comes back as *unknown* and

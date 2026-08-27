@@ -15,15 +15,21 @@ SERVONO DUE COSE, e vanno insieme:
 QUALE TRADUTTORE. Qui e' disegnato quello a MOSFET (il montaggio classico di
 Philips AN97055): quattro BSS138 e otto resistenze, roba da cassetto, e
 funziona nei due versi da solo. Ha un limite vero e va detto: la salita del
-segnale la fa la resistenza di pull-up, non il transistor, quindi sopra il
-megahertz i fronti si smussano. Con questo montaggio si scende a 1 MHz nella
-casella «Velocita'» e si legge tranquilli.
+segnale la fa la resistenza, non il transistor. Con 1 kOhm si tengono 4 MHz;
+con i 10 kOhm dello schema classico -- che vengono dall'I2C a 100 kHz -- la
+salita va sui 700 ns e gia' a 1 MHz le due letture non coincidono.
 
-Se il chip e' grande e la pazienza poca, un integrato dedicato
-(74LVC8T245, direzione fissa) tiene i 12 MHz senza fare una piega: le
-direzioni dell'SPI sono fisse -- SCLK, MOSI e CS vanno sempre verso il chip,
-MISO sempre verso il Pico -- quindi non serve nemmeno la traduzione
-automatica. E' scritto nelle note del disegno.
+Se il chip e' grande e la pazienza poca, un integrato a direzione fissa
+(TI SN74LVC8T245PWR) tiene i 12 MHz senza fare una piega: le direzioni
+dell'SPI sono fisse -- SCLK, MOSI e CS vanno sempre verso il chip, MISO
+sempre verso il Pico -- quindi la traduzione automatica non serve. Il
+TXS0108E invece no: e' fatto per bus a collettore aperto (I2C) e sull'SPI
+push-pull si comporta male.
+
+⚠️ I MODELLI STANNO IN PEZZI, e ci stanno apposta. «Un MOSFET» e «un
+regolatore» non bastano a comprare i pezzi giusti: sul MOSFET conta la
+tensione di soglia e il 2N7002 -- stesso contenitore, stesso prezzo -- col
+gate a 1,8 V non accende proprio.
 """
 from __future__ import unicode_literals
 
@@ -40,15 +46,29 @@ CANALI = (
     ("CS", "GP5", "1  /CS", "verso"),
 )
 
+# LA DISTINTA, con sigle vere.
+#
+# ⚠️ Sul MOSFET la specifica che conta non e' la corrente, e' la tensione di
+# soglia: il gate sta a 1,8 V, quindi serve un Vgs(th) sotto 1,5 V. Il BSS138
+# ce l'ha (0,5-1,5 V). Il 2N7002, che gli somiglia e costa uguale, arriva a
+# 2,5 V e col gate a 1,8 V non accende: e' l'errore piu' facile da fare qui.
+#
+# ⚠️ E le resistenze sono da 1 kΩ, non i 10 kΩ dello schema classico: quelli
+# vengono dall'I2C a 100 kHz. Qui la salita del segnale la fa la resistenza,
+# e con 10 kΩ su una trentina di picofarad si va sui 700 ns -- piu' del mezzo
+# periodo a 1 MHz. Con 1 kΩ si scende a ~70 ns e si tengono i 4 MHz.
 PEZZI = (
-    ("Q1-Q4", "BSS138", "pz_mosfet"),
-    ("R1-R4", "10 kΩ", "pz_pullup_basso"),
-    ("R5-R8", "10 kΩ", "pz_pullup_alto"),
-    ("U1", "XC6206P182 / MCP1700-1802", "pz_ldo"),
-    ("C1, C2", "1 µF", "pz_condensatori"),
+    ("Q1-Q4", "N-MOSFET · Vgs(th) < 1,5 V · SOT-23",
+     "onsemi BSS138LT1G · Diodes BSS138-7-F · Nexperia BSS138BK"),
+    ("R1-R8", "1 kΩ · 1% · 0603",
+     "Yageo RC0603FR-071KL"),
+    ("U1", "LDO 1,8 V · > 100 mA · SOT-23",
+     "Microchip MCP1700T-1802E/TT · Torex XC6206P182MR · Diodes AP2112K-1.8TRG1"),
+    ("C1, C2", "1 µF · X7R · 16 V · 0603",
+     "Murata GRM188R71C105KA12D"),
 )
 
-NOTE = ("ad_nota1", "ad_nota2", "ad_nota3", "ad_nota4")
+NOTE = ("ad_nota1", "ad_nota3", "ad_nota5", "ad_nota6")
 
 # --------------------------------------------------------------- geometria
 # Un canale solo, disegnato in grande: gli altri tre sono identici e
@@ -64,6 +84,10 @@ X_R_ALTA, X_R_BASSA = 232, 440  # le due resistenze di tiraggio
 # in mezzo, il suo filo attraversava la linea del segnale e sembrava toccarla.
 X_ENTRATA, X_USCITA = 76, 500
 LDO_X, LDO_Y = 216, 400        # il regolatore, sotto
+# ⚠️ La colonna di destra ha tre riquadri e arriva a 720: misurato, non
+# stimato. Se ALT_AD e' piu' corto dell'altezza vera, la scala si calcola su
+# un disegno che non c'e' e l'ultima nota finisce fuori dalla finestra.
+ALT_AD = 720
 LDO_L, LDO_A = 140, 44
 
 
@@ -73,7 +97,10 @@ class Adattatore(schema.Schema):
     def __init__(self, padre, tm, L):
         schema.Schema.__init__(self, padre, tm, L, pinza=True)
         self.title(L("ad_titolo"))
-        self.geometry("1060x640")
+        # ⚠️ 800 di altezza, non 700: il contenuto naturale arriva a 720 e
+        # con la scala guidata dalla larghezza diventano ~755 pixel.
+        # Misurato: a occhio l'ultima nota restava fuori.
+        self.geometry("1080x800")
 
     # ------------------------------------------------------------ disegno
     def disegna(self):
@@ -81,15 +108,14 @@ class Adattatore(schema.Schema):
         larghezza = max(self.tela.winfo_width(), 300)
         altezza = max(self.tela.winfo_height(), 240)
         self.k = max(0.52, min(larghezza / float(schema.LARG),
-                               altezza / float(schema.ALT), 1.7))
+                               altezza / float(ALT_AD), 1.7))
         self.tela.delete("all")
-        self.tela.configure(scrollregion=(0, 0, self._s(schema.LARG),
-                                          self._s(schema.ALT)))
         self._testata_ad(larghezza)
         self._barre()
         self._canale()
         self._regolatore()
         self._colonna_ad()
+        self._misura_disegno()
 
     def _testata_ad(self, larghezza_vera):
         alta = self._s(52)
@@ -127,8 +153,8 @@ class Adattatore(schema.Schema):
                     self._car(7, True), ancora="e")
 
         # le due resistenze di tiraggio, una per lato
-        self._resistenza(X_R_ALTA, RAIL_ALTO_Y, CANALE_Y, "R5", "10k")
-        self._resistenza(X_R_BASSA, RAIL_BASSO_Y, CANALE_Y, "R1", "10k")
+        self._resistenza(X_R_ALTA, RAIL_ALTO_Y, CANALE_Y, "R5", "1k")
+        self._resistenza(X_R_BASSA, RAIL_BASSO_Y, CANALE_Y, "R1", "1k")
 
         self._mosfet(X_MOS, CANALE_Y)
 
@@ -269,16 +295,36 @@ class Adattatore(schema.Schema):
                         tag="tabella")
             riga += 20
 
-        riga += 4
-        for sigla, valore, _chiave in PEZZI:
-            self._testo(x + 26, riga, sigla, "#93A5B4",
-                        self._car(7, True, mono=True), tag="tabella")
-            self._testo(x + 110, riga, valore, T.FG, self._car(7),
-                        tag="tabella")
-            riga += 18
-
         fondo = self._riquadra("tabella", x, y, x + schema.COL_LARG,
                                self.L("ad_tabella"))
+
+        # --- la distinta: sigla e valore su una riga, i modelli sotto
+        # ⚠️ I modelli servono: "un MOSFET" e "un regolatore" non bastano a
+        # comprare i pezzi giusti, e sul MOSFET la scelta sbagliata (2N7002)
+        # sembra identica e non funziona.
+        y1 = fondo + 14
+        riga = y1 + 38
+        for sigla, valore, modelli in PEZZI:
+            self._testo(x + 15, riga, sigla, "#E4EDF4",
+                        self._car(7.5, True, mono=True), tag="distinta")
+            self._testo(x + 74, riga, valore, "#B9C7D3", self._car(7),
+                        ancora="nw", larghezza=schema.COL_LARG - 90,
+                        tag="distinta")
+            limiti = self.tela.bbox("distinta")
+            riga = (limiti[3] / self.k) + 4 if limiti else riga + 14
+            identificativo = self._testo(x + 74, riga, modelli, "#7C8B99",
+                                         self._car(6.5), ancora="nw",
+                                         larghezza=schema.COL_LARG - 90,
+                                         tag="distinta")
+            limiti = self.tela.bbox(identificativo)
+            riga = (limiti[3] / self.k) + 11 if limiti else riga + 24
+
+        identificativo = self._testo(x + 15, riga + 2, self.L("ad_gia_pronti"),
+                                     "#8FC2E3", self._car(6.5), ancora="nw",
+                                     larghezza=schema.COL_LARG - 30,
+                                     tag="distinta")
+        fondo = self._riquadra("distinta", x, y1, x + schema.COL_LARG,
+                               self.L("ad_distinta"))
 
         y2 = fondo + 14
         riga = y2 + 38
