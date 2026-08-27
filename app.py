@@ -724,6 +724,7 @@ class App(tk.Tk):
         self.testo.tag_configure("io", foreground="#7FB2FF")
         self.testo.tag_configure("male", foreground="#FF8686")
         self.testo.tag_configure("bene", foreground=T.LOG_OK)
+        self.testo.tag_configure("attenzione", foreground=T.WARN)
 
         bottoni = tk.Frame(s, background=T.PANEL)
         bottoni.grid(row=1, column=0, columnspan=2, sticky="w", pady=(7, 0))
@@ -1445,8 +1446,10 @@ class App(tk.Tk):
             return
 
         marca = marca_ora()
-        primo = os.path.join(cartella, "bc250-letto-%s.rom" % marca)
-        secondo = os.path.join(cartella, "bc250-verifica-%s.rom" % marca)
+        primo = os.path.join(cartella, "%s-letto-%s.rom"
+                             % (self.profilo.chiave, marca))
+        secondo = os.path.join(cartella, "%s-verifica-%s.rom"
+                               % (self.profilo.chiave, marca))
 
         self._prepara_mappa()
         self.intervallo_lettura = (0, (self.chip.byte if self.chip and self.chip.byte
@@ -1492,12 +1495,72 @@ class App(tk.Tk):
             self.registro("   %s" % self.L(
                 "riconosciuto_come",
                 cosa=nota or self.L("md5_sconosciuto")))
-            if not self.var_atteso.get() and os.path.isfile(
-                    os.path.join(cartella, "bc250-risultato-atteso.rom")):
-                self.var_atteso.set(os.path.join(cartella, "bc250-risultato-atteso.rom"))
+            atteso = os.path.join(cartella, "%s-risultato-atteso.rom"
+                                  % self.profilo.chiave)
+            if not self.var_atteso.get() and os.path.isfile(atteso):
+                self.var_atteso.set(atteso)
+            self._confronta_col_precedente(cartella, primo)
             self._aggiorna_scrittura()
 
         self._avvia(lavoro, fine, "lettura")
+
+    def _letture_precedenti(self, cartella, escluso=None):
+        """I backup gia' presenti in cartella, dal piu' recente."""
+        prefisso = "%s-letto-" % self.profilo.chiave
+        trovati = []
+        try:
+            nomi = os.listdir(cartella)
+        except OSError:
+            return []
+        for nome in nomi:
+            if not (nome.startswith(prefisso) and nome.endswith(".rom")):
+                continue
+            percorso = os.path.join(cartella, nome)
+            if escluso and os.path.abspath(percorso) == os.path.abspath(escluso):
+                continue
+            try:
+                trovati.append((os.path.getmtime(percorso), percorso))
+            except OSError:
+                continue
+        trovati.sort(reverse=True)
+        return [p for _t, p in trovati]
+
+    def _confronta_col_precedente(self, cartella, appena_letto):
+        """Confronta la lettura appena fatta con il backup precedente.
+
+        ⚠️ Serve a rispondere a una domanda che viene sempre e a cui nessuno
+        sa rispondere a memoria: «questo chip e\u0027 ancora come l\u0027ho
+        lasciato?». Il confronto lo fa il programma, non l\u0027occhio su due
+        md5 lunghi trentadue cifre.
+        """
+        precedenti = self._letture_precedenti(cartella, escluso=appena_letto)
+        if not precedenti:
+            self.registro("   %s" % self.L("conf_primo"))
+            return
+        prima = precedenti[0]
+        nome = A.nome_file(prima)
+        try:
+            vecchia = A.leggi(prima)
+            nuova = A.leggi(appena_letto)
+        except OSError:
+            return
+        if len(vecchia) != len(nuova):
+            self.registro("   %s" % self.L("conf_altra_misura", file=nome),
+                          "attenzione")
+            return
+        esito = A.confronta(vecchia, nuova)
+        intervalli = esito["allineati"]
+        if esito["uguali"] or not intervalli:
+            self.registro("   %s" % self.L("conf_uguale", file=nome), "bene")
+            return
+        inizio = min(a for a, _b in intervalli)
+        fine = max(b for _a, b in intervalli)
+        quanti = len(esito["blocchi"])
+        self.registro("   %s" % self.L("conf_diverso", file=nome, quanti=quanti,
+                                       inizio=inizio, fine=fine), "attenzione")
+        for a, b in intervalli[:8]:
+            self.registro("      0x%06X-0x%06X  %s" % (
+                a, b, A.leggibile(b - a + 1)))
 
     def _esito_flashrom(self, messaggio, esito):
         """Quando flashrom si rifiuta: dirlo chiaro e lasciare il dettaglio nel

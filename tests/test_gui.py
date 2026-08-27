@@ -495,6 +495,54 @@ def prova(finestra):
                       quanti > 60, "%d elementi" % quanti)
             finestra_schema.destroy()
 
+
+        # 20. il confronto automatico con il backup precedente
+        import time as _t
+        vuoto = bytes(bytearray(16384))
+        cartella_c = os.path.join(LAVORO, "backup")
+        os.makedirs(cartella_c)
+        chiave = finestra.profilo.chiave
+        uno = os.path.join(cartella_c, "%s-letto-A.rom" % chiave)
+        due = os.path.join(cartella_c, "%s-letto-B.rom" % chiave)
+        for percorso in (uno, due):
+            with open(percorso, "wb") as f:
+                f.write(vuoto)
+            _t.sleep(0.05)
+        controlla("il precedente e' il piu' recente, escluso quello nuovo",
+                  finestra._letture_precedenti(cartella_c, escluso=due) == [uno],
+                  str(finestra._letture_precedenti(cartella_c, escluso=due)))
+
+        prima = len(finestra.righe_registro)
+        finestra._confronta_col_precedente(cartella_c, due)
+        detto = " ".join(finestra.righe_registro[prima:])
+        controlla("letture identiche: lo dice",
+                  "denti" in detto or "dentical" in detto, detto)
+
+        # ⚠️ La domanda vera e' l'altra: cos'e' cambiato da ieri a oggi.
+        with open(due, "wb") as f:
+            f.write(vuoto[:8192] + bytes(bytearray([0xAA]) * 4096) + vuoto[:4096])
+        prima = len(finestra.righe_registro)
+        finestra._confronta_col_precedente(cartella_c, due)
+        detto = " ".join(finestra.righe_registro[prima:])
+        controlla("differenza trovata e localizzata", "0x002000" in detto, detto)
+
+        # una lettura sola in cartella non ha con cosa confrontarsi
+        vuota = os.path.join(LAVORO, "backup-vuoto")
+        os.makedirs(vuota)
+        prima = len(finestra.righe_registro)
+        finestra._confronta_col_precedente(vuota, uno)
+        controlla("prima lettura: lo dice invece di tacere",
+                  len(finestra.righe_registro) > prima)
+
+        # misure diverse: non si confrontano, e non si esplode
+        corta = os.path.join(cartella_c, "%s-letto-C.rom" % chiave)
+        with open(corta, "wb") as f:
+            f.write(vuoto[:4096])
+        prima = len(finestra.righe_registro)
+        finestra._confronta_col_precedente(cartella_c, corta)
+        controlla("misure diverse: lo dice e tira dritto",
+                  len(finestra.righe_registro) > prima)
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

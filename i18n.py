@@ -316,6 +316,30 @@ T = {
         "it": "Non riesco a scrivere il layout: {motivo}",
         "en": "Cannot write the layout: {motivo}",
     },
+    # --- confronto automatico col backup precedente -------------------------
+    "conf_primo": {
+        "it": "Prima lettura in questa cartella: non c\u0027\u00e8 niente con "
+              "cui confrontarla.",
+        "en": "First read in this folder: there is nothing to compare it with.",
+    },
+    "conf_uguale": {
+        "it": "Identica al backup precedente ({file}). Il chip non \u00e8 "
+              "cambiato.",
+        "en": "Identical to the previous backup ({file}). The chip has not "
+              "changed.",
+    },
+    "conf_diverso": {
+        "it": "Diversa dal backup precedente ({file}): "
+              "0x{inizio:06X}-0x{fine:06X}, settori cambiati: {quanti}.",
+        "en": "Different from the previous backup ({file}): "
+              "0x{inizio:06X}-0x{fine:06X}, sectors changed: {quanti}.",
+    },
+    "conf_altra_misura": {
+        "it": "Il backup precedente ({file}) \u00e8 di un\u0027altra misura: "
+              "non si confrontano.",
+        "en": "The previous backup ({file}) has a different size: they cannot "
+              "be compared.",
+    },
     # --- 4. scrittura ----------------------------------------------------
     "sez_scrittura": {"it": "4 · Scrittura", "en": "4 · Writing"},
     "modo": {"it": "Ambito", "en": "Scope"},

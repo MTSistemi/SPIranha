@@ -88,6 +88,13 @@ firmware can be put back into update mode over the wire, so after the first
 time the button is never needed again. Upstream `pico-serprog` has no such
 path — it is one of the two patches in `firmware/`.
 
+**Every read compares itself with the previous backup.** After a verified
+read, SPIranha finds the last dump taken in the same folder and says whether the
+chip is unchanged or, if not, which sectors moved and where. It answers the
+question that always comes up and that nobody can answer from memory — *is this
+chip still how I left it?* — without anyone comparing two 32-character md5s by
+eye.
+
 **Board profiles.** The programmer has nothing board-specific about it —
 the same four wires read any SPI flash — but the surroundings do, and the
 surroundings are what gets people wrong: where to attach, which chip to expect,
@@ -242,7 +249,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 92 checks, no hardware needed
+python tests\test_gui.py     # 97 checks, no hardware needed
 python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 
