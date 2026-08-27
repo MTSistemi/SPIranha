@@ -22,6 +22,13 @@ python tests\test_gui.py        # 124 checks, no hardware
 python tests\test_full.py   # 44 checks, needs flashrom built with 'dummy'
 ```
 
+⚠️ `test_gui.py` runs in CI on a machine with **no `flashrom.exe`**, and that is
+a different code path: the window falls back to placeholders. If you touch
+anything that reads the flashrom object, run the suite once with the binary
+moved aside — that is exactly what CI does, and it has caught a failure that
+passed locally.
+
+
 `test_full.py` drives the real window and the real flashrom against an
 emulated chip. If your change touches the write path, the map, the dry run or
 the verification, **add a check there** rather than describing the behaviour in

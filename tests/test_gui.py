@@ -94,7 +94,14 @@ def prova(finestra):
         controlla("requisiti mancanti elencati", len(mancano) >= 4, str(len(mancano)))
 
         # 5. finto stato completo tranne la spunta: deve restare bloccato
-        finestra.flash = vero_flash or object()
+        # ⚠️ Il finto flashrom deve avere gli attributi che il programma
+        # legge davvero (qui: percorso, che finisce nella configurazione).
+        # Un object() nudo passava in locale, dove flashrom c'e', e faceva
+        # esplodere la CI, dove non c'e'.
+        class FlashFinto(object):
+            percorso = "flashrom-finto.exe"
+
+        finestra.flash = vero_flash or FlashFinto()
         finestra.chip = modulo.fr.Chip(nome="MX25L12835F/MX25L12873F",
                                        produttore="Macronix", kb=16384)
         finestra.lettura_verificata = "0" * 32
