@@ -106,6 +106,16 @@ def _leggi_informazioni(percorso):
     return modello, identificativo
 
 
+def e_rp2040(modello, identificativo):
+    """Questa scheda si dichiara un RP2040?
+
+    ⚠️ Il Board-ID vero e' "RPI-RP2", non "RP2...": si cerca RP2 DENTRO la
+    stringa. La prima versione pretendeva che cominciasse per RP2 e non
+    riconosceva nessuna scheda — se ne e' accorto solo l'hardware.
+    """
+    return "RP2" in ("%s %s" % (identificativo or "", modello or "")).upper()
+
+
 def schede_in_bootsel():
     """Le schede RP2040 in attesa di firmware, adesso."""
     trovate = []
@@ -114,9 +124,9 @@ def schede_in_bootsel():
         if not os.path.isfile(informazioni):
             continue
         modello, identificativo = _leggi_informazioni(informazioni)
-        # ⚠️ Si accettano solo le schede che si dichiarano RP2: su un disco
-        # qualunque una copia sbagliata non farebbe danni, ma nemmeno bene.
-        if not (identificativo or "").upper().startswith("RP2"):
+        # su un disco qualunque una copia sbagliata non farebbe danni, ma
+        # nemmeno bene
+        if not e_rp2040(modello, identificativo):
             continue
         liberi = 0
         try:

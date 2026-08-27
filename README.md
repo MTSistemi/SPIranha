@@ -86,9 +86,13 @@ flash ends up erased and the board returns to BOOTSEL on its own.
 Nothing here can brick a board: the RP2040 bootloader lives in ROM, and a board
 with an empty flash always comes back as `RPI-RP2`.
 
-⚠️ `firmware/pico_serprog.uf2` is **not in this repository** — it is GPL and has
-to be built. [`firmware/README.md`](firmware/README.md) has the exact commit,
-the toolchain, and the one-line patch needed to compile it with GCC 15 or newer.
+The firmware ships **in this repository**, together with the complete source
+it was built from and the one-line patch needed to compile it with GCC 15 or
+newer — see [`firmware/README.md`](firmware/README.md). It is GPLv3 and it is
+not our code; the source is there because the licence asks for it.
+
+Tested on real hardware: dropped onto a factory-fresh Pico, the board rebooted
+and answered the serprog protocol one second later.
 
 ## Hardware
 
@@ -153,7 +157,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 29 checks, no hardware needed
+python tests\test_gui.py     # 32 checks, no hardware needed
 python tests\test_full.py    # 37 checks, needs flashrom built with 'dummy'
 ```
 
@@ -180,12 +184,15 @@ The Italian documentation is in [`docs/it/LEGGIMI.md`](docs/it/LEGGIMI.md).
 SPIranha is released under the **GNU General Public License v2** — see
 [LICENSE](LICENSE).
 
-flashrom is a separate program, executed as a child process; SPIranha does not
-link against it. flashrom itself is GPL-2.0 (a mix of `GPL-2.0-or-later` and
-`GPL-2.0-only` files, which makes the resulting binary v2). **If you
-redistribute a build with flashrom embedded, you must also make the exact
-corresponding flashrom source available** — the simplest way is to attach the
-same source tarball to the same release.
+Two other programs travel with it, and neither is covered by that licence:
+
+- **flashrom** — GPL-2.0, executed as a child process; SPIranha does not link
+  against it. Its binary is not in this repository.
+  ⚠️ **If you redistribute a build with flashrom embedded, you must also make
+  the exact corresponding flashrom source available** — the simplest way is to
+  attach the same source tarball to the same release.
+- **pico-serprog** — GPLv3, runs on the microcontroller. Its binary *is* here,
+  and so is the source it was built from, in `firmware/pico-serprog/`.
 
 ## Credits
 

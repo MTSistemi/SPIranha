@@ -185,6 +185,16 @@ def prova(finestra):
         controlla("nessuna scheda in BOOTSEL adesso",
                   isinstance(pico.schede_in_bootsel(), list))
 
+        # ⚠️ Questo e' il caso che era sbagliato: il Board-ID di un Pico vero e'
+        # "RPI-RP2", e la prima versione lo scartava perche' non COMINCIAVA per
+        # "RP2". Se ne e' accorto solo l'hardware.
+        controlla("riconosce il Board-ID vero (RPI-RP2)",
+                  pico.e_rp2040("Raspberry Pi RP2", "RPI-RP2"))
+        controlla("riconosce anche solo dal modello",
+                  pico.e_rp2040("Raspberry Pi RP2040", ""))
+        controlla("scarta un disco qualunque",
+                  not pico.e_rp2040("SanDisk Cruzer", "USB-DISK"))
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

@@ -32,11 +32,18 @@ First public release.
   serial port and queries the firmware before declaring the programmer ready.
 - **Reset to factory** for an RP2040 board, using a `.uf2` SPIranha generates
   itself rather than a downloaded binary.
+- The `pico-serprog` firmware ships with the project, together with the source
+  it was built from and the patch that makes it compile with GCC 15.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 66 automated checks, including an end-to-end write against an emulated
+- 69 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
+
+### Verified on hardware
+- Firmware installation on a factory-fresh Raspberry Pi Pico: detected in
+  BOOTSEL, programmed, and answering serprog on a new COM port one second
+  later.
 
 ### Notes
 - The first target is the AMD BC-250 (`J4004` header). The wiring diagram,

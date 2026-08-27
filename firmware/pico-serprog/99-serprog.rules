@@ -1,0 +1,6 @@
+# udev rule that creates symlinks like /dev/serprog0
+#
+# only matches standard usb cdc-acm devices (/dev/ttyACM*) since non-standard
+# (ftdi etc) uart converters will probably have a generic descriptor anyway
+
+DRIVERS=="cdc_acm", ATTRS{interface}=="serprog", SYMLINK+="serprog%n"

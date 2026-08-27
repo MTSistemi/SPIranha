@@ -816,6 +816,11 @@ class App(tk.Tk):
         if scheda is None or not percorso_uf2:
             return
 
+        # ⚠️ Le porte serprog gia' presenti si annotano PRIMA: dopo si aspetta
+        # una porta NUOVA. Cercandone una qualunque, con un programmatore gia'
+        # collegato si direbbe "fatto" anche a copia fallita.
+        prima = set(d for d, _n, sospetto in serprog.elenca_porte() if sospetto)
+
         def lavoro():
             self._messaggio_da_thread(self.msg_firmware, chiave_avvio, AMBRA)
             fatto, motivo = pico.installa(percorso_uf2, scheda,
@@ -828,9 +833,9 @@ class App(tk.Tk):
             # la scheda riparte come porta seriale: le si da' tempo
             for _ in range(30):
                 time.sleep(0.5)
-                for dispositivo, _descrizione, sospetto in serprog.elenca_porte():
-                    if not sospetto:
-                        continue
+                adesso = set(d for d, _n, sospetto in serprog.elenca_porte()
+                             if sospetto)
+                for dispositivo in sorted(adesso - prima):
                     diagnostica = serprog.interroga(dispositivo, BAUD)
                     if diagnostica.ok and diagnostica.parla_spi:
                         return ("pronto", dispositivo, diagnostica)

@@ -1,0 +1,25 @@
+From: SPIranha <https://github.com/MTSistemi/SPIranha>
+Subject: [PATCH] fix the build with GCC 15 and newer
+
+`enable_spi` is declared as `static void enable_spi()`, which in C23 means
+"no parameters", but it is called once as `enable_spi(baud)`. GCC 15 rejects
+that with "too many arguments to function 'enable_spi'".
+
+This is not a behavioural change: `baud` is a global that the function already
+reads by itself, and older compilers silently discarded the argument.
+
+Applies to pico-serprog at commit 3ea792664ed29ca1ff3e2e78d1d16099684781bd.
+---
+diff --git a/main.c b/main.c
+index b06f92f..36a9265 100644
+--- a/main.c
++++ b/main.c
+@@ -322,7 +322,7 @@ int main() {
+ 	/* Setup USB */
+ 	tusb_init();
+ 	/* Setup PL022 SPI */
+-	enable_spi(baud);
++	enable_spi();
+ 
+ 	command_loop();
+ }

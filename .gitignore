@@ -12,11 +12,13 @@ tests/lavoro/
 tests/lavoro-gui/
 tests/corto.rom
 
-# Built, not committed: both are GPL, and shipping the binary would mean
-# shipping the corresponding source. See flashrom/PROVENANCE.md and
-# firmware/README.md.
+# Built, not committed: flashrom is GPL and shipping the binary would mean
+# shipping its corresponding source, which is far too big for this repository.
+# See flashrom/PROVENANCE.md.
 flashrom/flashrom.exe
-firmware/*.uf2
+
+# The programmer firmware IS committed, together with the source it was built
+# from (firmware/pico-serprog/ plus the patch), so the GPL is satisfied.
 
 # BIOS images: the dump of one specific board, 16 MiB each
 *.rom
