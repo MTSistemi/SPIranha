@@ -30,6 +30,7 @@ import confronto
 import flashrom as fr
 import mappa as M
 import pico
+import profili
 import regioni as reg
 import schema
 import serprog
@@ -40,11 +41,6 @@ APPNOME = "SPIranha"
 BAUD = 115200
 BLOCCO = 1024 * 1024
 
-# Le impronte che conosciamo di questa scheda (vedi bios-backup/LEGGIMI.md).
-MD5_NOTI = {
-    "3487f648a69a781d2609a8d4e6f4808e": "md5_stock",
-    "f7632f2ff61a7a5e65fff74d09942aeb": "md5_atteso",
-}
 
 VELOCITA = ["", "8M", "4M", "2M", "1M", "500k"]
 VELOCITA_ETICHETTE = {
@@ -53,7 +49,9 @@ VELOCITA_ETICHETTE = {
     "1M": "1 MHz", "500k": "500 kHz",
 }
 
-CHIP_SUGGERITI = ["", "MX25L12835F/MX25L12873F", "MX25L12805D", "W25Q128.V"]
+# I modelli suggeriti li porta il profilo: qui resta solo la voce vuota, che
+# vuol dire «fai riconoscere il chip a flashrom».
+CHIP_SUGGERITI = [""]
 
 # Quanto si legge per qualificare il collegamento: abbastanza da accorgersi di
 # un cavo incerto, poco abbastanza da poterlo rifare a ogni velocita'.
@@ -143,6 +141,7 @@ class App(tk.Tk):
         # stato della procedura: ogni requisito e' una condizione per scrivere
         self.chip = None                 # fr.Chip identificato
         self.protezione = None           # fr.Protezione, letta col chip
+        self.profilo = profili.prendi(self.conf.get("profilo"))
         self.fw_scheda = None            # versione dichiarata dal programmatore
         self.fw_chiesto = set()          # seriali a cui l'abbiamo gia' chiesta
         self.lettura_verificata = None   # md5 dell'ultima lettura doppia riuscita
@@ -200,6 +199,7 @@ class App(tk.Tk):
             "chip": self.var_chip.get(),
             "immagine": self.var_immagine.get(),
             "layout": self.var_layout.get(),
+            "profilo": self.profilo.chiave,
             "atteso": self.var_atteso.get(),
             "dettagli": bool(self.var_dettagli.get()),
             "schede": self.schede_note.come_elenco(),
@@ -229,6 +229,8 @@ class App(tk.Tk):
                 pass
         for messaggio in self._messaggi:
             messaggio.ridisegna()
+        if hasattr(self, "et_promemoria"):
+            self._scrivi_promemoria()
         self.var_velocita_etichetta.set(VELOCITA_ETICHETTE.get(self.var_velocita.get(), ""))
         if hasattr(self, "legenda"):
             self.legenda.traduci()
@@ -344,6 +346,16 @@ class App(tk.Tk):
                               values=[NOMI_LINGUA[c] for c in LINGUE])
         scelta.pack(side="left")
         scelta.bind("<<ComboboxSelected>>", self._cambia_lingua)
+
+        # ⚠️ Il profilo sta accanto alla lingua e non dentro una scheda: dice
+        # SU COSA si sta lavorando, e va visto prima di toccare qualunque cosa.
+        self.var_profilo = tk.StringVar()
+        self.combo_profilo = ttk.Combobox(cornice, textvariable=self.var_profilo,
+                                          width=16, state="readonly",
+                                          font=self.tema.f_testo)
+        self.combo_profilo.pack(side="left", padx=(8, 0))
+        self.combo_profilo.bind("<<ComboboxSelected>>", self._cambia_profilo)
+        self._riempi_profili()
         self.tela_testata.create_window(0, 0, window=cornice, anchor="ne",
                                         tags="lingua")
         self.tela_testata.bind("<Configure>", lambda _e: self._disegna_testata())
@@ -360,8 +372,9 @@ class App(tk.Tk):
                              anchor="w", justify="left", wraplength=900,
                              font=self.tema.f_testo)
         etichetta.pack(side="left", pady=5, padx=(0, 10))
-        self._etichetta(etichetta, "promemoria")
+        self.et_promemoria = etichetta
         self._avvolgibili = [(etichetta, 1.9)]
+        self._scrivi_promemoria()
 
     def _disegna_testata(self):
         tela = self.tela_testata
@@ -370,7 +383,11 @@ class App(tk.Tk):
         T.gradiente(tela, larghezza, 54)
         tela.create_text(18, 18, text=self.L("titolo"), fill=T.FG, anchor="w",
                          font=self.tema.f_titolo, tags="scritte")
-        tela.create_text(19, 38, text=self.L("sottotitolo"), fill=T.MUT,
+        tela.create_text(19, 38,
+                         text=self.L("sottotitolo",
+                                     scheda=self.profilo.testo(
+                                         "nome", self.L.codice)),
+                         fill=T.MUT,
                          anchor="w", font=self.tema.f_sotto, tags="scritte")
         tela.create_line(0, 53, larghezza, 53, fill=T.LINE, tags="scritte")
         tela.coords("lingua", larghezza - 12, 14)
@@ -521,7 +538,7 @@ class App(tk.Tk):
         self.var_chip = tk.StringVar(value=self.conf.get("chip", ""))
         self.combo_chip = ttk.Combobox(s, textvariable=self.var_chip,
                                        font=self.tema.f_testo,
-                                       values=CHIP_SUGGERITI)
+                                       values=CHIP_SUGGERITI + self.profilo.chip)
         self.combo_chip.grid(row=0, column=2, sticky="ew")
         self.combo_chip.bind("<<ComboboxSelected>>", lambda _e: self._invalida_chip())
         self.combo_chip.bind("<KeyRelease>", lambda _e: self._invalida_chip())
@@ -752,6 +769,8 @@ class App(tk.Tk):
                 self.L.codice = codice
                 break
         self._traduci()
+        # i nomi dei profili sono anche loro nelle due lingue
+        self._riempi_profili()
         self.var_stato.set(self.L("occupato") if self.occupato else self.L("pronto"))
 
     def _cambia_velocita(self, _evento=None):
@@ -763,7 +782,8 @@ class App(tk.Tk):
         self._invalida_lettura()
 
     def apri_schema(self):
-        schema.apri(self, self.tema, self.L)
+        schema.apri(self, self.tema, self.L,
+                    pinza=self.profilo.collegamento == profili.PINZA)
 
     def apri_confronto(self):
         confronto.apri(self, self.tema, self.L, self.var_cartella.get().strip())
@@ -837,6 +857,49 @@ class App(tk.Tk):
                 self._aggiorna_firmware()
             self._chiedi_versione_se_serve()
         self.attesa_bootsel = self.after(2000, self._guarda_bootsel)
+
+    # ------------------------------------------------------- profilo
+    def _scrivi_promemoria(self):
+        """La regola fissa, piu' le avvertenze proprie di questa scheda."""
+        righe = [self.L("promemoria")]
+        righe += [self.L(chiave) for chiave in self.profilo.avvisi]
+        self.et_promemoria.configure(text="  ".join(righe))
+
+    def _riempi_profili(self):
+        nomi = profili.nomi(self.L.codice)
+        self.combo_profilo.configure(values=[n for _c, n in nomi])
+        self.var_profilo.set(self.profilo.testo("nome", self.L.codice))
+
+    def _cambia_profilo(self, _evento=None):
+        scelto = self.var_profilo.get()
+        for chiave, nome in profili.nomi(self.L.codice):
+            if nome == scelto:
+                self.profilo = profili.prendi(chiave)
+                break
+        self.combo_chip.configure(values=CHIP_SUGGERITI + self.profilo.chip)
+        self._invalida_chip()
+        self._scrivi_promemoria()
+        self._disegna_testata()
+        self._salva_config()
+        self.registro("→ %s" % self.profilo.testo("nome", self.L.codice), "io")
+        self.msg_chip.testo_grezzo(
+            self.profilo.testo("descrizione", self.L.codice), GRIGIO)
+
+    def _impronta_nota(self, md5):
+        """Come si chiama questa immagine, se il profilo la conosce."""
+        voce = self.profilo.md5.get(md5)
+        if not voce:
+            return None
+        return voce.get(self.L.codice) or voce.get("it")
+
+    def _confronta_col_profilo(self):
+        """Dove la scheda vera si scosta da quello che il profilo prevede."""
+        nomi_regioni = [n for n, _a, _b in getattr(self, "regioni", ())]
+        return profili.scostamenti(
+            self.profilo,
+            chip_trovato=self.chip.nome if self.chip else None,
+            byte_trovati=self.chip.byte if self.chip else None,
+            regioni=nomi_regioni)
 
     def _aggiorna_firmware(self, con_messaggio=True):
         # il rientro in BOOTSEL si offre solo se c'e' un programmatore collegato
@@ -1297,6 +1360,10 @@ class App(tk.Tk):
             self.chip = chip
             self.protezione = protezione
             self.msg_chip.mostra("chip_trovato", VERDE, chip=chip.descrizione)
+            # ⚠️ Uno scostamento dal profilo si dice e basta: non si blocca
+            # niente. Chi ha la scheda davanti ne sa piu' di una tabella.
+            for chiave, campi in self._confronta_col_profilo():
+                self.registro("   %s" % self.L(chiave, **campi), "attenzione")
             self._mostra_protezione()
             self._aggiorna_scrittura()
 
@@ -1421,10 +1488,10 @@ class App(tk.Tk):
                 pass
             self.msg_lettura.mostra("lettura_ok", VERDE, md5=a)
             self.registro("   %s" % self.L("lettura_salvata", percorso=primo), "bene")
-            chiave = MD5_NOTI.get(a)
+            nota = self._impronta_nota(a)
             self.registro("   %s" % self.L(
                 "riconosciuto_come",
-                cosa=self.L(chiave) if chiave else self.L("md5_sconosciuto")))
+                cosa=nota or self.L("md5_sconosciuto")))
             if not self.var_atteso.get() and os.path.isfile(
                     os.path.join(cartella, "bc250-risultato-atteso.rom")):
                 self.var_atteso.set(os.path.join(cartella, "bc250-risultato-atteso.rom"))

@@ -88,6 +88,18 @@ firmware can be put back into update mode over the wire, so after the first
 time the button is never needed again. Upstream `pico-serprog` has no such
 path — it is one of the two patches in `firmware/`.
 
+**Board profiles.** The programmer has nothing board-specific about it —
+the same four wires read any SPI flash — but the surroundings do, and the
+surroundings are what gets people wrong: where to attach, which chip to expect,
+which images are already known, and the warnings that apply to *this* machine.
+A profile carries all of that: expected chip models and size, chip voltage,
+known md5s, expected regions, its own warnings, and which wiring diagram to
+open. The BC-250 is the first one; **Generic board** covers a clip on a bare
+SOIC-8, which is the common case everywhere else.
+
+A profile is what we expect, never what we impose: a chip that does not match
+is reported and the work goes on. Adding a board is data — no code.
+
 **Regions come out of the image itself.** A BIOS dump is not one block:
 it carries a map saying where each piece lives. SPIranha reads that map and
 turns it into a flashrom layout, so the region list fills itself in instead of
@@ -230,7 +242,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 79 checks, no hardware needed
+python tests\test_gui.py     # 92 checks, no hardware needed
 python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 

@@ -434,6 +434,67 @@ def prova(finestra):
                   doppie.split()[1] == "bios" and "bios_1" in doppie,
                   repr(doppie))
 
+
+        # 18. profili di scheda
+        import profili as _pf
+        controlla("profilo sconosciuto: si torna al predefinito",
+                  _pf.prendi("scheda-che-non-esiste").chiave == _pf.PREDEFINITO)
+        controlla("i nomi dei profili cambiano lingua",
+                  _pf.prendi("generico").testo("nome", "en") == "Generic board")
+        bc = _pf.prendi("bc250")
+        controlla("il profilo BC-250 conosce le due impronte",
+                  len(bc.md5) == 2 and all(len(v) == 2 for v in bc.md5.values()))
+
+        # ⚠️ Gli scostamenti sono avvisi, non divieti: devono comparire, e
+        # niente di piu'.
+        controlla("chip come previsto: nessuno scostamento",
+                  _pf.scostamenti(bc, chip_trovato="MX25L12835F/MX25L12873F",
+                                  byte_trovati=16 * 1024 * 1024,
+                                  regioni=("bios", "apcb", "psp")) == [])
+        fuori = dict(_pf.scostamenti(bc, chip_trovato="W25Q64.V",
+                                     byte_trovati=8 * 1024 * 1024,
+                                     regioni=("bios",)))
+        controlla("chip diverso segnalato", "prof_chip_diverso" in fuori,
+                  str(sorted(fuori)))
+        controlla("dimensione diversa segnalata", "prof_dim_diversa" in fuori)
+        controlla("regioni mancanti segnalate",
+                  "apcb" in fuori.get("prof_regioni_mancanti", {}).get("quali", ""),
+                  str(fuori.get("prof_regioni_mancanti")))
+        controlla("profilo senza attese: non inventa scostamenti",
+                  _pf.scostamenti(_pf.prendi("generico"),
+                                  chip_trovato="qualunque cosa",
+                                  byte_trovati=1234) == [])
+
+        # cambiando profilo cambiano i modelli suggeriti e le avvertenze
+        finestra.var_profilo.set(_pf.prendi("generico").testo("nome",
+                                                             finestra.L.codice))
+        finestra._cambia_profilo()
+        controlla("profilo generico: nessun modello suggerito",
+                  list(finestra.combo_chip.cget("values")) == [""],
+                  str(finestra.combo_chip.cget("values")))
+        controlla("il promemoria non ripete due volte la stessa frase",
+                  finestra.et_promemoria.cget("text").count(
+                      finestra.L("promemoria")) == 1)
+        finestra.var_profilo.set(bc.testo("nome", finestra.L.codice))
+        finestra._cambia_profilo()
+        controlla("tornando alla BC-250 tornano i modelli",
+                  len(finestra.combo_chip.cget("values")) > 1)
+
+        # 19. i due schemi si disegnano davvero
+        # ⚠️ Nessuna prova apriva il disegno: un errore li' si sarebbe visto
+        # solo aprendolo a mano.
+        import schema as _sc
+        for pinza in (False, True):
+            finestra_schema = _sc.Schema(finestra, finestra.tema, finestra.L,
+                                         pinza=pinza)
+            finestra_schema.update_idletasks()
+            finestra_schema.disegna()
+            quanti = len(finestra_schema.tela.find_all())
+            controlla("schema %s disegnato" % ("con pinza" if pinza
+                                               else "col connettore"),
+                      quanti > 60, "%d elementi" % quanti)
+            finestra_schema.destroy()
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

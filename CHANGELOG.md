@@ -37,6 +37,11 @@ First public release.
   GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
   be put back into update mode without touching the button.
 - **Send to BOOTSEL**, which uses it.
+- **Board profiles.** Expected chips and size, chip voltage, known md5s,
+  expected regions, board-specific warnings and the wiring diagram to open all
+  come from a profile now. BC-250 is the first; **Generic board** covers a clip
+  on a bare SOIC-8 and has its own pinout diagram. A profile is what we expect,
+  not what we impose: a mismatch is reported and the work goes on.
 - **Regions read out of the image.** Intel descriptor, FMAP and the AMD
   firmware structure are parsed straight from the dump, turned into a flashrom
   layout, and the region list fills itself. On the BC-250 — which has neither a
@@ -68,7 +73,7 @@ First public release.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 123 automated checks, including an end-to-end write against an emulated
+- 136 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Verified on hardware

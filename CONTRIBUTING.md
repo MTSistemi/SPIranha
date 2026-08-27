@@ -18,7 +18,7 @@ Convenience is not a good enough reason.
 Run both test suites on Windows:
 
 ```bash
-python tests\test_gui.py        # 79 checks, no hardware
+python tests\test_gui.py        # 92 checks, no hardware
 python tests\test_full.py   # 44 checks, needs flashrom built with 'dummy'
 ```
 

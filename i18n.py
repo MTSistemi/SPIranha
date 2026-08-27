@@ -17,13 +17,12 @@ NOMI_LINGUA = {"it": "Italiano", "en": "English"}
 
 T = {
     # --- finestra ------------------------------------------------------
-    "titolo": {
-        "it": "SPIranha — BC-250",
-        "en": "SPIranha — BC-250",
-    },
+    "titolo": {"it": "SPIranha", "en": "SPIranha"},
+    # ⚠️ Il sottotitolo dice su COSA si sta lavorando: il nome del profilo ci
+    # finisce dentro, o l'intestazione parlerebbe sempre di una BC-250.
     "sottotitolo": {
-        "it": "Raspberry Pi Pico · pico-serprog · connettore J4004",
-        "en": "Raspberry Pi Pico · pico-serprog · header J4004",
+        "it": "Raspberry Pi Pico · pico-serprog · {scheda}",
+        "en": "Raspberry Pi Pico · pico-serprog · {scheda}",
     },
     "lingua": {"it": "Lingua", "en": "Language"},
 
@@ -105,6 +104,94 @@ T = {
         "en": "Copy went through, but the board still reports {versione}.",
     },
 
+    # --- profili di scheda --------------------------------------------------
+    "profilo": {"it": "Scheda", "en": "Board"},
+    "prof_bc250_sio": {
+        "it": "Sulla scheda ci sono due flash: quella da 16 MiB \u00e8 il BIOS, "
+              "quella da 512 KiB \u00e8 il SuperIO. Il J4004 \u00e8 quello "
+              "accanto al chip grande.",
+        "en": "The board carries two flash chips: the 16 MiB one is the BIOS, "
+              "the 512 KiB one is the SuperIO. J4004 is the header next to the "
+              "big chip.",
+    },
+    "prof_gen_pinza": {
+        "it": "Con la scheda accesa il chip non si legge comunque: il chipset "
+              "tiene il bus.",
+        "en": "On a powered board the chip cannot be read anyway: the chipset "
+              "holds the bus.",
+    },
+    "prof_dim_diversa": {
+        "it": "Il profilo prevede {atteso} byte, il chip ne ha {trovato}.",
+        "en": "The profile expects {atteso} bytes, the chip has {trovato}.",
+    },
+    "prof_chip_diverso": {
+        "it": "Il profilo prevede {atteso}, qui c\u0027\u00e8 {trovato}. "
+              "Pu\u00f2 essere una revisione diversa della stessa scheda.",
+        "en": "The profile expects {atteso}, this is {trovato}. It may be a "
+              "different revision of the same board.",
+    },
+    "prof_regioni_mancanti": {
+        "it": "Regioni attese e non trovate: {quali}.",
+        "en": "Regions expected and not found: {quali}.",
+    },
+    "prof_come_previsto": {
+        "it": "Chip come previsto dal profilo.",
+        "en": "Chip is what the profile expects.",
+    },
+
+    # --- schema con la pinza sul chip ---------------------------------------
+    "sch_titolo_pinza": {
+        "it": "Collegamenti: Pico \u2192 chip SPI in SOIC-8",
+        "en": "Wiring: Pico \u2192 SOIC-8 SPI chip",
+    },
+    "sch_sotto_pinza": {
+        "it": "Raspberry Pi Pico (RP2040) \u2192 pinza sul chip",
+        "en": "Raspberry Pi Pico (RP2040) \u2192 clip on the chip",
+    },
+    "sch_chip": {"it": "Chip \u00b7 SOIC-8", "en": "Chip \u00b7 SOIC-8"},
+    "sch_chip_nota": {
+        "it": "Visto da sopra. La tacca \u00e8 dalla parte del piedino 1: "
+              "1-4 scendendo a sinistra, 5-8 risalendo a destra.",
+        "en": "Seen from above. The notch is on the pin 1 side: 1-4 going down "
+              "the left, 5-8 going up the right.",
+    },
+    "sch_wp_nota": {
+        "it": "/WP e /HOLD vanno alti. Tenuti bassi, il chip accetta i comandi "
+              "e non scrive niente: sui moduli con zoccolo ci pensa il modulo, "
+              "sul chip nudo vanno portati a VCC.",
+        "en": "/WP and /HOLD must be high. Held low, the chip takes the "
+              "commands and writes nothing: breakout modules do it for you, on "
+              "a bare chip they go to VCC.",
+    },
+    "sch_col_chip": {"it": "Chip", "en": "Chip"},
+    "sch_pz_nota": {
+        "it": "I quattro segnali stanno su due lati opposti: i cavetti si "
+              "incrociano, e va bene cos\u00ec. Conta il numero del piedino.",
+        "en": "The four signals sit on opposite sides: the wires cross, and "
+              "that is fine. What counts is the pin number.",
+    },
+    "sch_pz_av1": {
+        "it": "Scheda staccata dalla corrente, sempre.",
+        "en": "Board unplugged from mains, always.",
+    },
+    "sch_pz_av2": {
+        "it": "La pinza va messa con la tacca dalla parte del piedino 1: al "
+              "contrario si mandano 3,3 V sulla massa del chip.",
+        "en": "The clip goes on with the notch on the pin 1 side: the other "
+              "way round puts 3.3 V on the chip ground.",
+    },
+    "sch_pz_av3": {
+        "it": "Chip a 1,8 V: il Pico non li regge. Serve un adattatore di "
+              "livello, e alimentare il chip a 1,8 V.",
+        "en": "1.8 V chips: the Pico cannot drive them. A level shifter is "
+              "needed, and 1.8 V power for the chip.",
+    },
+    "sch_pz_av4": {
+        "it": "Se la scheda alimenta gi\u00e0 il chip da sola, non collegare "
+              "VCC: solo massa e i quattro segnali.",
+        "en": "If the board already powers the chip, leave VCC unconnected: "
+              "ground and the four signals only.",
+    },
     # --- 2. chip ---------------------------------------------------------
     "sez_chip": {"it": "2 · Chip", "en": "2 · Chip"},
     "identifica": {"it": "Identifica", "en": "Identify"},
@@ -243,8 +330,8 @@ T = {
         "en": "optional · re-read and compare after writing",
     },
     "spunta_alimentazione": {
-        "it": "BC-250 staccata dalla corrente",
-        "en": "BC-250 unplugged from mains",
+        "it": "Scheda staccata dalla corrente",
+        "en": "Board unplugged from mains",
     },
     "scrivi": {"it": "Scrivi…", "en": "Write…"},
     "scrivi_bloccato": {
@@ -671,9 +758,9 @@ T = {
     },
     # --- promemoria fisso --------------------------------------------------
     "promemoria": {
-        "it": "BC-250 staccata dalla corrente. Il chip è alimentato dal Pico "
+        "it": "Scheda staccata dalla corrente. Il chip è alimentato dal Pico "
               "(3V3, piedino 36).",
-        "en": "BC-250 unplugged from mains. The chip is powered by the Pico "
+        "en": "Board unplugged from mains. The chip is powered by the Pico "
               "(3V3, pin 36).",
     },
 }

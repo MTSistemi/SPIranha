@@ -62,6 +62,44 @@ COLLEGAMENTI = [   # (segnale, piedino Pico, nome Pico, piedino J4004)
 
 AVVISI = ("sch_av1", "sch_av2", "sch_av3", "sch_av4")
 
+# ---------------------------------------------------- il chip nudo (SOIC-8)
+# Piedinatura standard delle flash SPI in SOIC-8, vista da sopra: 1-4 scendendo
+# a sinistra, 5-8 risalendo a destra, tacca in alto.
+#
+# ⚠️ Qui NON si disegnano i cavetti, e non e' pigrizia: su un SOIC-8 i quattro
+# segnali stanno su DUE lati opposti (CS e MISO da una parte, MOSI e SCLK
+# dall'altra), quindi nella realta' i cavi si incrociano e basta. Un disegno
+# che li mostrasse ordinati sarebbe piu' bello del vero e meno utile: qui
+# contano i NUMERI dei piedini e il colore del segnale.
+SOIC8 = [   # (lato, numero, nome, segnale o None)
+    ("sx", 1, "/CS", "CS"),
+    ("sx", 2, "DO", "MISO"),
+    ("sx", 3, "/WP", None),
+    ("sx", 4, "GND", "GND"),
+    ("dx", 5, "DI", "MOSI"),
+    ("dx", 6, "CLK", "SCLK"),
+    ("dx", 7, "/HOLD", None),
+    ("dx", 8, "VCC", "VCC"),
+]
+
+COLLEGAMENTI_PINZA = [   # (segnale, piedino Pico, nome Pico, piedino del chip)
+    ("VCC", 36, "3V3 OUT", 8),
+    ("GND", 3, "GND", 4),
+    ("CS", 7, "GP5", 1),
+    ("SCLK", 4, "GP2", 6),
+    ("MISO", 6, "GP4", 2),
+    ("MOSI", 5, "GP3", 5),
+]
+
+AVVISI_PINZA = ("sch_pz_av1", "sch_pz_av2", "sch_pz_av3", "sch_pz_av4")
+
+# geometria del chip: corpo stretto, piazzole che sporgono
+CHX0, CHX1 = 206, 286          # corpo
+CHY0 = 268
+CHPASSO = 40
+CHPAD = 26                     # quanto sporge la piazzola
+CHALT = 13                     # mezza altezza della piazzola
+
 # --------------------------------------------------------------- geometria
 # Tutto in coordinate «naturali»: al disegno vengono moltiplicate per k.
 LARG, ALT = 1030, 566
@@ -107,13 +145,16 @@ def y_pico(numero):
 class Schema(tk.Toplevel):
     """La finestra dello schema: si ridisegna in scala quando cambia misura."""
 
-    def __init__(self, padre, tm, L):
+    def __init__(self, padre, tm, L, pinza=False):
         tk.Toplevel.__init__(self, padre, background=T.INK)
         self.tema = tm
         self.L = L
+        # due schemi: il connettore di una scheda conosciuta, oppure la pinza
+        # sul chip nudo, che e' il caso di tutte le altre
+        self.pinza = pinza
         self.k = 1.0
         self._attesa = None
-        self.title(L("sch_titolo"))
+        self.title(L("sch_titolo_pinza" if pinza else "sch_titolo"))
         self.geometry("1060x630")
         self.minsize(660, 420)
 
@@ -199,8 +240,11 @@ class Schema(tk.Toplevel):
         self.tela.configure(scrollregion=(0, 0, self._s(LARG), self._s(ALT)))
         self._testata(larghezza)
         self._scheda_pico()
-        self._connettore()
-        self._fili()
+        if self.pinza:
+            self._chip_nudo()
+        else:
+            self._connettore()
+            self._fili()
         self._colonna_destra()
 
     def _testata(self, larghezza_vera):
@@ -209,8 +253,10 @@ class Schema(tk.Toplevel):
         # rettangolo pieno lo coprirebbe
         T.gradiente(self.tela, larghezza_vera, alta)
         self.tela.create_line(0, alta, larghezza_vera, alta, fill=T.LINE)
-        self._testo(20, 18, self.L("sch_titolo"), T.FG, self._car(12, True))
-        self._testo(21, 37, self.L("sch_sotto"), T.MUT, self._car(8))
+        self._testo(20, 18, self.L("sch_titolo_pinza" if self.pinza
+                                   else "sch_titolo"), T.FG, self._car(12, True))
+        self._testo(21, 37, self.L("sch_sotto_pinza" if self.pinza
+                                   else "sch_sotto"), T.MUT, self._car(8))
 
     # -- il Pico ----------------------------------------------------------
     def _scheda_pico(self):
@@ -313,6 +359,60 @@ class Schema(tk.Toplevel):
         self._testo(CX[0] + 34, 456, self.L("sch_unk"), "#93A5B4",
                     self._car(7), ancora="nw", larghezza=200)
 
+    # -- il chip nudo, preso con la pinza ----------------------------------
+    def _chip_nudo(self):
+        """Il SOIC-8 visto da sopra, con i piedini colorati per segnale.
+
+        ⚠️ Niente cavetti disegnati: vedi la nota accanto a SOIC8. Qui il
+        collegamento si legge dai NUMERI e dai colori, che e' anche il modo in
+        cui lo si fa davvero -- guardando la tacca e contando i piedini.
+        """
+        y_fine = CHY0 + 3 * CHPASSO
+        self._testo(CHX0 - CHPAD, TITOLO_Y, T.micro(self.L("sch_chip")), T.MUT,
+                    self._car(7, True))
+        self._testo(CHX0 - CHPAD, NOTA_Y, self.L("sch_chip_nota"), "#5E7488",
+                    self._car(7), larghezza=230)
+
+        # corpo del contenitore
+        self._rett(CHX0, CHY0 - 30, CHX1, y_fine + 30, "#12171D", "#39434E")
+        # la tacca: e' cosi' che si riconosce da che parte sta il piedino 1
+        cx, cy = self._s((CHX0 + CHX1) / 2.0, CHY0 - 30)
+        r = self._s(13)
+        self.tela.create_arc(cx - r, cy - r, cx + r, cy + r, start=180,
+                             extent=180, style="chord", fill=T.INK,
+                             outline="#39434E")
+        # e il punto accanto al piedino 1, che sui chip veri c'e' quasi sempre.
+        # ⚠️ Sta SOPRA la prima riga, non accanto: al fianco del piedino finiva
+        # addosso al nome del segnale.
+        px, py = self._s(CHX0 + 13, CHY0 - 15)
+        d = self._s(3.5)
+        self.tela.create_oval(px - d, py - d, px + d, py + d, fill="#8FA2B2",
+                              outline="")
+
+        for lato, numero, nome, segnale in SOIC8:
+            fila = (numero - 1) if lato == "sx" else (8 - numero)
+            y = CHY0 + fila * CHPASSO
+            colore = T.FILO.get(segnale) if segnale else None
+            if lato == "sx":
+                x0, x1 = CHX0 - CHPAD, CHX0
+                x_num, ancora_num = CHX0 - CHPAD - 8, "e"
+            else:
+                x0, x1 = CHX1, CHX1 + CHPAD
+                x_num, ancora_num = CHX1 + CHPAD + 8, "w"
+            self._rett(x0, y - CHALT, x1, y + CHALT,
+                       colore or "#2A323B", colore or "#3A4652")
+            self._testo(x_num, y, str(numero), "#8FA2B2",
+                        self._car(7, True, mono=True), ancora=ancora_num)
+            # il nome sta DENTRO il corpo, dalla parte del suo piedino
+            self._testo(CHX0 + 10 if lato == "sx" else CHX1 - 10, y, nome,
+                        colore or "#6E8296", self._car(7, True),
+                        ancora="w" if lato == "sx" else "e")
+
+        # ⚠️ /WP e /HOLD bassi = il chip accetta i comandi e non scrive niente.
+        # E' lo stesso modo silenzioso di fallire della protezione in scrittura.
+        self._testo(CHX0 - CHPAD, y_fine + 58, self.L("sch_wp_nota"), "#93A5B4",
+                    self._car(7), ancora="nw", larghezza=250)
+
     # -- i cavetti ---------------------------------------------------------
     def _fili(self):
         sx = PX0 - PADL
@@ -351,12 +451,14 @@ class Schema(tk.Toplevel):
         riga = y + 38
         for etichetta, dx in ((self.L("sch_col_segnale"), 30),
                               (self.L("sch_col_pico"), 130),
-                              (self.L("sch_col_conn"), 215)):
+                              (self.L("sch_col_chip" if self.pinza
+                                      else "sch_col_conn"), 215)):
             self._testo(x + dx, riga, T.micro(etichetta), "#55697C",
                         self._car(6, True), tag="tabella")
         riga += 15
 
-        for segnale, pin_pico, nome_pico, pin_conn in COLLEGAMENTI:
+        for segnale, pin_pico, nome_pico, pin_conn in (
+                COLLEGAMENTI_PINZA if self.pinza else COLLEGAMENTI):
             colore = T.FILO[segnale]
             a, b, c = self._s(x + 12, riga, x + 23)
             self.tela.create_line(a, b, c, b, fill=colore, tags="tabella",
@@ -374,7 +476,9 @@ class Schema(tk.Toplevel):
                               tags="tabella")
         # ⚠️ ancora "nw", non "w": con l'ancoraggio al centro un testo che va a
         # capo si estende anche SOPRA il punto dato, e finiva addosso al filetto.
-        self._testo(x + 12, riga - 1, self.L("sch_gnd_nota"), "#6E8296",
+        self._testo(x + 12, riga - 1,
+                    self.L("sch_pz_nota" if self.pinza else "sch_gnd_nota"),
+                    "#6E8296",
                     self._car(7), ancora="nw", larghezza=COL_LARG - 24,
                     tag="tabella")
 
@@ -385,7 +489,8 @@ class Schema(tk.Toplevel):
         # --- avvisi
         y2 = fondo + 14
         riga = y2 + 38
-        for indice, chiave in enumerate(AVVISI):
+        for indice, chiave in enumerate(AVVISI_PINZA if self.pinza
+                                        else AVVISI):
             colore = T.CRIT if indice < 2 else T.WARN
             a, b = self._s(x + 15, riga + 4)
             r = self._s(3)
@@ -405,14 +510,20 @@ class Schema(tk.Toplevel):
         # documentazione e in testa a questo file, dove servono a chi verifica.
 
 
-def apri(padre, tm, L):
-    """Apre lo schema, o riporta davanti quello gia' aperto."""
+def apri(padre, tm, L, pinza=False):
+    """Apre lo schema, o riporta davanti quello gia' aperto.
+
+    ⚠️ Se quello aperto e' dell'altro tipo va rifatto, non riportato davanti:
+    sarebbe lo schema di un'altra scheda.
+    """
     esistente = getattr(padre, "_finestra_schema", None)
     if esistente is not None and esistente.winfo_exists():
-        esistente.deiconify()
-        esistente.lift()
-        esistente.focus_set()
-        return esistente
-    finestra = Schema(padre, tm, L)
+        if getattr(esistente, "pinza", False) == pinza:
+            esistente.deiconify()
+            esistente.lift()
+            esistente.focus_set()
+            return esistente
+        esistente.destroy()
+    finestra = Schema(padre, tm, L, pinza=pinza)
     padre._finestra_schema = finestra
     return finestra
