@@ -75,6 +75,12 @@ first, and flashrom does — but flashrom also sends `S_CMD_S_PIN_STATE(0)` when
 it exits. So a board that has just been used with flashrom sits there with SPI
 disabled, and the next program to ask it an ordinary question hangs it.
 
+Verified on hardware, both ways round. On 1.1 the sequence — flashrom, then a
+raw SPI operation without setting the pin state — made the board disappear from
+Windows: the port could not be opened again by anything, and it took unplugging
+it. On 1.2 the same sequence answers `00 00 00` (no chip attached) and the board
+still reports `pico-serprog1.2` afterwards.
+
 We found this by being that next program. `0004-spiop-cannot-hang-the-board.patch`
 enables the peripheral on demand, which the operation needs anyway. SPIranha
 also sends the pin state itself before any raw SPI, so it works with older

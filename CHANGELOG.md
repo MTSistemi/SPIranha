@@ -99,8 +99,13 @@ First public release.
 - Factory reset, and the 1200-baud return to BOOTSEL, on the same board.
 - Naming: a board named while running is still recognised by name after being
   sent to BOOTSEL, where its serial is a different number.
-- Updating a board over the wire, with no button: 1.0 → 1.1, verified by asking
-  the board afterwards. flashrom reads the new name back as
+- Updating a board over the wire, with no button: 1.0 → 1.1 → 1.2, verified by
+  asking the board afterwards each time.
+- The firmware hang, both ways round: on 1.1 the board vanished from Windows
+  and had to be unplugged; on 1.2 the same sequence answers and the board stays
+  alive.
+- The JEDEC probe with nothing attached: reported as *no chip*, and the
+  programmer still answers afterwards. flashrom reads the new name back as
   `pico-serprog1.1`.
 
 ### Notes
