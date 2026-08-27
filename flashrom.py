@@ -22,6 +22,14 @@ _RE_NOME = re.compile(r'vendor="([^"]*)"\s+name="([^"]*)"')
 # Found Macronix flash chip "MX25L12835F/MX25L12873F" (16384 kB, SPI) on serprog.
 _RE_TROVATO = re.compile(r'Found\s+(.+?)\s+flash chip\s+"([^"]+)"\s+\((\d+)\s*kB')
 _RE_AMBIGUO = re.compile(r"Multiple flash chip definitions match", re.IGNORECASE)
+
+# La protezione in scrittura, come la racconta flashrom:
+#   Protection range: start=0x00000000 length=0x00000000 (none)
+#   Protection mode: disabled
+_RE_WP_INTERVALLO = re.compile(
+    r"Protection range:\s*start=0x([0-9a-f]+)\s*length=0x([0-9a-f]+)\s*\(([^)]*)\)",
+    re.IGNORECASE)
+_RE_WP_MODO = re.compile(r"Protection mode:\s*(\S+)", re.IGNORECASE)
 _RE_CANDIDATO = re.compile(r'^\s*"?([A-Za-z0-9][\w./\-]{3,})"?\s*$')
 
 # Quello che flashrom dice mentre lavora, e che serve per la mappa a blocchi.
@@ -73,6 +81,41 @@ class Esito(object):
     @property
     def testo(self):
         return "\n".join(self.righe)
+
+
+class Protezione(object):
+    """Lo stato del blocco in scrittura di un chip SPI.
+
+    ⚠️ Perche' conta: e' il modo piu' comune in cui una scrittura di BIOS
+    fallisce o, peggio, sembra riuscita e non ha scritto niente. Il chip
+    accetta i comandi e non cambia. Meglio saperlo prima.
+    """
+
+    def __init__(self, inizio=None, lunghezza=None, descrizione=None,
+                 modo=None, sostenuta=True, motivo=None):
+        self.inizio = inizio
+        self.lunghezza = lunghezza
+        self.descrizione = descrizione
+        self.modo = modo
+        self.sostenuta = sostenuta      # il chip sa rispondere?
+        self.motivo = motivo
+
+    @property
+    def attiva(self):
+        """C'e' davvero un pezzo di chip protetto?"""
+        return bool(self.lunghezza) and (self.modo or "").lower() != "disabled"
+
+    @property
+    def fine(self):
+        if self.inizio is None or not self.lunghezza:
+            return None
+        return self.inizio + self.lunghezza - 1
+
+    def tocca(self, inizio, fine):
+        """L'intervallo protetto si sovrappone a quello che vogliamo scrivere?"""
+        if not self.attiva:
+            return False
+        return not (fine < self.inizio or inizio > self.fine)
 
 
 class Chip(object):
@@ -274,6 +317,25 @@ class Flashrom(object):
         esito = self.esegui(args, su_riga, su_evento)
         return esito, leggi_chip(esito.righe)
 
+    def protezione(self, porta, baud=115200, spispeed=None, chip=None,
+                   dettagli=False, su_riga=None):
+        """Chiede al chip com'e' messo il blocco in scrittura."""
+        args = self.argomenti(porta, baud, spispeed, chip, dettagli,
+                              avanzamento=False) + ["--wp-status"]
+        esito = self.esegui(args, su_riga)
+        return esito, leggi_protezione(esito.righe, esito.ok)
+
+    def sblocca(self, porta, baud=115200, spispeed=None, chip=None,
+                dettagli=False, su_riga=None):
+        """Toglie il blocco: --wp-disable e intervallo azzerato.
+
+        ⚠️ Cambia lo STATO DEL CHIP, non un'impostazione del programma. Va
+        chiesto, non fatto di nascosto.
+        """
+        args = self.argomenti(porta, baud, spispeed, chip, dettagli,
+                              avanzamento=False) + ["--wp-range=0,0", "--wp-disable"]
+        return self.esegui(args, su_riga)
+
     def leggi(self, destinazione, porta, baud=115200, spispeed=None, chip=None,
               dettagli=False, su_riga=None, su_evento=None):
         args = self.argomenti(porta, baud, spispeed, chip, dettagli) + \
@@ -325,6 +387,29 @@ def leggi_chip(righe):
     if ambiguo:
         chip.nome = None
     return chip
+
+
+def leggi_protezione(righe, esito_ok=True):
+    """Estrae lo stato del blocco da cio' che flashrom ha detto."""
+    testo = "\n".join(righe)
+    intervallo = _RE_WP_INTERVALLO.search(testo)
+    modo = _RE_WP_MODO.search(testo)
+    if not intervallo and not modo:
+        # chip che non sa rispondere, o programmatore che non ce la fa
+        motivo = None
+        for riga in righe:
+            if "wp" in riga.lower() and ("not support" in riga.lower()
+                                         or "failed" in riga.lower()
+                                         or "error" in riga.lower()):
+                motivo = riga.strip()
+                break
+        return Protezione(sostenuta=False, motivo=motivo)
+    return Protezione(
+        inizio=int(intervallo.group(1), 16) if intervallo else None,
+        lunghezza=int(intervallo.group(2), 16) if intervallo else None,
+        descrizione=intervallo.group(3).strip() if intervallo else None,
+        modo=modo.group(1).strip() if modo else None,
+        sostenuta=esito_ok)
 
 
 def trova_eseguibile(cartella_app, extra=None):

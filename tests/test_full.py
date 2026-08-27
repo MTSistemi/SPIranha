@@ -92,6 +92,14 @@ def prova(finestra):
         controlla("dimensione riconosciuta = 16 MiB",
                   finestra.chip and finestra.chip.byte == 16 * 1024 * 1024)
 
+        controlla("protezione letta insieme al chip",
+                  finestra.protezione is not None)
+        controlla("il chip emulato non e' protetto",
+                  finestra.protezione is not None
+                  and finestra.protezione.sostenuta
+                  and not finestra.protezione.attiva,
+                  (finestra.protezione.modo or "?") if finestra.protezione else "")
+
         # ---- 2. lettura doppia -------------------------------------
         finestra.leggi_e_verifica()
         aspetta(finestra)

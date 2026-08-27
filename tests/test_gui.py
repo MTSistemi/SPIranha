@@ -246,6 +246,52 @@ def prova(finestra):
                   "disabled" not in d.ok.state())
         d.destroy()
 
+
+        # 15. protezione in scrittura: lettura, sovrapposizione, blocco
+        libero = modulo.fr.leggi_protezione([
+            "Protection range: start=0x00000000 length=0x00000000 (none)",
+            "Protection mode: disabled"])
+        controlla("protezione assente riconosciuta",
+                  libero.sostenuta and not libero.attiva)
+
+        tutto = modulo.fr.leggi_protezione([
+            "Protection range: start=0x00000000 length=0x01000000 (all)",
+            "Protection mode: hardware"])
+        controlla("protezione totale riconosciuta", tutto.attiva, tutto.modo)
+        controlla("protezione totale copre la regione uefi",
+                  tutto.tocca(0xAE0000, 0xC22FFF))
+
+        alta = modulo.fr.leggi_protezione([
+            "Protection range: start=0x00F00000 length=0x00100000 (upper 1/16)",
+            "Protection mode: hardware"])
+        controlla("protezione alta NON copre la regione uefi",
+                  not alta.tocca(0xAE0000, 0xC22FFF))
+        controlla("ma copre l'ultimo pezzo di chip", alta.tocca(0xF80000, 0xF80FFF))
+
+        muto = modulo.fr.leggi_protezione(
+            ["Failed to get WP status: WP operations are not supported"], False)
+        controlla("chip che non risponde: non si inventa niente",
+                  not muto.sostenuta and not muto.attiva)
+
+        # ⚠️ Il punto: un chip protetto NON deve lasciar partire la scrittura,
+        # perche' accetterebbe i comandi senza cambiare niente.
+        finestra.protezione = tutto
+        finestra._aggiorna_scrittura()
+        mancano = finestra._requisiti_mancanti()
+        controlla("chip protetto blocca la scrittura",
+                  any("protet" in m or "protect" in m for m in mancano),
+                  str(mancano))
+        controlla("tasto scrivi spento col chip protetto",
+                  "disabled" in finestra.b_scrivi.state())
+        finestra.protezione = alta
+        finestra._aggiorna_scrittura()
+        controlla("protezione fuori regione non blocca",
+                  not any("protet" in m or "protect" in m
+                          for m in finestra._requisiti_mancanti()),
+                  str(finestra._requisiti_mancanti()))
+        finestra.protezione = libero
+        finestra._aggiorna_scrittura()
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

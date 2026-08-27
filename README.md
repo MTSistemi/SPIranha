@@ -88,6 +88,19 @@ firmware can be put back into update mode over the wire, so after the first
 time the button is never needed again. Upstream `pico-serprog` has no such
 path — it is one of the two patches in `firmware/`.
 
+**Write protection is checked, not assumed.** Right after the chip is
+identified, SPIranha asks it for its status register lock: the protected range,
+and whether it is held by software or by hardware. If that range overlaps what
+you are about to write, the write button stays off and says why.
+
+⚠️ This matters more than it sounds. A protected chip does not refuse the
+commands — it accepts them and does not change. Without the check, an erase and
+a write both "succeed", and only the final verification tells you the chip still
+holds the old image. Removing the lock is offered as a button, behind a typed
+confirmation, because it changes the state of the chip itself and survives
+unplugging everything. If the lock is held by the WP pin, no software can clear
+it: the pin has to be pulled high.
+
 **Name your boards.** With three identical Picos on the bench, "are you sure?"
 tells you nothing about *which* one you are about to erase. Give each a name and
 it follows the board everywhere: the port dropdown, the firmware row, the
@@ -177,8 +190,8 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 43 checks, no hardware needed
-python tests\test_full.py    # 37 checks, needs flashrom built with 'dummy'
+python tests\test_gui.py     # 52 checks, no hardware needed
+python tests\test_full.py    # 39 checks, needs flashrom built with 'dummy'
 ```
 
 `test_full.py` drives the real window and the real flashrom against an

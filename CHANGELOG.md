@@ -37,6 +37,11 @@ First public release.
   GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
   be put back into update mode without touching the button.
 - **Send to BOOTSEL**, which uses it.
+- **Write protection.** The chip's lock is read together with its
+  identification, shown with its range and mode, and blocks the write when it
+  covers the target region — a protected chip accepts an erase and a write
+  without changing, so this is the difference between a failure and a silent
+  one. Clearing it takes a typed confirmation.
 - **Board names.** Each programmer can be given a name that follows it
   everywhere. A board shows a different serial while running than it does in
   BOOTSEL, so SPIranha links the two the first time it sees the board move
@@ -46,7 +51,7 @@ First public release.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 80 automated checks, including an end-to-end write against an emulated
+- 91 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Verified on hardware

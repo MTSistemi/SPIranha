@@ -81,6 +81,51 @@ T = {
         "en": "Several models match: pick one under “Model”.",
     },
 
+    # --- protezione in scrittura --------------------------------------------
+    "prot_libera": {
+        "it": "Chip non protetto in scrittura.",
+        "en": "Chip is not write protected.",
+    },
+    "prot_attiva": {
+        "it": "Protetto: 0x{inizio:06X}-0x{fine:06X} ({descrizione}), modo {modo}.",
+        "en": "Protected: 0x{inizio:06X}-0x{fine:06X} ({descrizione}), mode {modo}.",
+    },
+    "prot_scontro": {
+        "it": "La protezione copre la regione da scrivere "
+              "(0x{inizio:06X}-0x{fine:06X}): la scrittura non passerebbe.",
+        "en": "The protection covers the region to write "
+              "(0x{inizio:06X}-0x{fine:06X}): the write would not go through.",
+    },
+    "prot_ignota": {
+        "it": "Il chip non risponde sullo stato della protezione.",
+        "en": "The chip does not answer about its protection state.",
+    },
+    "prot_sblocca": {"it": "Sblocca", "en": "Unlock"},
+    "prot_conferma": {
+        "it": "Sto per togliere la protezione in scrittura del chip "
+              "{chip}.\n\nNon e\u0027 un\u0027impostazione del programma: cambia lo "
+              "stato del chip, e resta cos\u00ec anche staccando tutto. Su una "
+              "scheda che si accende ancora, un BIOS non protetto \u00e8 pi\u00f9 "
+              "esposto.",
+        "en": "About to remove the write protection of chip {chip}.\n\nThis is "
+              "not a program setting: it changes the chip\u0027s own state and "
+              "persists after everything is unplugged. On a board that still "
+              "boots, an unprotected BIOS is more exposed.",
+    },
+    "parola_sblocca": {"it": "SBLOCCA", "en": "UNLOCK"},
+    "prot_sbloccato": {
+        "it": "Protezione tolta.",
+        "en": "Protection removed.",
+    },
+    "prot_non_tolta": {
+        "it": "Non sono riuscito a togliere la protezione (codice {codice}). "
+              "Spesso il blocco \u00e8 tenuto dal piedino WP o da /HOLD: va "
+              "portato alto, o il chip resta protetto comunque.",
+        "en": "Could not remove the protection (code {codice}). The lock is "
+              "often held by the WP or /HOLD pin: it has to be pulled high, or "
+              "the chip stays protected anyway.",
+    },
+    "req_protezione": {"it": "chip protetto in scrittura", "en": "chip is write protected"},
     # --- 3. lettura ------------------------------------------------------
     "sez_lettura": {"it": "3 · Lettura e backup", "en": "3 · Read and backup"},
     "cartella": {"it": "Cartella", "en": "Folder"},

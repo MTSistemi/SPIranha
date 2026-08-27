@@ -12,7 +12,7 @@ They open and close the window by themselves; there is nothing to click.
 
 *Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
 
-## `test_gui.py` — 43 checks
+## `test_gui.py` — 52 checks
 
 The window and its rules, without touching flashrom: construction, live
 IT↔EN switching, everything disabled when flashrom is missing, layout file
@@ -28,6 +28,11 @@ non-UF2 file must be refused before they could ever reach a board. And it
 pins down the board recognition against the real `Board-ID: RPI-RP2` string,
 which an earlier version got wrong.
 
+It covers write protection without a chip: the three answers flashrom can
+give (no protection, a range, no answer at all), whether a protected range
+overlaps the region being written, and — the one that matters — that a protected
+chip turns the write button off.
+
 It covers the board registry too: a name given against the running serial is
 not known from the BOOTSEL side until the two are linked, two separate entries
 merge when they turn out to be one board, and an empty name forgets it. Plus the
@@ -37,7 +42,7 @@ erase consent ask for the serial's last four characters.
 **This test fabricates its own fixtures** — a layout file and two 16 MiB images
 — so it needs nothing from outside and runs in CI on every push.
 
-## `test_full.py` — 37 checks
+## `test_full.py` — 39 checks
 
 **This is the one that matters.** It drives the real window and the real
 flashrom; the only difference is the programmer, which is `dummy` instead of

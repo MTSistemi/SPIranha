@@ -141,6 +141,7 @@ class App(tk.Tk):
 
         # stato della procedura: ogni requisito e' una condizione per scrivere
         self.chip = None                 # fr.Chip identificato
+        self.protezione = None           # fr.Protezione, letta col chip
         self.lettura_verificata = None   # md5 dell'ultima lettura doppia riuscita
         self.righe_registro = []
         self.regioni = []                # (nome, inizio, fine) dal file di layout
@@ -521,6 +522,16 @@ class App(tk.Tk):
         self.msg_chip = Messaggio(self, s)
         self.msg_chip.widget.grid(row=1, column=0, columnspan=3, sticky="w",
                                   pady=(7, 0))
+
+        # La protezione occupa spazio solo quando ha qualcosa da dire: niente
+        # etichetta fissa, e il tasto compare solo se c'e' un blocco da togliere.
+        cornice_p = tk.Frame(s, background=T.PANEL)
+        cornice_p.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(7, 0))
+        self.msg_protezione = Messaggio(self, cornice_p)
+        self.msg_protezione.widget.pack(side="left")
+        self.b_sblocca = self._etichetta(
+            ttk.Button(cornice_p, style="Secondario.TButton",
+                       command=self.sblocca_chip), "prot_sblocca")
         return scheda
 
     # -- 3. lettura --------------------------------------------------------
@@ -1090,6 +1101,9 @@ class App(tk.Tk):
     # ------------------------------------------------------------- chip
     def _invalida_chip(self):
         self.chip = None
+        self.protezione = None
+        if hasattr(self, "msg_protezione"):
+            self._mostra_protezione()
         self._invalida_lettura()
 
     def _invalida_lettura(self):
@@ -1102,13 +1116,23 @@ class App(tk.Tk):
             return
 
         def lavoro():
-            return self.flash.identifica(
+            esito, chip = self.flash.identifica(
                 porta, BAUD, self.var_velocita.get() or None,
                 self.var_chip.get().strip() or None,
                 bool(self.var_dettagli.get()), self._riga_da_thread)
+            protezione = None
+            if esito.ok and chip.nome:
+                # ⚠️ Si chiede SUBITO: e' il modo piu' comune in cui una
+                # scrittura non passa, e scoprirlo dopo la cancellazione e'
+                # tardi.
+                _e, protezione = self.flash.protezione(
+                    porta, BAUD, self.var_velocita.get() or None,
+                    chip.nome, bool(self.var_dettagli.get()),
+                    self._riga_da_thread)
+            return esito, chip, protezione
 
         def fine(risultato):
-            esito, chip = risultato
+            esito, chip, protezione = risultato
             if chip.candidati:
                 self.combo_chip.configure(values=CHIP_SUGGERITI + chip.candidati)
                 self.msg_chip.mostra("chip_ambiguo", AMBRA)
@@ -1117,10 +1141,75 @@ class App(tk.Tk):
                 self.msg_chip.mostra("chip_non_trovato", ROSSO)
                 return
             self.chip = chip
+            self.protezione = protezione
             self.msg_chip.mostra("chip_trovato", VERDE, chip=chip.descrizione)
+            self._mostra_protezione()
             self._aggiorna_scrittura()
 
         self._avvia(lavoro, fine, "identifica")
+
+    def _mostra_protezione(self):
+        p = self.protezione
+        if p is None:
+            self.msg_protezione.pulisci()
+            self.b_sblocca.pack_forget()
+            return
+        if not p.sostenuta:
+            self.msg_protezione.mostra("prot_ignota", GRIGIO)
+            self.b_sblocca.pack_forget()
+            return
+        if not p.attiva:
+            self.msg_protezione.mostra("prot_libera", VERDE)
+            self.b_sblocca.pack_forget()
+            return
+        self.b_sblocca.pack(side="right", padx=(10, 0))
+        intervallo = self._intervallo_regione()
+        scontro = intervallo and p.tocca(intervallo[0], intervallo[1])
+        if scontro:
+            self.msg_protezione.mostra("prot_scontro", ROSSO,
+                                       inizio=p.inizio, fine=p.fine)
+        else:
+            self.msg_protezione.mostra("prot_attiva", AMBRA, inizio=p.inizio,
+                                       fine=p.fine, descrizione=p.descrizione,
+                                       modo=p.modo)
+        self.b_sblocca.state(["!disabled"] if not self.occupato else ["disabled"])
+
+    def sblocca_chip(self):
+        """Toglie la protezione. Cambia lo stato del chip: si chiede prima."""
+        porta = self._porta_scelta()
+        if not (self.flash and porta and self.chip):
+            return
+        testo = self.L("prot_conferma", chip=self.chip.descrizione)
+        if not Conferma(self, self.L, testo, self.tema,
+                        parola=self.L("parola_sblocca")).confermato:
+            return
+
+        def lavoro():
+            comuni = dict(porta=porta, baud=BAUD,
+                          spispeed=self.var_velocita.get() or None,
+                          chip=self._chip_per_flashrom(),
+                          dettagli=bool(self.var_dettagli.get()),
+                          su_riga=self._riga_da_thread)
+            esito = self.flash.sblocca(**comuni)
+            _e, dopo = self.flash.protezione(**comuni)
+            return esito, dopo
+
+        def fine(risultato):
+            esito, dopo = risultato
+            self.protezione = dopo
+            if dopo is not None and not dopo.attiva:
+                self.registro("   %s" % self.L("prot_sbloccato"), "bene")
+            else:
+                self.msg_protezione.mostra("prot_non_tolta", ROSSO,
+                                           codice=esito.codice)
+                self.registro("!! %s" % self.L("prot_non_tolta",
+                                               codice=esito.codice), "male")
+                self._aggiorna_scrittura()
+                return
+            self._mostra_protezione()
+            self._aggiorna_scrittura()
+
+        self._avvia(lavoro, fine, "sblocco")
 
     # ---------------------------------------------------------- lettura
     def leggi_e_verifica(self):
@@ -1379,6 +1468,13 @@ class App(tk.Tk):
                 mancano.append(self.L("req_layout"))
         if not self.var_alimentazione.get():
             mancano.append(self.L("req_alimentazione"))
+        # ⚠️ Un chip protetto accetta i comandi e non cambia: la scrittura
+        # sembrerebbe riuscita e non lo sarebbe.
+        intervallo = self._intervallo_regione() or (
+            (0, self.chip.byte - 1) if self.chip and self.chip.byte else None)
+        if (self.protezione is not None and intervallo
+                and self.protezione.tocca(intervallo[0], intervallo[1])):
+            mancano.append(self.L("req_protezione"))
         # ⚠️ La prova a secco e' obbligatoria: e' l'unico controllo che guarda
         # il CONTENUTO invece dei nomi dei file, e produce l'immagine attesa
         # con cui si verifichera' il chip alla fine.
@@ -1693,6 +1789,9 @@ class App(tk.Tk):
         self.b_interrompi.state(["!disabled"] if occupato else ["disabled"])
         if occupato:
             self.b_scrivi.state(["disabled"])
+            self.b_sblocca.state(["disabled"])
+        elif hasattr(self, "msg_protezione"):
+            self._mostra_protezione()
         if not occupato and not self.flash:
             for bottone in (self.b_identifica, self.b_leggi, self.b_qualifica):
                 bottone.state(["disabled"])
