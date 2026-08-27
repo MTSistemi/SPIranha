@@ -88,6 +88,26 @@ firmware can be put back into update mode over the wire, so after the first
 time the button is never needed again. Upstream `pico-serprog` has no such
 path — it is one of the two patches in `firmware/`.
 
+**1.8 V chips are recognised before they are destroyed.** The RP2040
+speaks at 3.3 V and a 1.8 V chip is rated for 1.95 V on its pins: wired directly
+it gets nearly twice what it expects. The other direction does not work either —
+a logic one at 1.8 V never reaches the RP2040's input threshold of 2.31 V, so
+MISO reads at random even in the lucky case where the chip survives.
+
+There is no way to measure the voltage from here, but the model name says it:
+in every SPI NOR family the 1.8 V version is one letter away from the 3 V one
+(`MX25U` vs `MX25L`, `W25Q..JW` vs `W25Q..V`, `GD25LQ` vs `GD25Q`, `IS25WP` vs
+`IS25LP`, `MT25QU` vs `MT25QL`). When SPIranha sees one, it says so in red and
+the write stays blocked until you confirm a level shifter is in place. **A model
+it cannot place is reported as unknown, never as 3.3 V** — assuming the safe
+answer would be the opposite of safe.
+
+**1.8 V wiring** opens a schematic for the adapter: a BSS138 per signal with its
+two pull-ups, and a regulator for the 1.8 V the Pico does not have. It also says
+what the drawing cannot: the MOSFET version needs the speed dropped to 1 MHz
+because the rising edge comes from the resistor, and a 74LVC8T245 holds 12 MHz
+if you would rather buy one part than eight.
+
 **When flashrom does not know the chip, SPIranha asks the chip itself.**
 It sends the JEDEC id command over the programmer and, if the chip has one,
 reads its SFDP table for the real density. That separates two failures that look
@@ -260,7 +280,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 105 checks, no hardware needed
+python tests\test_gui.py     # 124 checks, no hardware needed
 python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 

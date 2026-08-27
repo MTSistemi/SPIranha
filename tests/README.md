@@ -12,7 +12,7 @@ They open and close the window by themselves; there is nothing to click.
 
 *Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
 
-## `test_gui.py` — 105 checks
+## `test_gui.py` — 124 checks
 
 The window and its rules, without touching flashrom: construction, live
 IT↔EN switching, everything disabled when flashrom is missing, layout file
@@ -27,6 +27,11 @@ read back and checked block by block, and both a corrupted file and a
 non-UF2 file must be refused before they could ever reach a board. And it
 pins down the board recognition against the real `Board-ID: RPI-RP2` string,
 which an earlier version got wrong.
+
+It covers the 1.8 V rules against eleven real chip names, both versions of
+each family, and checks that an unrecognised model comes back as *unknown* and
+not as 3.3 V. Then that a 1.8 V chip blocks the write until the level shifter is
+confirmed, and that the level-shifter schematic draws.
 
 It covers the JEDEC/SFDP probe against a paper chip that speaks the serprog
 protocol back: the id, the manufacturer name, the density read out of an SFDP

@@ -665,6 +665,62 @@ def prova(finestra):
         if vera_apertura is not None:
             _sp2.serial.Serial = vera_apertura
 
+
+        # 22. la tensione del chip, dedotta dal modello
+        import tensione as _tv
+        for nome, atteso in (("MX25L12835F/MX25L12873F", 3.3),
+                             ("MX25U12835F", 1.8),
+                             ("W25Q128.V", 3.3),
+                             ("W25Q128.JW.DTR", 1.8),
+                             ("W25Q64FW", 1.8),
+                             ("GD25LQ128", 1.8),
+                             ("GD25Q128", 3.3),
+                             ("IS25WP128", 1.8),
+                             ("IS25LP128", 3.3),
+                             ("MT25QU256", 1.8),
+                             ("MT25QL256", 3.3)):
+            volt, famiglia = _tv.tensione(nome)
+            controlla("tensione di %s" % nome, volt == atteso,
+                      "%s (%s)" % (volt, famiglia))
+        # ⚠️ Un modello che non si riconosce NON e' un chip a 3,3 V: e' un
+        # chip di cui non sappiamo dirlo, e va detto cosi'.
+        controlla("modello sconosciuto: non si tira a indovinare",
+                  _tv.tensione("qualcosa di mai visto") == (None, None))
+        controlla("a_bassa_tensione risponde None se non sa",
+                  _tv.a_bassa_tensione("mai visto") is None)
+
+        # un chip a 1,8 V blocca la scrittura finche' non si conferma
+        # l'adattatore, e la casella compare solo in quel caso
+        finestra._valuta_tensione("W25Q128.V")
+        controlla("chip a 3,3 V: nessuna casella in piu'",
+                  not finestra.spunta_adattatore.winfo_ismapped()
+                  and not finestra.chip_a_18)
+        finestra._valuta_tensione("MX25U12835F")
+        finestra.update()
+        controlla("chip a 1,8 V riconosciuto", finestra.chip_a_18)
+        controlla("compare la casella dell'adattatore",
+                  finestra.spunta_adattatore.winfo_ismapped())
+        controlla("e la scrittura resta bloccata",
+                  any("adattatore" in m or "shifter" in m
+                      for m in finestra._requisiti_mancanti()),
+                  str(finestra._requisiti_mancanti()))
+        finestra.var_adattatore.set(1)
+        controlla("confermato l'adattatore, quel requisito cade",
+                  not any("adattatore" in m or "shifter" in m
+                          for m in finestra._requisiti_mancanti()))
+        finestra._valuta_tensione("W25Q128.V")
+        finestra.var_adattatore.set(0)
+
+        # 23. lo schema dell'adattatore si disegna
+        import adattatore as _ad
+        finestra_ad = _ad.Adattatore(finestra, finestra.tema, finestra.L)
+        finestra_ad.update_idletasks()
+        finestra_ad.disegna()
+        quanti = len(finestra_ad.tela.find_all())
+        controlla("schema dell'adattatore disegnato", quanti > 60,
+                  "%d elementi" % quanti)
+        finestra_ad.destroy()
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

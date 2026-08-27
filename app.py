@@ -24,6 +24,7 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+import adattatore
 import analisi as A
 import anagrafica
 import confronto
@@ -33,6 +34,7 @@ import pico
 import profili
 import regioni as reg
 import schema
+import tensione as V
 import serprog
 import tema as T
 from i18n import LINGUE, NOMI_LINGUA, Lingua
@@ -143,6 +145,7 @@ class App(tk.Tk):
         self.protezione = None           # fr.Protezione, letta col chip
         self.profilo = profili.prendi(self.conf.get("profilo"))
         self.fw_scheda = None            # versione dichiarata dal programmatore
+        self.chip_a_18 = None            # il chip vuole 1,8 V? None = non si sa
         self.fw_chiesto = set()          # seriali a cui l'abbiamo gia' chiesta
         self.lettura_verificata = None   # md5 dell'ultima lettura doppia riuscita
         self.righe_registro = []
@@ -497,6 +500,10 @@ class App(tk.Tk):
             ttk.Button(cornice_f, style="Ghost.TButton",
                        command=self.rientra_in_bootsel), "fw_bootsel")
         self.b_bootsel.pack(side="left")
+        self.b_adattatore = self._etichetta(
+            ttk.Button(cornice_f, style="Ghost.TButton",
+                       command=self.apri_adattatore), "tens_schema")
+        self.b_adattatore.pack(side="left", padx=(6, 0))
         # compare solo se c'e' davvero qualcosa da aggiornare
         self.b_aggiorna = self._etichetta(
             ttk.Button(cornice_f, style="Secondario.TButton",
@@ -638,8 +645,19 @@ class App(tk.Tk):
         self.spunta_alimentazione = T.Spunta(
             s, self.tema, self.var_alimentazione,
             comando=self._aggiorna_scrittura, colore="#F0C9CB")
-        self.spunta_alimentazione.grid(row=7, column=0, columnspan=3, sticky="w")
+        self.spunte = tk.Frame(s, background=T.PANEL)
+        self.spunte.grid(row=7, column=0, columnspan=3, sticky="w")
+        self.spunta_alimentazione.pack(in_=self.spunte, anchor="w")
         self._etichetta(self.spunta_alimentazione, "spunta_alimentazione",
+                        attributo="testo")
+
+        # ⚠️ Compare solo se il chip e' davvero a 1,8 V. Una casella sempre
+        # presente si spunta per abitudine e non protegge nessuno.
+        self.var_adattatore = tk.IntVar(value=0)
+        self.spunta_adattatore = T.Spunta(
+            self.spunte, self.tema, self.var_adattatore,
+            comando=self._aggiorna_scrittura, colore="#F0C9CB")
+        self._etichetta(self.spunta_adattatore, "spunta_adattatore",
                         attributo="testo")
 
         azioni = tk.Frame(s, background=T.PANEL)
@@ -781,6 +799,9 @@ class App(tk.Tk):
                 self.var_velocita.set(valore)
                 break
         self._invalida_lettura()
+
+    def apri_adattatore(self):
+        adattatore.apri(self, self.tema, self.L)
 
     def apri_schema(self):
         schema.apri(self, self.tema, self.L,
@@ -1319,6 +1340,9 @@ class App(tk.Tk):
     # ------------------------------------------------------------- chip
     def _invalida_chip(self):
         self.chip = None
+        self.chip_a_18 = None
+        if hasattr(self, "spunta_adattatore"):
+            self.spunta_adattatore.pack_forget()
         self.protezione = None
         if hasattr(self, "msg_protezione"):
             self._mostra_protezione()
@@ -1368,6 +1392,7 @@ class App(tk.Tk):
             self.chip = chip
             self.protezione = protezione
             self.msg_chip.mostra("chip_trovato", VERDE, chip=chip.descrizione)
+            self._valuta_tensione(chip.nome)
             # ⚠️ Uno scostamento dal profilo si dice e basta: non si blocca
             # niente. Chi ha la scheda davanti ne sa piu' di una tabella.
             for chiave, campi in self._confronta_col_profilo():
@@ -1376,6 +1401,28 @@ class App(tk.Tk):
             self._aggiorna_scrittura()
 
         self._avvia(lavoro, fine, "identifica")
+
+    def _valuta_tensione(self, nome):
+        """Dal modello si capisce a che tensione lavora il chip.
+
+        ⚠️ Non c\u0027e\u0027 modo di misurarla da qui, ma il nome basta: nelle
+        famiglie SPI NOR la versione a 1,8 V si distingue da una lettera. E
+        sbagliare tensione non da\u0027 un errore: da\u0027 un chip morto.
+        """
+        volt, famiglia = V.tensione(nome)
+        self.chip_a_18 = None if volt is None else (volt == V.BASSA)
+        if self.chip_a_18:
+            self.registro("!! %s" % self.L("tens_bassa", famiglia=famiglia),
+                          "male")
+            self.spunta_adattatore.pack(anchor="w", pady=(5, 0))
+        else:
+            self.spunta_adattatore.pack_forget()
+            self.var_adattatore.set(0)
+            if volt is None:
+                self.registro("   %s" % self.L("tens_ignota"), "attenzione")
+            else:
+                self.registro("   %s" % self.L("tens_alta", famiglia=famiglia))
+        self._aggiorna_scrittura()
 
     def _racconta_identita(self, identita):
         """Cosa ha risposto il chip quando gliel\u0027abbiamo chiesto noi.
@@ -1784,6 +1831,8 @@ class App(tk.Tk):
                 mancano.append(self.L("req_layout"))
         if not self.var_alimentazione.get():
             mancano.append(self.L("req_alimentazione"))
+        if self.chip_a_18 and not self.var_adattatore.get():
+            mancano.append(self.L("req_adattatore"))
         # ⚠️ Un chip protetto accetta i comandi e non cambia: la scrittura
         # sembrerebbe riuscita e non lo sarebbe.
         intervallo = self._intervallo_regione() or (

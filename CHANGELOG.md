@@ -37,6 +37,13 @@ First public release.
   GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
   be put back into update mode without touching the button.
 - **Send to BOOTSEL**, which uses it.
+- **1.8 V chips are recognised from the model name** and block the write
+  until a level shifter is confirmed — wiring one straight to the RP2040 puts
+  nearly twice its rated voltage on the pins, and reads MISO at random anyway.
+  A model that cannot be placed is reported as unknown, never as 3.3 V.
+- **A schematic for the 1.8 V adapter**: BSS138 per signal with its pull-ups,
+  a 1.8 V regulator, and the two things the drawing cannot say — drop the speed
+  to 1 MHz with MOSFETs, or use a 74LVC8T245 and keep 12 MHz.
 - **The chip is asked directly when flashrom does not recognise it**: JEDEC
   id, and SFDP density when the chip has the table. An unknown chip and an
   absent chip stop looking the same.
@@ -83,7 +90,7 @@ First public release.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 149 automated checks, including an end-to-end write against an emulated
+- 168 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Verified on hardware

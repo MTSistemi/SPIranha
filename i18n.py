@@ -269,6 +269,95 @@ T = {
         "it": "Non sono riuscito a interrogare il chip: {motivo}",
         "en": "Could not query the chip: {motivo}",
     },
+    # --- tensione del chip e adattatore di livello --------------------------
+    "tens_bassa": {
+        "it": "Chip a 1,8 V ({famiglia}). L\u0027RP2040 parla a 3,3 V: "
+              "collegato diretto lo rovina, e il MISO non si legge comunque.",
+        "en": "1.8 V chip ({famiglia}). The RP2040 speaks at 3.3 V: wired "
+              "directly it destroys the chip, and MISO cannot be read anyway.",
+    },
+    "tens_alta": {
+        "it": "Chip a 3,3 V ({famiglia}): si collega diretto.",
+        "en": "3.3 V chip ({famiglia}): wire it directly.",
+    },
+    "tens_ignota": {
+        "it": "Tensione del chip non deducibile dal modello: guardare la "
+              "scheda tecnica prima di collegarlo.",
+        "en": "The chip voltage cannot be told from the model: check the "
+              "datasheet before wiring it.",
+    },
+    "tens_schema": {"it": "Schema 1,8 V", "en": "1.8 V wiring"},
+    "spunta_adattatore": {
+        "it": "Adattatore di livello a 1,8 V collegato",
+        "en": "1.8 V level shifter in place",
+    },
+    "req_adattatore": {
+        "it": "conferma dell\u0027adattatore a 1,8 V",
+        "en": "confirmation of the 1.8 V level shifter",
+    },
+
+    # --- schema dell'adattatore ---------------------------------------------
+    "ad_titolo": {
+        "it": "Adattatore di livello per chip a 1,8 V",
+        "en": "Level shifter for 1.8 V chips",
+    },
+    "ad_sotto": {
+        "it": "Un canale su quattro \u00b7 BSS138 \u00b7 regolatore 3,3 \u2192 1,8 V",
+        "en": "One channel of four \u00b7 BSS138 \u00b7 3.3 \u2192 1.8 V regulator",
+    },
+    "ad_rail_alto": {"it": "3,3 V \u00b7 Pico", "en": "3.3 V \u00b7 Pico"},
+    "ad_rail_basso": {"it": "1,8 V \u00b7 chip", "en": "1.8 V \u00b7 chip"},
+    "ad_lato_pico": {"it": "dal Pico", "en": "from Pico"},
+    "ad_lato_chip": {"it": "al chip", "en": "to chip"},
+    "ad_ldo": {"it": "regolatore 1,8 V", "en": "1.8 V regulator"},
+    "ad_ldo_nota": {
+        "it": "I due condensatori non sono un vezzo: senza, il regolatore "
+              "oscilla e l\u0027alimentazione del chip balla.",
+        "en": "The two capacitors are not decoration: without them the "
+              "regulator oscillates and the chip supply wanders.",
+    },
+    "ad_verso": {
+        "it": "Il MOSFET non \u00e8 simmetrico: il source (S) guarda il lato "
+              "a 1,8 V. Montato al contrario conduce sempre, i due lati "
+              "restano attaccati e il chip prende 3,3 V lo stesso.",
+        "en": "The MOSFET is not symmetric: the source (S) faces the 1.8 V "
+              "side. Fitted the other way round it conducts always, the two "
+              "sides stay connected and the chip gets 3.3 V anyway.",
+    },
+    "ad_tabella": {"it": "Un canale per segnale, e i pezzi",
+                   "en": "One channel per signal, and the parts"},
+    "ad_col_segnale": {"it": "Segnale", "en": "Signal"},
+    "ad_note_titolo": {"it": "Da sapere", "en": "Worth knowing"},
+    "ad_nota1": {
+        "it": "Il chip va alimentato a 1,8 V dal regolatore, NON dal 3V3 del "
+              "Pico. Tradurre i segnali e lasciare l\u0027alimentazione a 3,3 "
+              "\u00e8 il modo pi\u00f9 rapido di rovinarlo.",
+        "en": "The chip takes 1.8 V from the regulator, NOT the Pico\u0027s "
+              "3V3. Translating the signals and leaving the supply at 3.3 V "
+              "is the quickest way to destroy it.",
+    },
+    "ad_nota2": {
+        "it": "Quattro canali identici: SCLK, MOSI, MISO, CS. La massa \u00e8 "
+              "in comune e non passa dall\u0027adattatore.",
+        "en": "Four identical channels: SCLK, MOSI, MISO, CS. Ground is shared "
+              "and does not go through the shifter.",
+    },
+    "ad_nota3": {
+        "it": "Con i MOSFET la salita del segnale la fa la resistenza, non il "
+              "transistor: scendere a 1 MHz nella casella «Velocit\u00e0». "
+              "A 12 MHz i fronti si smussano e le letture non coincidono.",
+        "en": "With MOSFETs the rising edge is made by the resistor, not the "
+              "transistor: drop to 1 MHz under \u201cSpeed\u201d. At 12 MHz "
+              "the edges round off and the two reads disagree.",
+    },
+    "ad_nota4": {
+        "it": "Alternativa senza compromessi: un 74LVC8T245 a direzione fissa "
+              "(SCLK, MOSI e CS verso il chip, MISO verso il Pico). Tiene i "
+              "12 MHz e non ha resistenze di tiraggio.",
+        "en": "The no-compromise alternative: a 74LVC8T245 with fixed "
+              "direction (SCLK, MOSI, CS towards the chip, MISO towards the "
+              "Pico). It holds 12 MHz and needs no pull-ups.",
+    },
     # --- 3. lettura ------------------------------------------------------
     "sez_lettura": {"it": "3 · Lettura e backup", "en": "3 · Read and backup"},
     "cartella": {"it": "Cartella", "en": "Folder"},
