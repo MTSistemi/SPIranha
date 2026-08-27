@@ -11,7 +11,7 @@ RP2040 board running `pico-serprog` is the whole hardware requirement.
 > board; everything else — the safety rails, the chip map, the dry run, the
 > image comparison — is not.
 
-![Wiring diagram](screenshots/wiring-diagram.png)
+![SPIranha main window](docs/img/main-window.png)
 
 ## Why another flashrom GUI
 
@@ -101,6 +101,8 @@ flashrom prints across several lines are stitched back together — the name it
 accepts is the whole `GD25LQ128E/GD25LB128E/GD25LR128E/…`, and taking the first
 line only would pick a model flashrom then refuses.
 
+![Chip model search](docs/img/chip-search.png)
+
 **1.8 V chips are recognised before they are destroyed.** The RP2040
 speaks at 3.3 V and a 1.8 V chip is rated for 1.95 V on its pins: wired directly
 it gets nearly twice what it expects. The other direction does not work either —
@@ -127,6 +129,13 @@ resistor — 10 kΩ gives a 700 ns rise and the two reads already disagree at
 takes a fixed-direction translator (`SN74LVC8T245`), and not a `TXS0108E`, which
 is built for open-drain buses and misbehaves on SPI. Ready-made boards are
 listed too, for anyone who would rather buy one part than solder twelve.
+
+![1.8 V level shifter](docs/img/level-shifter.png)
+
+**Print to PDF** turns that page into two printable A4 sheets — the circuit and
+the bill of materials — with the colours inverted for paper, because a dark
+schematic costs a cartridge and reads badly. A copy is in the repository:
+[docs/level-shifter-1v8.pdf](docs/level-shifter-1v8.pdf).
 
 **When flashrom does not know the chip, SPIranha asks the chip itself.**
 It sends the JEDEC id command over the programmer and, if the chip has one,
@@ -239,6 +248,14 @@ and answered the serprog protocol one second later.
 
 ## Hardware
 
+![Wiring to the BC-250 J4004 header](docs/img/wiring-bc250.png)
+
+On any other board the clip goes on the chip itself, and the diagram changes
+with the profile:
+
+![SOIC-8 pinout](docs/img/wiring-soic8.png)
+
+
 | | |
 |---|---|
 | programmer | any RP2040 board (Raspberry Pi Pico or clone) |
@@ -300,7 +317,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 150 checks, no hardware needed
+python tests\test_gui.py     # 162 checks, no hardware needed
 python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 

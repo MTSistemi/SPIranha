@@ -237,7 +237,7 @@ def prova(finestra):
         controlla("rilettura di controllo salvata",
                   any(f.startswith("bc250-dopo-") for f in os.listdir(LAVORO)))
         controlla("registro su file",
-                  os.path.isfile(os.path.join(LAVORO, "programmatore-bios.log")))
+                  os.path.isfile(os.path.join(LAVORO, "SPIranha.log")))
 
         # ---- 8. la mappa ha visto passare i blocchi veri ------------
         import mappa as M

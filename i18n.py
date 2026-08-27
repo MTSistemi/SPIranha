@@ -297,6 +297,26 @@ T = {
     },
 
     # --- schema dell'adattatore ---------------------------------------------
+    "ad_col_sigla": {"it": "Sigla", "en": "Ref"},
+    "ad_col_valore": {"it": "Cosa", "en": "What"},
+    "ad_col_modelli": {"it": "Modelli", "en": "Part numbers"},
+    "ad_piede": {
+        "it": "SPIranha \u00b7 github.com/MTSistemi/SPIranha \u00b7 "
+              "adattatore di livello per flash SPI a 1,8 V",
+        "en": "SPIranha \u00b7 github.com/MTSistemi/SPIranha \u00b7 "
+              "level shifter for 1.8 V SPI flash",
+    },
+    "ad_pdf": {"it": "Stampa PDF", "en": "Print to PDF"},
+    "ad_pdf_dove": {"it": "Salva lo schema in PDF", "en": "Save the schematic as PDF"},
+    "ad_pdf_fatto": {"it": "PDF salvato: {file}", "en": "PDF saved: {file}"},
+    "ad_pdf_errore": {
+        "it": "Non sono riuscito a fare il PDF: {motivo}",
+        "en": "Could not make the PDF: {motivo}",
+    },
+    "ad_pdf_niente_chrome": {
+        "it": "Serve Chrome o Edge per la stampa in PDF: non li trovo.",
+        "en": "Chrome or Edge is needed to print to PDF: neither was found.",
+    },
     "ad_titolo": {
         "it": "Adattatore di livello per chip a 1,8 V",
         "en": "Level shifter for 1.8 V chips",

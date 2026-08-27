@@ -37,6 +37,16 @@ First public release.
   GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
   be put back into update mode without touching the button.
 - **Send to BOOTSEL**, which uses it.
+- **A printable PDF of the schematic with its bill of materials.** Two A4
+  sheets — the circuit, then the parts and the notes as real tables. The
+  drawing is not re-drawn for print: it is read back off the canvas and
+  emitted as SVG, so there is only ever one schematic. Colours are inverted
+  for paper (lightness only, so a red wire stays red), because a dark
+  schematic costs a cartridge and reads badly. An English copy lives in
+  `docs/level-shifter-1v8.pdf`.
+- **Screenshots in the README**, all in English, taken with neutral paths.
+- Log files are named after the program (`SPIranha.log`), not after the
+  project it grew out of.
 - **All 492 supported SPI chips in the model list, with a search.** Read from
   `flashrom -L`, so it follows the binary in use; multi-line names are stitched
   back together because that is the name flashrom accepts. The search shows
@@ -98,7 +108,7 @@ First public release.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 194 automated checks, including an end-to-end write against an emulated
+- 206 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Verified on hardware

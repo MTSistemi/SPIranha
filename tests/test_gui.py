@@ -841,6 +841,65 @@ def prova(finestra):
         controlla("ricerca: si chiude dopo la scelta",
                   not finestra_r.winfo_exists())
 
+
+        # 26. la pagina da stampare: colori rovesciati e disegno dentro
+        import stampa as _st
+        import xml.etree.ElementTree as _xml
+
+        # ⚠️ Rovesciare la luminosita' NON e' fare il negativo: il rosso deve
+        # restare rosso, o lo schema stampato racconta un altro circuito.
+        controlla("fondo scuro -> carta bianca",
+                  _st.per_stampa("#0B1119") > "#E0", _st.per_stampa("#0B1119"))
+        controlla("testo chiaro -> inchiostro scuro",
+                  _st.per_stampa("#E4EDF4") < "#40", _st.per_stampa("#E4EDF4"))
+        rosso = _st.per_stampa("#E5484D")
+        r, g, b = (int(rosso[i:i + 2], 16) for i in (1, 3, 5))
+        controlla("il rosso resta rosso", r > g + 40 and r > b + 40, rosso)
+        controlla("niente colore resta niente", _st.per_stampa("") is None)
+
+        finestra_ad = _ad.Adattatore(finestra, finestra.tema, finestra.L)
+        finestra_ad.geometry("1080x800")
+        finestra_ad.update()
+        finestra_ad.disegna()
+        finestra_ad.tela.delete("pdf")
+        area = [finestra_ad._s(v) for v in _ad.AREA_DISEGNO]
+        disegno = _st.svg_da_tela(finestra_ad.tela, area)
+        try:
+            albero = _xml.fromstring(disegno)
+            valido = True
+        except Exception:                                  # noqa: BLE001
+            albero, valido = None, False
+        controlla("l'SVG e' XML valido", valido)
+        # ⚠️ width E height, non solo la larghezza: senza l'altezza Chrome in
+        # stampa calcola zero e la pagina esce vuota. E' successo.
+        controlla("l'SVG dichiara larghezza e altezza",
+                  valido and albero.get("width") and albero.get("height"),
+                  "%s x %s" % (albero.get("width") if valido else "?",
+                               albero.get("height") if valido else "?"))
+        controlla("l'SVG contiene il disegno, non solo il fondo",
+                  disegno.count("<polyline") > 10 and disegno.count("<text") > 5,
+                  "%d linee, %d testi" % (disegno.count("<polyline"),
+                                          disegno.count("<text")))
+        controlla("nell'SVG non c'e' il fondo scuro dello schermo",
+                  "#0B1119" not in disegno and "#141E29" not in disegno)
+
+        pagina = _st.html_adattatore(
+            disegno, finestra.L,
+            [(p[0], _ad.valore(p, finestra.L.codice), p[2]) for p in _ad.PEZZI],
+            _ad.CANALI, _ad.NOTE, finestra.L("ad_gia_pronti"),
+            finestra.L("ad_titolo"), finestra.L("ad_sotto"))
+        controlla("la pagina porta i modelli veri",
+                  "BSS138LT1G" in pagina and "MCP1700T-1802E/TT" in pagina)
+        controlla("la pagina porta le due tabelle",
+                  pagina.count("<table") == 2, str(pagina.count("<table")))
+        # ⚠️ Senza il tetto all'altezza il disegno diventa piu' alto del
+        # foglio e Chrome lo sposta sulla pagina dopo, lasciando la prima
+        # vuota: e' successo, e non si vede finche' non si stampa.
+        controlla("il CSS tiene il disegno dentro il foglio",
+                  "max-height" in pagina and "print-color-adjust" in pagina)
+        controlla("due fogli, non uno", pagina.count('class="foglio"') == 2)
+        finestra_ad.destroy()
+
         # 11. elenco porte
         finestra.rileva_porte()
         controlla("rilevamento porte non esplode", True,

@@ -249,6 +249,16 @@ class App(tk.Tk):
             messaggio.ridisegna()
         if hasattr(self, "et_promemoria"):
             self._scrivi_promemoria()
+        # ⚠️ Anche il selettore e la barra di stato: cambiando lingua da
+        # codice restavano indietro, e si vedeva «Italiano» sopra una
+        # finestra in inglese.
+        if hasattr(self, "var_lingua"):
+            self.var_lingua.set(NOMI_LINGUA.get(self.L.codice, ""))
+        if hasattr(self, "var_stato"):
+            self.var_stato.set(self.L("occupato") if self.occupato
+                               else self.L("pronto"))
+        if hasattr(self, "combo_profilo"):
+            self._riempi_profili()
         self.var_velocita_etichetta.set(VELOCITA_ETICHETTE.get(self.var_velocita.get(), ""))
         if hasattr(self, "legenda"):
             self.legenda.traduci()
@@ -810,9 +820,6 @@ class App(tk.Tk):
                 self.L.codice = codice
                 break
         self._traduci()
-        # i nomi dei profili sono anche loro nelle due lingue
-        self._riempi_profili()
-        self.var_stato.set(self.L("occupato") if self.occupato else self.L("pronto"))
 
     def _cambia_velocita(self, _evento=None):
         etichetta = self.var_velocita_etichetta.get()
@@ -2179,7 +2186,7 @@ class App(tk.Tk):
     def salva_registro(self):
         percorso = filedialog.asksaveasfilename(
             initialdir=self.var_cartella.get() or None,
-            initialfile="programmatore-bios-%s.log" % marca_ora(),
+            initialfile="SPIranha-%s.log" % marca_ora(),
             defaultextension=".log")
         if not percorso:
             return
@@ -2194,7 +2201,7 @@ class App(tk.Tk):
         if not cartella or not os.path.isdir(cartella):
             return
         try:
-            with open(os.path.join(cartella, "programmatore-bios.log"), "ab") as f:
+            with open(os.path.join(cartella, "SPIranha.log"), "ab") as f:
                 intestazione = "\n===== %s — %s =====\n" % (
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"), operazione)
                 f.write(intestazione.encode("utf-8"))

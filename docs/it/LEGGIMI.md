@@ -208,7 +208,7 @@ Le due impronte il programma le riconosce da sé e le dice a parole.
 ## Registro
 
 Tutto quello che dice flashrom finisce nel riquadro in basso e, a fine
-operazione, in coda a `programmatore-bios.log` dentro la cartella di lavoro. La
+operazione, in coda a `SPIranha.log` dentro la cartella di lavoro. La
 spunta `-V` accende il registro dettagliato di flashrom: serve quando qualcosa
 non torna.
 

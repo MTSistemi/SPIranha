@@ -12,7 +12,7 @@ They open and close the window by themselves; there is nothing to click.
 
 *Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
 
-## `test_gui.py` — 150 checks
+## `test_gui.py` — 162 checks
 
 The window and its rules, without touching flashrom: construction, live
 IT↔EN switching, everything disabled when flashrom is missing, layout file
@@ -27,6 +27,12 @@ read back and checked block by block, and both a corrupted file and a
 non-UF2 file must be refused before they could ever reach a board. And it
 pins down the board recognition against the real `Board-ID: RPI-RP2` string,
 which an earlier version got wrong.
+
+It covers the print path without needing Chrome: that the colour inversion
+turns the dark background into paper white while leaving a red wire red, that
+the exported SVG is valid XML and declares **both** width and height (without
+the height Chrome prints an empty page), and that the print CSS keeps the
+drawing inside the sheet.
 
 It covers the chip list parser on a fabricated `flashrom -L` — including a
 name split across three lines, which has to come back stitched — the dropdown

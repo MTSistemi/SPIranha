@@ -33,7 +33,12 @@ gate a 1,8 V non accende proprio.
 """
 from __future__ import unicode_literals
 
+import os
+import tkinter.messagebox as messagebox
+import tkinter.filedialog as filedialog
+
 import schema
+import stampa
 import tema as T
 
 # ------------------------------------------------------------------ dati
@@ -57,16 +62,29 @@ CANALI = (
 # vengono dall'I2C a 100 kHz. Qui la salita del segnale la fa la resistenza,
 # e con 10 kΩ su una trentina di picofarad si va sui 700 ns -- piu' del mezzo
 # periodo a 1 MHz. Con 1 kΩ si scende a ~70 ns e si tengono i 4 MHz.
+# ⚠️ La colonna «cosa» e' bilingue anche per la virgola: 1,5 V in italiano e
+# 1.5 V in inglese. Le sigle dei modelli invece non si traducono.
 PEZZI = (
-    ("Q1-Q4", "N-MOSFET · Vgs(th) < 1,5 V · SOT-23",
+    ("Q1-Q4", {"it": "N-MOSFET · Vgs(th) < 1,5 V · SOT-23",
+               "en": "N-MOSFET · Vgs(th) < 1.5 V · SOT-23"},
      "onsemi BSS138LT1G · Diodes BSS138-7-F · Nexperia BSS138BK"),
-    ("R1-R8", "1 kΩ · 1% · 0603",
+    ("R1-R8", {"it": "1 kΩ · 1% · 0603", "en": "1 kΩ · 1% · 0603"},
      "Yageo RC0603FR-071KL"),
-    ("U1", "LDO 1,8 V · > 100 mA · SOT-23",
+    ("U1", {"it": "LDO 1,8 V · > 100 mA · SOT-23",
+            "en": "LDO 1.8 V · > 100 mA · SOT-23"},
      "Microchip MCP1700T-1802E/TT · Torex XC6206P182MR · Diodes AP2112K-1.8TRG1"),
-    ("C1, C2", "1 µF · X7R · 16 V · 0603",
+    ("C1, C2", {"it": "1 µF · X7R · 16 V · 0603",
+                "en": "1 µF · X7R · 16 V · 0603"},
      "Murata GRM188R71C105KA12D"),
 )
+
+
+def valore(pezzo, lingua="it"):
+    """La colonna «cosa» del pezzo, nella lingua giusta."""
+    testo = pezzo[1]
+    if isinstance(testo, dict):
+        return testo.get(lingua) or testo.get("it") or ""
+    return testo
 
 NOTE = ("ad_nota1", "ad_nota3", "ad_nota5", "ad_nota6")
 
@@ -88,6 +106,10 @@ LDO_X, LDO_Y = 216, 400        # il regolatore, sotto
 # stimato. Se ALT_AD e' piu' corto dell'altezza vera, la scala si calcola su
 # un disegno che non c'e' e l'ultima nota finisce fuori dalla finestra.
 ALT_AD = 720
+# ⚠️ Nel PDF va SOLO il circuito: la colonna di destra diventa una
+# tabella vera nella seconda pagina, che in stampa si legge meglio di
+# un riquadro fotografato.
+AREA_DISEGNO = (10, 60, 700, 600)
 LDO_L, LDO_A = 140, 44
 
 
@@ -123,6 +145,57 @@ class Adattatore(schema.Schema):
         self.tela.create_line(0, alta, larghezza_vera, alta, fill=T.LINE)
         self._testo(20, 18, self.L("ad_titolo"), T.FG, self._car(12, True))
         self._testo(21, 37, self.L("ad_sotto"), T.MUT, self._car(8))
+
+        # il tasto per la stampa: una pillola disegnata, come il resto
+        larghezza_pillola = 96
+        x0 = (larghezza_vera / self.k) - larghezza_pillola - 16
+        self._rett(x0, 14, x0 + larghezza_pillola, 38, "#1D2937", "#2A3846",
+                   tag="pdf")
+        self._testo(x0 + larghezza_pillola / 2.0, 26, self.L("ad_pdf"),
+                    "#8FC2E3", self._car(7.5, True), ancora="center",
+                    tag="pdf")
+        self.tela.tag_bind("pdf", "<Button-1>", lambda _e: self.esporta_pdf())
+        self.tela.tag_bind("pdf", "<Enter>",
+                           lambda _e: self.tela.configure(cursor="hand2"))
+        self.tela.tag_bind("pdf", "<Leave>",
+                           lambda _e: self.tela.configure(cursor=""))
+
+    # -- stampa ------------------------------------------------------------
+    def esporta_pdf(self, percorso=None):
+        """Il disegno e la distinta in un PDF stampabile."""
+        if percorso is None:
+            if stampa.trova_chrome() is None:
+                messagebox.showwarning(self.L("ad_titolo"),
+                                       self.L("ad_pdf_niente_chrome"),
+                                       parent=self)
+                return None
+            percorso = filedialog.asksaveasfilename(
+                parent=self, title=self.L("ad_pdf_dove"), defaultextension=".pdf",
+                initialfile="adattatore-1v8.pdf",
+                filetypes=[("PDF", "*.pdf")])
+            if not percorso:
+                return None
+        # ⚠️ Il tasto non deve finire nel PDF: e' un comando, non un disegno.
+        self.tela.delete("pdf")
+        area = [self._s(v) for v in AREA_DISEGNO]
+        disegno = stampa.svg_da_tela(self.tela, area)
+        pagina = stampa.html_adattatore(
+            disegno, self.L,
+            [(p[0], valore(p, self.L.codice), p[2]) for p in PEZZI],
+            CANALI, NOTE, self.L("ad_gia_pronti"),
+            self.L("ad_titolo"), self.L("ad_sotto"))
+        fatto, motivo = stampa.in_pdf(pagina, percorso)
+        self.disegna()
+        if not fatto:
+            messagebox.showerror(self.L("ad_titolo"),
+                                 self.L("ad_pdf_errore", motivo=motivo),
+                                 parent=self)
+            return None
+        messagebox.showinfo(self.L("ad_titolo"),
+                            self.L("ad_pdf_fatto",
+                                   file=os.path.basename(percorso)),
+                            parent=self)
+        return percorso
 
     # -- le due alimentazioni ---------------------------------------------
     def _barre(self):
@@ -304,10 +377,12 @@ class Adattatore(schema.Schema):
         # sembra identica e non funziona.
         y1 = fondo + 14
         riga = y1 + 38
-        for sigla, valore, modelli in PEZZI:
+        for pezzo in PEZZI:
+            sigla, _v, modelli = pezzo
             self._testo(x + 15, riga, sigla, "#E4EDF4",
                         self._car(7.5, True, mono=True), tag="distinta")
-            self._testo(x + 74, riga, valore, "#B9C7D3", self._car(7),
+            self._testo(x + 74, riga, valore(pezzo, self.L.codice),
+                        "#B9C7D3", self._car(7),
                         ancora="nw", larghezza=schema.COL_LARG - 90,
                         tag="distinta")
             limiti = self.tela.bbox("distinta")
