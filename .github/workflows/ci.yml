@@ -10,11 +10,11 @@ permissions:
   contents: read
 
 jobs:
-  controlli:
+  checks:
     name: Checks (Windows)
     runs-on: windows-latest
-    # ⚠️ Gli script "shell: python" girano da una cartella temporanea: senza
-    # questo non trovano i moduli del progetto.
+    # The "shell: python" steps run from a temporary directory, so without this
+    # they cannot import the project's own modules.
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
@@ -34,11 +34,11 @@ jobs:
         shell: python
         run: |
           import i18n
-          mancanti = [k for k, v in i18n.T.items() if set(v) != {"it", "en"}]
-          assert not mancanti, "chiavi senza traduzione: %s" % mancanti
-          vuote = [k for k, v in i18n.T.items() if not all(x.strip() for x in v.values())]
-          assert not vuote, "chiavi vuote: %s" % vuote
-          print("%d chiavi, italiano e inglese completi" % len(i18n.T))
+          missing = [k for k, v in i18n.T.items() if set(v) != {"it", "en"}]
+          assert not missing, "keys without a translation: %s" % missing
+          empty = [k for k, v in i18n.T.items() if not all(x.strip() for x in v.values())]
+          assert not empty, "empty keys: %s" % empty
+          print("%d keys, Italian and English both complete" % len(i18n.T))
 
       - name: Analysis engine
         shell: python
@@ -46,21 +46,47 @@ jobs:
           import analisi as A
           a = bytes(16 * 1024) * 64
           b = bytearray(a)
-          b[0x5000:0x5010] = b"x" * 16          # dentro un solo settore
-          esito = A.confronta(a, bytes(b))
-          assert esito["allineati"] == [(0x5000, 0x5FFF)], esito["allineati"]
-          assert esito["esatti"] == [(0x5000, 0x500F)], esito["esatti"]
-          assert esito["byte_diversi"] == 16
-          # la prova a secco deve accorgersi di cio' che resta fuori regione
-          secco = A.prova_a_secco(a, bytes(b), regione=(0x8000, 0x8FFF))
-          assert secco.fuori == [(0x5000, 0x5FFF)], secco.fuori
-          assert secco.nulla_da_fare, "fuori regione non si scrive niente"
-          # il layout generato deve coprire tutto il chip
-          testo = A.genera_layout([(0x5000, 0x5FFF)], len(a), "prova")
-          assert testo.count("\n") == 3, testo
+          b[0x5000:0x5010] = b"x" * 16          # inside a single sector
+          result = A.confronta(a, bytes(b))
+          assert result["allineati"] == [(0x5000, 0x5FFF)], result["allineati"]
+          assert result["esatti"] == [(0x5000, 0x500F)], result["esatti"]
+          assert result["byte_diversi"] == 16
+          # the dry run must notice what falls outside the chosen region
+          dry = A.prova_a_secco(a, bytes(b), regione=(0x8000, 0x8FFF))
+          assert dry.fuori == [(0x5000, 0x5FFF)], dry.fuori
+          assert dry.nulla_da_fare, "nothing outside the region gets written"
+          # the generated layout must cover the whole chip
+          text = A.genera_layout([(0x5000, 0x5FFF)], len(a), "test")
+          assert text.count("\n") == 3, text
           assert A.allineato(0x5000, 0x5FFF)
           assert not A.allineato(0x5001, 0x5FFF)
-          print("motore di analisi: a posto")
+          print("analysis engine: fine")
+
+      - name: UF2 handling
+        shell: python
+        run: |
+          import os, tempfile, pico
+          path = os.path.join(tempfile.gettempdir(), "reset.uf2")
+          pico.genera_cancellazione(path, byte=64 * 1024)
+          blocks, first, last, families = pico.leggi_uf2(path)
+          assert blocks == 256, blocks
+          assert first == pico.BASE_FLASH, hex(first)
+          assert last == pico.BASE_FLASH + 64 * 1024 - 1, hex(last)
+          assert families == {pico.FAMIGLIA_RP2040}, families
+          with open(path, "rb") as f:
+              head = f.read(pico.BLOCCO)
+          assert head[32:32 + pico.CARICO] == b"\xff" * pico.CARICO
+          # a corrupted file must be refused before it could reach a board
+          data = bytearray(open(path, "rb").read())
+          data[4] = (data[4] + 1) % 256
+          broken = path + ".broken"
+          open(broken, "wb").write(bytes(data))
+          try:
+              pico.leggi_uf2(broken)
+              raise AssertionError("a corrupted UF2 was accepted")
+          except ValueError:
+              pass
+          print("UF2 handling: fine")
 
       - name: Window and safety rails
         run: python tests\test_gui.py
