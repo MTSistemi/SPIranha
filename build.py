@@ -46,12 +46,12 @@ def prepara_venv():
         sys.exit("le dipendenze non si installano (serve la rete)")
 
 
-VERSIONE = "1.1.0"
+VERSIONE = "1.2.0"
 
 
 def prepara_risorse():
     """Icona e proprieta' del file: per qualcosa che si distribuisce contano."""
-    icona = os.path.join(QUI, "programmatore.ico")
+    icona = os.path.join(QUI, "SPIranha.ico")
     if not os.path.isfile(icona):
         print("Genero l'icona")
         esegui([sys.executable, os.path.join(QUI, "icona.py")])
@@ -127,7 +127,19 @@ def firma(percorsi):
     esegui(args)
 
 
+def scrivi_versione_iss():
+    """Il numero di versione per Inno Setup: uno solo, generato da qui."""
+    cartella = os.path.join(QUI, "build")
+    if not os.path.isdir(cartella):
+        os.makedirs(cartella)
+    percorso = os.path.join(cartella, "versione.iss")
+    with open(percorso, "w", encoding="utf-8") as f:
+        f.write('#define Versione "%s"\n' % VERSIONE)
+    return percorso
+
+
 def costruisci_setup():
+    scrivi_versione_iss()
     iscc = next((p for p in ISCC if os.path.isfile(p)), None)
     if not iscc:
         print("Inno Setup non trovato: salto l'installatore.")

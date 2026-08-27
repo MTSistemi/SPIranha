@@ -4,39 +4,12 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/1.1.0/), and
 the project uses [semantic versioning](https://semver.org/).
 
-## [1.1.0] — 2026-08-27
+## [1.2.0] — 2026-08-28
 
-First public release.
+Everything below came after the first release, and most of it came from a
+failure that did not announce itself.
 
 ### Added
-- **Guarded write path.** The write button stays off until flashrom is found,
-  the chip is identified and its size matches the image, two consecutive reads
-  agree, a dry run has been done, and the "board unplugged" box is ticked.
-  Confirmation requires typing the word.
-- **Dry run**, mandatory. Computes the resulting image in memory before
-  anything is erased: expected md5, how many bytes change and where, and
-  whether the source also differs outside the selected region.
-- **Live chip map**, driven by flashrom's own `E(start:end)` and
-  `W(start:end)` markers and per-stage progress, not by estimates.
-- **Independent final verification.** Re-reads the whole chip after writing and
-  compares it byte for byte with the dry-run image, then checks the written
-  region is coherent (not all `0xFF`, not all `0x00`, known structures present).
-- **Link qualification.** Finds the fastest SPI speed that gives two identical
-  reads of 256 KB and sets it.
-- **Image comparison** with 4 KB sector alignment, structure recognition
-  (`_FVH`, `NVAR`, `APCB`, `$PSP`) and flashrom layout generation.
-- **Wiring diagram** drawn in code, showing both the RP2040 and the target
-  header, with the pin-1 marker.
-- **Programmer firmware installation.** A board held in BOOTSEL is detected
-  within seconds; SPIranha validates the `.uf2`, copies it, then waits for the
-  serial port and queries the firmware before declaring the programmer ready.
-- **Reset to factory** for an RP2040 board, using a `.uf2` SPIranha generates
-  itself rather than a downloaded binary.
-- The `pico-serprog` firmware ships with the project, together with the source
-  it was built from and the two patches applied to it: the build fix for
-  GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
-  be put back into update mode without touching the button.
-- **Send to BOOTSEL**, which uses it.
 - **A printable PDF of the schematic with its bill of materials.** Two A4
   sheets — the circuit, then the parts and the notes as real tables. The
   drawing is not re-drawn for print: it is read back off the canvas and
@@ -112,19 +85,74 @@ First public release.
   16 MiB chip.
 
 ### Verified on hardware
+- Updating a board over the wire, with no button: 1.0 → 1.1 → 1.2, asking the
+  board its version after each step. flashrom reads the new name back as
+  `pico-serprog1.2`.
+- The firmware hang, both ways round: on 1.1 the board vanished from Windows
+  and had to be unplugged; on 1.2 the same sequence answers `00 00 00` and the
+  board still responds afterwards.
+- The JEDEC probe with nothing attached: reported as *no chip*, which is the
+  distinction it exists to make.
+- A 16 MiB BC-250 dump read end to end through the whole chain — identify,
+  protection, two reads, fingerprints compared, regions derived — and matching
+  the file it came from byte for byte.
+
+### Fixed
+- **A write-protected chip no longer looks like a successful write.** It
+  accepts the erase and the write and stays as it was; the protection is now
+  read with the chip and blocks the write when it covers the target.
+- **A firmware copy that never started is reported as failed.** Any `OSError`
+  used to count as the normal end-of-copy detach, and a board fresh into
+  BOOTSEL answers `Permission denied` until Windows finishes mounting it — so
+  the firmware was never written and the program said it was.
+- **An SPI operation can no longer hang the board** (firmware 1.2). With the
+  peripheral disabled it never returned, which stopped the USB task and made
+  the board vanish until unplugged — and flashrom leaves the peripheral
+  disabled when it exits.
+- **The tests no longer overwrite the user's settings**: they build the real
+  window and saved over the real configuration.
+- The language switch now updates the language selector and the status bar too.
+
+## [1.1.0] — 2026-08-27
+
+First public release.
+
+### Added
+- **Guarded write path.** The write button stays off until flashrom is found,
+  the chip is identified and its size matches the image, two consecutive reads
+  agree, a dry run has been done, and the "board unplugged" box is ticked.
+  Confirmation requires typing the word.
+- **Dry run**, mandatory. Computes the resulting image in memory before
+  anything is erased: expected md5, how many bytes change and where, and
+  whether the source also differs outside the selected region.
+- **Live chip map**, driven by flashrom's own `E(start:end)` and
+  `W(start:end)` markers and per-stage progress, not by estimates.
+- **Independent final verification.** Re-reads the whole chip after writing and
+  compares it byte for byte with the dry-run image, then checks the written
+  region is coherent (not all `0xFF`, not all `0x00`, known structures present).
+- **Link qualification.** Finds the fastest SPI speed that gives two identical
+  reads of 256 KB and sets it.
+- **Image comparison** with 4 KB sector alignment, structure recognition
+  (`_FVH`, `NVAR`, `APCB`, `$PSP`) and flashrom layout generation.
+- **Wiring diagram** drawn in code, showing both the RP2040 and the target
+  header, with the pin-1 marker.
+- **Programmer firmware installation.** A board held in BOOTSEL is detected
+  within seconds; SPIranha validates the `.uf2`, copies it, then waits for the
+  serial port and queries the firmware before declaring the programmer ready.
+- **Reset to factory** for an RP2040 board, using a `.uf2` SPIranha generates
+  itself rather than a downloaded binary.
+- The `pico-serprog` firmware ships with the project, together with the source
+  it was built from and the two patches applied to it: the build fix for
+  GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
+  be put back into update mode without touching the button.
+- **Send to BOOTSEL**, which uses it.
+
+### Verified on hardware
 - Firmware installation on a factory-fresh Raspberry Pi Pico: detected in
   BOOTSEL, programmed, and answering serprog on a new COM port one second later.
 - Factory reset, and the 1200-baud return to BOOTSEL, on the same board.
 - Naming: a board named while running is still recognised by name after being
   sent to BOOTSEL, where its serial is a different number.
-- Updating a board over the wire, with no button: 1.0 → 1.1 → 1.2, verified by
-  asking the board afterwards each time.
-- The firmware hang, both ways round: on 1.1 the board vanished from Windows
-  and had to be unplugged; on 1.2 the same sequence answers and the board stays
-  alive.
-- The JEDEC probe with nothing attached: reported as *no chip*, and the
-  programmer still answers afterwards. flashrom reads the new name back as
-  `pico-serprog1.1`.
 
 ### Notes
 - The first target is the AMD BC-250 (`J4004` header). The wiring diagram,
@@ -132,4 +160,5 @@ First public release.
 - `flashrom.exe` is not distributed in this repository; see
   `flashrom/PROVENANCE.md`.
 
+[1.2.0]: https://github.com/MTSistemi/SPIranha/releases/tag/v1.2.0
 [1.1.0]: https://github.com/MTSistemi/SPIranha/releases/tag/v1.1.0

@@ -7,7 +7,7 @@ __pycache__/
 *.pyc
 
 # generated
-programmatore.ico
+SPIranha.ico
 tests/lavoro/
 tests/lavoro-gui/
 tests/corto.rom

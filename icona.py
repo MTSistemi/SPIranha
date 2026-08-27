@@ -3,7 +3,7 @@
 
     python icona.py
 
-Scrive `programmatore.ico`. Il disegno segue il tema: fondo ardesia, un chip
+Scrive `SPIranha.ico`. Il disegno segue il tema: fondo ardesia, un chip
 blu accento con i piedini ambra ai lati. Si ridisegna a ogni misura invece di
 scalare una sola immagine, cosi' a 16 px resta leggibile.
 
@@ -146,7 +146,7 @@ def voce_png(tela):
             + pezzo(b"IEND", b""))
 
 
-def scrivi(percorso="programmatore.ico"):
+def scrivi(percorso="SPIranha.ico"):
     immagini = []
     for lato in MISURE:
         immagini.append((lato, voce_bmp(disegna(lato))))
@@ -168,5 +168,5 @@ def scrivi(percorso="programmatore.ico"):
 if __name__ == "__main__":
     import os
     percorso = scrivi(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                   "programmatore.ico"))
+                                   "SPIranha.ico"))
     print("scritta %s (%d byte)" % (percorso, os.path.getsize(percorso)))

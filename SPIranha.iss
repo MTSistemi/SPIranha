@@ -3,7 +3,11 @@
 ; Inno Setup script for SPIranha.
 
 #define Nome "SPIranha"
-#define Versione "1.1.0"
+; ⚠️ La versione NON si scrive qui: la genera build.py in build/versione.iss,
+; perche' con due numeri da tenere allineati l'installer e' gia' uscito una
+; volta con la versione vecchia -- e quindi senza firma, perche' build.py
+; cercava un file con l'altro nome.
+#include "build/versione.iss"
 #define Editore "MTSistemi"
 #define Eseguibile "SPIranha.exe"
 
@@ -20,7 +24,7 @@ OutputBaseFilename=SPIranha-Setup-{#Versione}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-SetupIconFile=programmatore.ico
+SetupIconFile=SPIranha.ico
 UninstallDisplayIcon={app}\{#Eseguibile}
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
