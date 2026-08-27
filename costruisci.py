@@ -1,0 +1,163 @@
+# -*- coding: utf-8 -*-
+"""Costruisce SPIranha.exe (e, se c'e' Inno Setup, l'installatore).
+
+Si fa un ambiente virtuale TUTTO SUO dentro questa cartella: il Python di
+sistema non viene toccato. Serve la rete solo la prima volta, per scaricare
+pyserial e pyinstaller.
+
+    python costruisci.py            # exe
+    python costruisci.py --setup    # exe + installatore
+    python costruisci.py --setup --firma   # e li firma (vedi firma.ps1)
+    python costruisci.py --pulisci  # butta via build/ dist/ .venv/
+
+Builds SPIranha.exe in a self-contained virtualenv; add --setup for
+the Inno Setup installer.
+"""
+from __future__ import unicode_literals
+
+import os
+import shutil
+import subprocess
+import sys
+
+QUI = os.path.dirname(os.path.abspath(__file__))
+VENV = os.path.join(QUI, ".venv")
+PYTHON_VENV = os.path.join(VENV, "Scripts", "python.exe")
+DIPENDENZE = ["pyserial>=3.5", "pyinstaller>=6.0"]
+NOME = "SPIranha"
+ISCC = [
+    r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+    r"C:\Program Files\Inno Setup 6\ISCC.exe",
+]
+
+
+def esegui(args, **kw):
+    print(">", " ".join(args))
+    return subprocess.call(args, cwd=QUI, **kw)
+
+
+def prepara_venv():
+    if not os.path.isfile(PYTHON_VENV):
+        print("Creo l'ambiente virtuale in .venv")
+        if esegui([sys.executable, "-m", "venv", VENV]) != 0:
+            sys.exit("non riesco a creare .venv")
+    if esegui([PYTHON_VENV, "-m", "pip", "install", "--upgrade", "pip"]) != 0:
+        sys.exit("pip non si aggiorna")
+    if esegui([PYTHON_VENV, "-m", "pip", "install"] + DIPENDENZE) != 0:
+        sys.exit("le dipendenze non si installano (serve la rete)")
+
+
+VERSIONE = "1.1.0"
+
+
+def prepara_risorse():
+    """Icona e proprieta' del file: per qualcosa che si distribuisce contano."""
+    icona = os.path.join(QUI, "programmatore.ico")
+    if not os.path.isfile(icona):
+        print("Genero l'icona")
+        esegui([sys.executable, os.path.join(QUI, "icona.py")])
+    versione = os.path.join(QUI, "build", "versione.txt")
+    parti = VERSIONE.split(".") + ["0", "0", "0", "0"]
+    n = tuple(int(p) for p in parti[:4])
+    os.makedirs(os.path.dirname(versione), exist_ok=True)
+    with open(versione, "w", encoding="utf-8") as f:
+        f.write("""VSVersionInfo(
+  ffi=FixedFileInfo(filevers=%r, prodvers=%r, mask=0x3f, flags=0x0,
+                    OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[StringFileInfo([StringTable('040C04B0', [
+      StringStruct('CompanyName', 'MTSistemi'),
+      StringStruct('FileDescription', 'Programmatore BIOS \\u2014 BC-250'),
+      StringStruct('FileVersion', '%s'),
+      StringStruct('InternalName', '%s'),
+      StringStruct('OriginalFilename', '%s.exe'),
+      StringStruct('ProductName', 'SPIranha'),
+      StringStruct('ProductVersion', '%s'),
+      StringStruct('Comments',
+                   'Pico con pico-serprog sul J4004 della BC-250. '
+                   'flashrom incluso.')])]),
+    VarFileInfo([VarStruct('Translation', [1036, 1200])])]
+)
+""" % (n, n, VERSIONE, NOME, NOME, VERSIONE))
+    return icona, versione
+
+
+def costruisci_exe():
+    icona, versione = prepara_risorse()
+    flashrom = os.path.join(QUI, "flashrom", "flashrom.exe")
+    args = [
+        PYTHON_VENV, "-m", "PyInstaller",
+        "--noconfirm", "--clean", "--onefile", "--windowed",
+        "--name", NOME,
+        "--icon", icona,
+        "--version-file", versione,
+        "--hidden-import", "serial.tools.list_ports",
+        "--exclude-module", "numpy",
+        "--exclude-module", "PIL",
+    ]
+    # ⚠️ flashrom viaggia DENTRO l'eseguibile: e' cio' che lo rende portatile.
+    # Senza, su un'altra macchina comparirebbe la fascia rossa.
+    if os.path.isfile(flashrom):
+        args += ["--add-binary", "%s%sflashrom" % (flashrom, os.pathsep)]
+    else:
+        print("⚠️ flashrom/flashrom.exe non c'e': l'eseguibile NON sara' portatile")
+    args.append(os.path.join(QUI, "SPIranha.pyw"))
+    if esegui(args) != 0:
+        sys.exit("PyInstaller ha fallito")
+    exe = os.path.join(QUI, "dist", NOME + ".exe")
+    print("\nFatto: %s (%.1f MiB)" % (exe, os.path.getsize(exe) / 1048576.0))
+    return exe
+
+
+def firma(percorsi):
+    """Firma con firma.ps1. ⚠️ L'ORDINE CONTA: prima l'eseguibile, poi
+    l'installatore che se lo porta dentro. Firmando solo alla fine, l'exe
+    dentro il setup resterebbe non firmato."""
+    script = os.path.join(QUI, "firma.ps1")
+    if not os.path.isfile(script):
+        print("firma.ps1 non c'e': salto la firma")
+        return
+    args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+            "-File", script, "-File"] + list(percorsi)
+    esegui(args)
+
+
+def costruisci_setup():
+    iscc = next((p for p in ISCC if os.path.isfile(p)), None)
+    if not iscc:
+        print("Inno Setup non trovato: salto l'installatore.")
+        return None
+    if esegui([iscc, os.path.join(QUI, NOME + ".iss")]) != 0:
+        sys.exit("Inno Setup ha fallito")
+    return os.path.join(QUI, "dist")
+
+
+def pulisci():
+    for nome in ("build", "dist", ".venv", NOME + ".spec", "__pycache__"):
+        percorso = os.path.join(QUI, nome)
+        if os.path.isdir(percorso):
+            shutil.rmtree(percorso, ignore_errors=True)
+        elif os.path.isfile(percorso):
+            os.remove(percorso)
+    print("pulito")
+
+
+def main():
+    if "--pulisci" in sys.argv:
+        pulisci()
+        return 0
+    prepara_venv()
+    exe = costruisci_exe()
+    vuole_firma = "--firma" in sys.argv
+    if vuole_firma:
+        firma([exe])
+    if "--setup" in sys.argv:
+        costruisci_setup()
+        setup = os.path.join(QUI, "dist",
+                             "%s-Setup-%s.exe" % (NOME, VERSIONE))
+        if vuole_firma and os.path.isfile(setup):
+            firma([setup])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

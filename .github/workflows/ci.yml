@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  controlli:
+    name: Checks (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install pyserial
+        run: python -m pip install --disable-pip-version-check pyserial
+
+      - name: Compile every module
+        run: python -m compileall -q .
+
+      - name: Both languages complete
+        shell: python
+        run: |
+          import i18n
+          mancanti = [k for k, v in i18n.T.items() if set(v) != {"it", "en"}]
+          assert not mancanti, "chiavi senza traduzione: %s" % mancanti
+          vuote = [k for k, v in i18n.T.items() if not all(x.strip() for x in v.values())]
+          assert not vuote, "chiavi vuote: %s" % vuote
+          print("%d chiavi, italiano e inglese completi" % len(i18n.T))
+
+      - name: Analysis engine
+        shell: python
+        run: |
+          import analisi as A
+          a = bytes(16 * 1024) * 64
+          b = bytearray(a)
+          b[0x5000:0x5010] = b"x" * 16          # dentro un solo settore
+          esito = A.confronta(a, bytes(b))
+          assert esito["allineati"] == [(0x5000, 0x5FFF)], esito["allineati"]
+          assert esito["esatti"] == [(0x5000, 0x500F)], esito["esatti"]
+          assert esito["byte_diversi"] == 16
+          # la prova a secco deve accorgersi di cio' che resta fuori regione
+          secco = A.prova_a_secco(a, bytes(b), regione=(0x8000, 0x8FFF))
+          assert secco.fuori == [(0x5000, 0x5FFF)], secco.fuori
+          assert secco.nulla_da_fare, "fuori regione non si scrive niente"
+          # il layout generato deve coprire tutto il chip
+          testo = A.genera_layout([(0x5000, 0x5FFF)], len(a), "prova")
+          assert testo.count("\n") == 3, testo
+          assert A.allineato(0x5000, 0x5FFF)
+          assert not A.allineato(0x5001, 0x5FFF)
+          print("motore di analisi: a posto")
+
+      - name: Window and safety rails
+        run: python prove\prova_gui.py
+
+      - name: Full run against an emulated chip
+        run: python prove\prova_completa.py

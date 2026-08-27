@@ -1,0 +1,24 @@
+# costruzione
+build/
+dist/
+.venv/
+*.spec
+__pycache__/
+*.pyc
+
+# generati
+programmatore.ico
+prove/lavoro/
+prove/corto.rom
+
+# ⚠️ flashrom si compila, non si committa: vedi flashrom/PROVENIENZA.md
+flashrom/flashrom.exe
+
+# immagini di BIOS: sono il dump di una scheda precisa, 16 MiB l'una
+*.rom
+*.bin
+*.fd
+
+# roba di sistema
+Thumbs.db
+desktop.ini
