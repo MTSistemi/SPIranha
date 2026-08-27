@@ -33,7 +33,10 @@ First public release.
 - **Reset to factory** for an RP2040 board, using a `.uf2` SPIranha generates
   itself rather than a downloaded binary.
 - The `pico-serprog` firmware ships with the project, together with the source
-  it was built from and the patch that makes it compile with GCC 15.
+  it was built from and the two patches applied to it: the build fix for
+  GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
+  be put back into update mode without touching the button.
+- **Send to BOOTSEL**, which uses it.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.

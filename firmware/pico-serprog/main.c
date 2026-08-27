@@ -14,6 +14,7 @@
 
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
+#include "pico/bootrom.h"
 #include "hardware/spi.h"
 #include "tusb.h"
 #include "serprog.h"
@@ -302,6 +303,20 @@ static void command_loop() {
 		gpio_put(PICO_DEFAULT_LED_PIN, 0);
 #endif
 	}
+}
+
+/* Reboot into the ROM bootloader when the host opens the port at 1200 baud.
+ *
+ * This is the same convention as the Arduino Leonardo and pico_stdio_usb: it
+ * lets a host tool put the board back into BOOTSEL without anyone pressing the
+ * button. Nothing else uses 1200 baud - serprog hosts open the port at their
+ * configured rate, typically 115200 - so it cannot be triggered by accident.
+ */
+void tud_cdc_line_coding_cb(uint8_t itf, cdc_line_coding_t const *coding)
+{
+	(void)itf;
+	if (coding->bit_rate == 1200)
+		reset_usb_boot(0, 0);
 }
 
 int main() {

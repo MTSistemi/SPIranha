@@ -9,8 +9,9 @@ firmware. It can also **reset a board to factory state**.
 | | |
 |---|---|
 | `pico_serprog.uf2` | the firmware, built from the source next to it |
-| `pico-serprog/` | the complete source it was built from, patch applied |
-| `0001-enable_spi-gcc15.patch` | the one change we made, on its own |
+| `pico-serprog/` | the complete source it was built from, both patches applied |
+| `0001-enable_spi-gcc15.patch` | build fix for GCC 15 and newer |
+| `0002-bootsel-1200-baud.patch` | reboot into BOOTSEL on a 1200-baud open |
 
 The firmware is **GPLv3** and it ships here **with its corresponding source**,
 which is what the licence asks for. It is a separate program that runs on the
@@ -28,14 +29,15 @@ that `.uf2` itself (see `pico.py`), so there is no third-party binary involved.
 
 | | |
 |---|---|
-| file | `pico_serprog.uf2`, 45,056 bytes — 88 UF2 blocks |
-| sha256 | `d199bf99658b358af1a53239cdab91c3ed6537117d3307bd79415dddb7635b10` |
-| covers | `0x10000000`–`0x100057FF` |
+| file | `pico_serprog.uf2`, 44,544 bytes — 87 UF2 blocks |
+| sha256 | `a3cc23db714f2dce7ab8f146dc16b3ca70b159069c4a42dbcf5bcda829ae7236` |
+| covers | `0x10000000`–`0x100056FF` |
 | family | `0xE48BFF56` (RP2040) |
 
 Tested on real hardware: copied onto a factory-fresh Pico, the board rebooted
 and answered the serprog protocol one second later — `pico-serprog`,
-interface 1, bus `0x08 = SPI`.
+interface 1, bus `0x08 = SPI`. Then reset to factory, reprogrammed, and sent
+back to BOOTSEL over the wire, all without touching the button.
 
 ## Rebuilding it
 
@@ -43,15 +45,18 @@ interface 1, bus `0x08 = SPI`.
 |---|---|
 | upstream | <https://codeberg.org/libreboot/pico-serprog> |
 | commit | `3ea792664ed29ca1ff3e2e78d1d16099684781bd`, 2025-02-12 |
-| pico-sdk | `98a542c` |
-| toolchain | GCC ARM 15.3.1 |
+| pico-sdk | 2.1.1 |
+| toolchain | GCC ARM 14.2.1 (Arm GNU Toolchain 14.2.Rel1) |
 
 ```bash
-cd pico-serprog
-mkdir build && cd build
-cmake .. -DPICO_SDK_PATH=/path/to/pico-sdk
-make
+cmake -S pico-serprog -B build -G Ninja \
+      -DPICO_SDK_PATH=/path/to/pico-sdk -DPICO_BOARD=pico
+cmake --build build
 ```
+
+⚠️ On Windows, clone the SDK into a **short path** (`C:\pico\sdk`) and enable
+`core.longpaths`: the TinyUSB submodule has paths deep enough to break a
+checkout otherwise, and the failure looks like an unrelated git error.
 
 ⚠️ **The patch is needed with GCC 15 or newer.** `enable_spi` is declared as
 `static void enable_spi()` — which in C23 means *no parameters* — but is called
@@ -98,6 +103,29 @@ a failure.
 An early version of the detection looked for an id *starting* with `RP2` and
 therefore recognised nothing. Only real hardware caught it; there is now a test
 for exactly that string.
+
+## Getting back into BOOTSEL, without the button
+
+Upstream `pico-serprog` implements the serprog protocol and nothing else: no
+`reset_usb_boot`, no 1200-baud touch, no vendor command. With it, the only way
+back into the bootloader is physical — unplug, hold **BOOTSEL**, plug back in.
+
+`0002-bootsel-1200-baud.patch` adds it. When the host sets the line coding to
+**1200 baud**, the firmware calls `reset_usb_boot()` and the board comes back
+as the `RPI-RP2` drive. It is the Arduino Leonardo convention, and the one
+`pico_stdio_usb` uses.
+
+It cannot fire by accident: serprog hosts open the port at their configured
+rate — 115200 in SPIranha, whatever `-p serprog:dev=...:baud` says in flashrom.
+Nothing legitimate asks for 1200.
+
+⚠️ Opening the port at 1200 baud normally **raises an error on the host**: the
+board reboots and the port disappears while the operating system is still
+configuring it. That is the sign it worked. Never read the outcome from the
+serial open — check whether the board came back as a drive.
+
+⚠️ This only works with firmware built from the source here. A board carrying
+an older build ignores 1200 baud, and the button is still the only way.
 
 ## How the reset works
 

@@ -243,6 +243,23 @@ T = {
         "it": "{modello} su {unita} — pronta per il firmware",
         "en": "{modello} on {unita} — ready for firmware",
     },
+    "fw_bootsel": {"it": "Riporta in BOOTSEL", "en": "Send to BOOTSEL"},
+    "fw_bootsel_provo": {
+        "it": "Chiedo alla scheda su {porta} di riavviarsi nel bootloader\u2026",
+        "en": "Asking the board on {porta} to reboot into the bootloader\u2026",
+    },
+    "fw_bootsel_ok": {
+        "it": "Rientrata in BOOTSEL su {unita}, senza toccare il pulsante.",
+        "en": "Back in BOOTSEL on {unita}, without touching the button.",
+    },
+    "fw_bootsel_no": {
+        "it": "La scheda non \u00e8 rientrata in BOOTSEL. Con il firmware "
+              "precedente al 1200 baud non risponde: staccarla, tenere premuto "
+              "BOOTSEL, riattaccarla.",
+        "en": "The board did not return to BOOTSEL. Firmware older than the "
+              "1200-baud support ignores this: unplug it, hold BOOTSEL, plug it "
+              "back in.",
+    },
     "fw_installa": {"it": "Rendila programmatore", "en": "Make it a programmer"},
     "fw_azzera": {"it": "Riporta a nuovo", "en": "Reset to factory"},
     "fw_assente": {

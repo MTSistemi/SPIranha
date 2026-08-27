@@ -11,7 +11,6 @@ reads by itself, and older compilers silently discarded the argument.
 Applies to pico-serprog at commit 3ea792664ed29ca1ff3e2e78d1d16099684781bd.
 ---
 diff --git a/main.c b/main.c
-index b06f92f..36a9265 100644
 --- a/main.c
 +++ b/main.c
 @@ -322,7 +322,7 @@ int main() {

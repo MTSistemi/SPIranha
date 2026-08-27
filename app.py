@@ -469,6 +469,10 @@ class App(tk.Tk):
             ttk.Button(cornice_f, style="Ghost.TButton",
                        command=self.azzera_scheda), "fw_azzera")
         self.b_azzera.pack(side="left", padx=6)
+        self.b_bootsel = self._etichetta(
+            ttk.Button(cornice_f, style="Ghost.TButton",
+                       command=self.rientra_in_bootsel), "fw_bootsel")
+        self.b_bootsel.pack(side="left")
         self.msg_firmware = Messaggio(self, s)
         self.msg_firmware.widget.grid(row=4, column=0, columnspan=3, sticky="w",
                                       pady=(7, 0))
@@ -794,6 +798,10 @@ class App(tk.Tk):
         self.attesa_bootsel = self.after(2000, self._guarda_bootsel)
 
     def _aggiorna_firmware(self):
+        # il rientro in BOOTSEL si offre solo se c'e' un programmatore collegato
+        porta = self._porta_programmatore()
+        self.b_bootsel.state(["!disabled"] if porta and not self.occupato
+                             else ["disabled"])
         scheda = self.scheda_bootsel
         if scheda is None:
             self.msg_firmware.mostra("fw_nessuna", GRIGIO)
@@ -859,6 +867,45 @@ class App(tk.Tk):
             self._aggiorna_firmware()
 
         self._avvia(lavoro, fine, "firmware")
+
+    def _porta_programmatore(self):
+        """La porta di un programmatore collegato adesso, se c'e'."""
+        for dispositivo, _descrizione, sospetto in serprog.elenca_porte():
+            if sospetto:
+                return dispositivo
+        return None
+
+    def rientra_in_bootsel(self):
+        """Rimette il programmatore in modalita' aggiornamento, da software."""
+        porta = self._porta_programmatore()
+        if not porta:
+            return
+
+        def lavoro():
+            self._messaggio_da_thread(self.msg_firmware, "fw_bootsel_provo",
+                                      AMBRA, porta=porta)
+            pico.rientra_in_bootsel(porta)
+            # ⚠️ L'esito non si legge dall'apertura della porta, che fallisce
+            # apposta: si guarda se la scheda ricompare come disco.
+            for _ in range(20):
+                time.sleep(0.5)
+                schede = pico.schede_in_bootsel()
+                if schede:
+                    return ("bootsel", schede[0], None)
+            return ("niente", None, None)
+
+        def fine(risultato):
+            stato, scheda, _ = risultato
+            if stato == "bootsel":
+                self.scheda_bootsel = scheda
+                self.msg_firmware.mostra("fw_bootsel_ok", VERDE,
+                                         unita=scheda.lettera)
+                self.rileva_porte()
+            else:
+                self.msg_firmware.mostra("fw_bootsel_no", AMBRA)
+            self._aggiorna_firmware()
+
+        self._avvia(lavoro, fine, "bootsel")
 
     def installa_firmware(self):
         self._programma(self._percorso_firmware(), "fw_installando",
@@ -1521,7 +1568,7 @@ class App(tk.Tk):
 
     def _blocca(self, occupato):
         for bottone in (self.b_identifica, self.b_leggi, self.b_prova,
-                        self.b_qualifica, self.b_secco):
+                        self.b_qualifica, self.b_secco, self.b_bootsel):
             bottone.state(["disabled"] if occupato else ["!disabled"])
         self.b_interrompi.state(["!disabled"] if occupato else ["disabled"])
         if occupato:

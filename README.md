@@ -83,6 +83,11 @@ one needs no downloaded file: SPIranha builds the `.uf2` itself, writing `0xFF`
 across the flash. The bootloader erases each sector before writing it, so the
 flash ends up erased and the board returns to BOOTSEL on its own.
 
+And **Send to BOOTSEL** closes the loop: a programmer already running our
+firmware can be put back into update mode over the wire, so after the first
+time the button is never needed again. Upstream `pico-serprog` has no such
+path — it is one of the two patches in `firmware/`.
+
 Nothing here can brick a board: the RP2040 bootloader lives in ROM, and a board
 with an empty flash always comes back as `RPI-RP2`.
 

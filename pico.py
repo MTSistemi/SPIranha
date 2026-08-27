@@ -48,6 +48,7 @@ CARICO = 256
 BASE_FLASH = 0x10000000
 FLASH_PICO = 2 * 1024 * 1024        # il Pico originale ne ha 2 MiB
 
+BAUD_BOOTSEL = 1200                 # aprire a questa velocita' = torna in BOOTSEL
 ETICHETTA = "RPI-RP2"
 NOME_FIRMWARE = "pico_serprog.uf2"
 INFORMAZIONI = "INFO_UF2.TXT"
@@ -198,6 +199,36 @@ def genera_cancellazione(percorso, byte=FLASH_PICO):
             f.write(blocco_uf2(BASE_FLASH + numero * CARICO, vuoto,
                                numero, totale))
     return percorso
+
+
+# ------------------------------------------------- rientro nel bootloader
+
+def rientra_in_bootsel(porta):
+    """Chiede al firmware di riavviarsi nel bootloader ROM.
+
+    Si apre la porta a 1200 baud: e' la convenzione dell'Arduino Leonardo, e
+    il nostro pico-serprog la implementa (vedi firmware/). Funziona SOLO con il
+    firmware nostro dalla 1.2 in poi; con quello di prima non succede niente e
+    il pulsante BOOTSEL resta l'unica strada.
+
+    ⚠️ L'apertura della porta di solito FALLISCE, e va bene cosi': la scheda si
+    riavvia e sparisce mentre il sistema sta ancora configurando la porta. E'
+    il segno che ha funzionato, non un errore. Chi chiama deve verificare
+    guardando se la scheda ricompare in BOOTSEL, non l'esito di questa.
+    """
+    try:
+        import serial
+    except ImportError:
+        return False, "pyserial non e' installato"
+    try:
+        collegamento = serial.Serial(porta, BAUD_BOOTSEL, timeout=1)
+        try:
+            collegamento.close()
+        except Exception:                            # noqa: BLE001
+            pass
+    except Exception:                                # noqa: BLE001
+        pass          # atteso: la scheda se n'e' andata
+    return True, None
 
 
 # ------------------------------------------------------------ installazione
