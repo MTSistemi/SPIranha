@@ -14,6 +14,7 @@ firmware. It can also **reset a board to factory state**.
 | `0001-enable_spi-gcc15.patch` | build fix for GCC 15 and newer |
 | `0002-bootsel-1200-baud.patch` | reboot into BOOTSEL on a 1200-baud open |
 | `0003-report-version.patch` | say which firmware version this is |
+| `0004-spiop-cannot-hang-the-board.patch` | an SPI op can no longer wedge the board |
 
 The firmware is **GPLv3** and it ships here **with its corresponding source**,
 which is what the licence asks for. It is a separate program that runs on the
@@ -32,8 +33,8 @@ that `.uf2` itself (see `pico.py`), so there is no third-party binary involved.
 | | |
 |---|---|
 | file | `pico_serprog.uf2`, 44,544 bytes — 87 UF2 blocks |
-| version | **1.1** |
-| sha256 | `05a24665a85e7116ee25b90ed53e0cbcda76d57b0aee810f4c383d6a666bbdc4` |
+| version | **1.2** |
+| sha256 | `c7a8c29eb3ac8908bfe02c6826ad66173cc3d14d15194afb217861bc8aa2ade0` |
 | covers | `0x10000000`–`0x100056FF` |
 | family | `0xE48BFF56` (RP2040) |
 
@@ -54,12 +55,30 @@ version travels inside it, with no new command and no compatibility cost:
 
 | firmware | reports |
 |---|---|
-| 1.1 and later | `pico-serprog1.1` |
+| 1.2 | `pico-serprog1.2` |
+| 1.1 | `pico-serprog1.1` |
 | 1.0 and earlier | `pico-serprog` |
 
 A bare name is therefore not "unknown": it is a board older than 1.1, which is
 the distinction that matters — those boards cannot be sent back to BOOTSEL over
 the wire, so updating them still needs the button, once.
+
+## The hang that 1.2 removes
+
+`S_CMD_O_SPIOP` with the SPI peripheral disabled never returns. The write
+blocks on a FIFO that cannot drain, the main loop stops, and with it
+`tud_task()` — USB stops being serviced and the board disappears from the host
+completely. The port cannot be opened again. Only unplugging it helps.
+
+Reaching that state is easy: the host is supposed to send `S_CMD_S_PIN_STATE`
+first, and flashrom does — but flashrom also sends `S_CMD_S_PIN_STATE(0)` when
+it exits. So a board that has just been used with flashrom sits there with SPI
+disabled, and the next program to ask it an ordinary question hangs it.
+
+We found this by being that next program. `0004-spiop-cannot-hang-the-board.patch`
+enables the peripheral on demand, which the operation needs anyway. SPIranha
+also sends the pin state itself before any raw SPI, so it works with older
+firmware too — but on 1.2 the failure is impossible rather than avoided.
 
 ## Rebuilding it
 

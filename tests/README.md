@@ -12,7 +12,7 @@ They open and close the window by themselves; there is nothing to click.
 
 *Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
 
-## `test_gui.py` — 97 checks
+## `test_gui.py` — 105 checks
 
 The window and its rules, without touching flashrom: construction, live
 IT↔EN switching, everything disabled when flashrom is missing, layout file
@@ -27,6 +27,11 @@ read back and checked block by block, and both a corrupted file and a
 non-UF2 file must be refused before they could ever reach a board. And it
 pins down the board recognition against the real `Board-ID: RPI-RP2` string,
 which an earlier version got wrong.
+
+It covers the JEDEC/SFDP probe against a paper chip that speaks the serprog
+protocol back: the id, the manufacturer name, the density read out of an SFDP
+table, the fallback to the JEDEC capacity byte when there is no SFDP, and the
+two readings that must never be taken for a chip — all `0xFF` and all `0x00`.
 
 It covers the automatic comparison against the previous backup: identical
 reads, a changed sector reported with its address, the first read in an empty

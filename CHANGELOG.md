@@ -37,6 +37,14 @@ First public release.
   GCC 15, and a **1200-baud reboot into BOOTSEL** so a running programmer can
   be put back into update mode without touching the button.
 - **Send to BOOTSEL**, which uses it.
+- **The chip is asked directly when flashrom does not recognise it**: JEDEC
+  id, and SFDP density when the chip has the table. An unknown chip and an
+  absent chip stop looking the same.
+- **Firmware 1.2.** An SPI operation can no longer hang the board. With the
+  peripheral disabled it never returned, which stopped the USB task and made
+  the board vanish from the host until unplugged — and flashrom leaves the
+  peripheral disabled when it exits, so the next program to ask an ordinary
+  question would hang it. Found by being that program.
 - **Every read is compared with the previous backup** taken in the same
   folder: unchanged, or which sectors moved and where.
 - **Board profiles.** Expected chips and size, chip voltage, known md5s,
@@ -75,7 +83,7 @@ First public release.
 - Italian and English interface, switchable live. Responsive layout.
 - Single-file portable executable with flashrom embedded; Inno Setup installer;
   Authenticode signing script that does not need the Windows SDK.
-- 141 automated checks, including an end-to-end write against an emulated
+- 149 automated checks, including an end-to-end write against an emulated
   16 MiB chip.
 
 ### Verified on hardware

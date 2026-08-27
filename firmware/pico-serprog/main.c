@@ -36,7 +36,7 @@ uint baud = 12000000; /* Default to 12MHz */
 /* The name is a 16-byte field and the host reads all 16 of them, so a version
  * fits without terminator. It is the only way for the host to tell which
  * firmware a board is running: the board reports it, nothing else does. */
-static const char progname[16] = "pico-serprog1.1";
+static const char progname[16] = "pico-serprog1.2";
 
 /* Map of supported serprog commands */
 static const uint32_t cmdmap[8] = {
@@ -182,6 +182,15 @@ void s_cmd_o_spiop() {
 	uint32_t rlen = 0;
 	readbytes_blocking(&wlen, 3);
 	readbytes_blocking(&rlen, 3);
+
+	/* An SPI operation while the peripheral is disabled never returns: the
+	 * write blocks on a FIFO that will not drain, the main loop stops, and
+	 * with it the USB task - the board disappears until it is unplugged.
+	 * The host is supposed to send S_CMD_S_PIN_STATE first, and flashrom
+	 * leaves the pins disabled when it exits, so the very next host to talk
+	 * to the board can hang it by asking politely. Enable instead. */
+	if (!spi_enabled)
+		enable_spi();
 
 	cs_select(cs_pin);
 

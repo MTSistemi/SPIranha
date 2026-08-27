@@ -1,0 +1,39 @@
+From: SPIranha <https://github.com/MTSistemi/SPIranha>
+Subject: [PATCH] never let an SPI operation hang the board
+
+An S_CMD_O_SPIOP while the SPI peripheral is disabled never returns:
+spi_write_blocking waits on a FIFO that cannot drain, the main loop stops, and
+with it tud_task(). USB stops being serviced, so the board vanishes from the
+host entirely - the port cannot even be opened again - until someone unplugs
+it. No amount of care on the host side can recover it.
+
+The host is supposed to send S_CMD_S_PIN_STATE first, and flashrom does. But
+flashrom also sends S_CMD_S_PIN_STATE(0) when it exits, so the board is left
+with SPI disabled: the *next* program to talk to it hangs it by asking a
+perfectly ordinary question. That is a loaded gun pointed at every host that
+was not written by us.
+
+Found the hard way, on a board that then had to be unplugged.
+
+Enabling on demand is what the operation needs anyway, costs one branch, and
+makes the failure impossible rather than merely unlikely.
+---
+diff --git a/main.c b/main.c
+--- a/main.c
++++ b/main.c
+@@ -181,6 +181,15 @@ void s_cmd_o_spiop() {
+ 	readbytes_blocking(&wlen, 3);
+ 	readbytes_blocking(&rlen, 3);
+
++	/* An SPI operation while the peripheral is disabled never returns: the
++	 * write blocks on a FIFO that will not drain, the main loop stops, and
++	 * with it the USB task - the board disappears until it is unplugged.
++	 * The host is supposed to send S_CMD_S_PIN_STATE first, and flashrom
++	 * leaves the pins disabled when it exits, so the very next host to talk
++	 * to the board can hang it by asking politely. Enable instead. */
++	if (!spi_enabled)
++		enable_spi();
++
+ 	cs_select(cs_pin);
+
+ 	while (wlen) {

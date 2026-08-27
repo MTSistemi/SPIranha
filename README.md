@@ -88,6 +88,17 @@ firmware can be put back into update mode over the wire, so after the first
 time the button is never needed again. Upstream `pico-serprog` has no such
 path — it is one of the two patches in `firmware/`.
 
+**When flashrom does not know the chip, SPIranha asks the chip itself.**
+It sends the JEDEC id command over the programmer and, if the chip has one,
+reads its SFDP table for the real density. That separates two failures that look
+identical from the outside and need opposite responses:
+
+- the chip answers — it is simply not in flashrom's list, so force a model of
+  the same size and family and carry on;
+- the chip does not answer at all — the bus reads all `0xFF` or all `0x00`,
+  which is not a chip. Trying more models is pointless; the wiring or the power
+  is wrong.
+
 **Every read compares itself with the previous backup.** After a verified
 read, SPIranha finds the last dump taken in the same folder and says whether the
 chip is unchanged or, if not, which sectors moved and where. It answers the
@@ -249,7 +260,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 97 checks, no hardware needed
+python tests\test_gui.py     # 105 checks, no hardware needed
 python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 

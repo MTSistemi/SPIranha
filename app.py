@@ -1347,16 +1347,23 @@ class App(tk.Tk):
                     porta, BAUD, self.var_velocita.get() or None,
                     chip.nome, bool(self.var_dettagli.get()),
                     self._riga_da_thread)
-            return esito, chip, protezione
+            identita = None
+            if not (esito.ok and chip.nome) and not chip.candidati:
+                # ⚠️ Solo qui: se flashrom ha riconosciuto il chip, chiederlo
+                # una seconda volta non aggiunge niente e tocca i fili per
+                # niente.
+                identita = serprog.identifica_chip(porta, BAUD)
+            return esito, chip, protezione, identita
 
         def fine(risultato):
-            esito, chip, protezione = risultato
+            esito, chip, protezione, identita = risultato
             if chip.candidati:
                 self.combo_chip.configure(values=CHIP_SUGGERITI + chip.candidati)
                 self.msg_chip.mostra("chip_ambiguo", AMBRA)
                 return
             if not esito.ok or not chip.nome:
                 self.msg_chip.mostra("chip_non_trovato", ROSSO)
+                self._racconta_identita(identita)
                 return
             self.chip = chip
             self.protezione = protezione
@@ -1369,6 +1376,31 @@ class App(tk.Tk):
             self._aggiorna_scrittura()
 
         self._avvia(lavoro, fine, "identifica")
+
+    def _racconta_identita(self, identita):
+        """Cosa ha risposto il chip quando gliel\u0027abbiamo chiesto noi.
+
+        ⚠️ Serve a separare due guai che sembrano lo stesso: un chip che
+        flashrom non conosce, e un chip che non c\u0027e\u0027. Nel primo caso si
+        forza un modello simile e si va avanti; nel secondo si rifanno i
+        collegamenti, e provare modelli a caso non porta da nessuna parte.
+        """
+        if identita is None:
+            return
+        if not identita.ok:
+            self.registro("   %s" % self.L("jedec_errore",
+                                           motivo=identita.errore), "attenzione")
+            return
+        if not identita.risponde:
+            self.msg_chip.mostra("jedec_muto", ROSSO)
+            self.registro("   %s (JEDEC %s)" % (self.L("jedec_muto"),
+                                                identita.jedec), "male")
+            return
+        self.msg_chip.mostra("jedec_risponde", AMBRA,
+                             descrizione=identita.descrizione())
+        self.registro("   %s" % self.L("jedec_risponde",
+                                       descrizione=identita.descrizione()),
+                      "attenzione")
 
     def _mostra_protezione(self):
         p = self.protezione

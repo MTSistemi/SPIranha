@@ -251,6 +251,24 @@ T = {
               "the chip stays protected anyway.",
     },
     "req_protezione": {"it": "chip protetto in scrittura", "en": "chip is write protected"},
+    # --- il chip interrogato da noi (JEDEC/SFDP) ----------------------------
+    "jedec_risponde": {
+        "it": "Il chip risponde: {descrizione}. flashrom non lo conosce: "
+              "scegliere in «Modello» un chip della stessa misura e famiglia.",
+        "en": "The chip answers: {descrizione}. flashrom does not know it: "
+              "pick a chip of the same size and family under \u201cModel\u201d.",
+    },
+    "jedec_muto": {
+        "it": "Il chip non risponde nemmeno all\u0027identificativo JEDEC: "
+              "il problema \u00e8 nei collegamenti o nell\u0027alimentazione, "
+              "non nel modello.",
+        "en": "The chip does not even answer its JEDEC id: the problem is the "
+              "wiring or the power, not the model.",
+    },
+    "jedec_errore": {
+        "it": "Non sono riuscito a interrogare il chip: {motivo}",
+        "en": "Could not query the chip: {motivo}",
+    },
     # --- 3. lettura ------------------------------------------------------
     "sez_lettura": {"it": "3 · Lettura e backup", "en": "3 · Read and backup"},
     "cartella": {"it": "Cartella", "en": "Folder"},

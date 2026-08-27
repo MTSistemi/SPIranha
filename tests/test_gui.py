@@ -3,6 +3,7 @@
 di costruzione senza stare li' a cliccare."""
 import io
 import os
+import re
 import shutil
 import sys
 import traceback
@@ -328,15 +329,17 @@ def prova(finestra):
                   not _sp.piu_vecchia("1.0", None))
 
         import pico as _pk
+        # la versione spedita non si scrive qui dentro: cambia a ogni build,
+        # e una prova che va aggiornata a mano si aggiorna sbagliata
+        spedita = _pk.versione_disponibile(os.path.join(CARTELLA, "firmware"))
         controlla("la versione spedita si legge dalla cartella firmware",
-                  _pk.versione_disponibile(
-                      os.path.join(CARTELLA, "firmware")) == "1.1",
-                  str(_pk.versione_disponibile(os.path.join(CARTELLA, "firmware"))))
+                  bool(spedita) and re.match(r"^\d+\.\d+$", spedita),
+                  str(spedita))
         controlla("cartella senza VERSION: nessuna versione, senza esplodere",
                   _pk.versione_disponibile(LAVORO) is None)
 
         # il tasto Aggiorna compare solo quando c'e' qualcosa da aggiornare
-        finestra.fw_scheda = "1.1"
+        finestra.fw_scheda = spedita
         finestra._aggiorna_firmware()
         controlla("firmware aggiornato: nessun tasto Aggiorna",
                   not finestra.b_aggiorna.winfo_ismapped())
@@ -542,6 +545,125 @@ def prova(finestra):
         finestra._confronta_col_precedente(cartella_c, corta)
         controlla("misure diverse: lo dice e tira dritto",
                   len(finestra.righe_registro) > prima)
+
+
+        # 21. chiedere al chip chi e', senza flashrom
+        import serprog as _sp2
+
+        class PortaFinta(object):
+            """Un chip di carta: risponde al protocollo, niente di piu'."""
+
+            def __init__(self, jedec=(0xC8, 0x40, 0x18), sfdp=True):
+                self.jedec = jedec
+                self.ha_sfdp = sfdp
+                self.uscita = bytearray()
+                self.dentro = bytearray()
+
+            # -- lato serprog
+            def reset_input_buffer(self):
+                pass
+
+            def flush(self):
+                pass
+
+            def write(self, dati):
+                dati = bytearray(dati)
+                while dati:
+                    comando = dati.pop(0)
+                    if comando == _sp2.SYNCNOP:
+                        self.dentro += bytearray([_sp2.NAK, _sp2.ACK])
+                    elif comando == _sp2.S_PIN_STATE:
+                        dati.pop(0)
+                        self.dentro.append(_sp2.ACK)
+                    elif comando == _sp2.O_SPIOP:
+                        wlen = dati[0] | (dati[1] << 8) | (dati[2] << 16)
+                        rlen = dati[3] | (dati[4] << 8) | (dati[5] << 16)
+                        del dati[:6]
+                        carico = bytearray(dati[:wlen])
+                        del dati[:wlen]
+                        self.dentro.append(_sp2.ACK)
+                        self.dentro += self._risposta(carico, rlen)
+                    else:
+                        self.dentro.append(_sp2.ACK)
+
+            def read(self, quanti=1):
+                pezzo = self.dentro[:quanti]
+                del self.dentro[:quanti]
+                return bytes(pezzo)
+
+            def close(self):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_a):
+                return False
+
+            # -- lato chip
+            def _risposta(self, carico, rlen):
+                if carico and carico[0] == _sp2.CMD_JEDEC:
+                    return bytearray(self.jedec)[:rlen]
+                if carico and carico[0] == _sp2.CMD_SFDP:
+                    if not self.ha_sfdp:
+                        return bytearray(rlen)          # tutto zero: niente SFDP
+                    indirizzo = (carico[1] << 16) | (carico[2] << 8) | carico[3]
+                    return self._sfdp(indirizzo, rlen)
+                return bytearray(rlen)
+
+            def _sfdp(self, indirizzo, rlen):
+                if indirizzo == 0:
+                    # firma, minore, maggiore, nph=0 (una tabella), protocollo
+                    testa = bytearray(b"SFDP") + bytearray([6, 1, 0, 0xFF])
+                    return testa[:rlen]
+                if indirizzo == 8:
+                    # id 0x00, lunghezza 4 dword, puntatore 0x100
+                    return bytearray([0x00, 6, 1, 4, 0x00, 0x01, 0x00, 0xFF])[:rlen]
+                if indirizzo == 0x100:
+                    # dword1 qualunque, dword2 = densita' in bit meno uno
+                    bit = 16 * 1024 * 1024 * 8
+                    d = bit - 1
+                    return (bytearray([0, 0, 0, 0])
+                            + bytearray([d & 0xFF, (d >> 8) & 0xFF,
+                                         (d >> 16) & 0xFF, (d >> 24) & 0xFF])
+                            + bytearray(56))[:rlen]
+                return bytearray(rlen)
+
+        vera_apertura = _sp2.serial.Serial if _sp2.SERIALE else None
+        finta = PortaFinta()
+        _sp2.serial.Serial = lambda *a, **k: finta
+        identita = _sp2.identifica_chip("COMFINTA")
+        controlla("il chip risponde con il suo JEDEC",
+                  identita.ok and identita.jedec == "C8 40 18",
+                  identita.errore or identita.jedec)
+        controlla("costruttore riconosciuto dal codice",
+                  identita.nome_costruttore == "GigaDevice")
+        controlla("dimensione presa dalla SFDP",
+                  identita.byte == 16 * 1024 * 1024, str(identita.byte))
+        controlla("la SFDP viene segnalata", identita.sfdp)
+
+        # ⚠️ Questa e' la distinzione che serve: chip sconosciuto o filo
+        # staccato. Un bus fermo legge tutto 0xFF, e non e' un chip.
+        _sp2.serial.Serial = lambda *a, **k: PortaFinta(jedec=(0xFF, 0xFF, 0xFF))
+        muto = _sp2.identifica_chip("COMFINTA")
+        controlla("bus fermo: non lo si scambia per un chip",
+                  muto.ok and not muto.risponde)
+        _sp2.serial.Serial = lambda *a, **k: PortaFinta(jedec=(0, 0, 0))
+        controlla("tutto zero: nemmeno quello e' un chip",
+                  not _sp2.identifica_chip("COMFINTA").risponde)
+
+        # senza SFDP la misura si ricava dal terzo byte JEDEC
+        _sp2.serial.Serial = lambda *a, **k: PortaFinta(jedec=(0xEF, 0x40, 0x16),
+                                                        sfdp=False)
+        vecchio = _sp2.identifica_chip("COMFINTA")
+        controlla("senza SFDP la misura viene dal codice JEDEC",
+                  vecchio.byte == 4 * 1024 * 1024 and not vecchio.sfdp,
+                  str(vecchio.byte))
+        controlla("costruttore sconosciuto: nessun nome inventato",
+                  _sp2.Identita(costruttore=0x77, tipo=1,
+                                capacita=0x18).nome_costruttore is None)
+        if vera_apertura is not None:
+            _sp2.serial.Serial = vera_apertura
 
         # 11. elenco porte
         finestra.rileva_porte()
