@@ -65,15 +65,18 @@ def prepara_risorse():
                     OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
   kids=[StringFileInfo([StringTable('040C04B0', [
       StringStruct('CompanyName', 'MTSistemi'),
-      StringStruct('FileDescription', 'Programmatore BIOS \\u2014 BC-250'),
+      StringStruct('LegalCopyright',
+                   '\\u00a9 2026 Mattia Tadini \\u2014 GPL-2.0'),
+      StringStruct('FileDescription',
+                   'SPIranha \\u2014 BIOS and SPI flash programmer'),
       StringStruct('FileVersion', '%s'),
       StringStruct('InternalName', '%s'),
       StringStruct('OriginalFilename', '%s.exe'),
       StringStruct('ProductName', 'SPIranha'),
       StringStruct('ProductVersion', '%s'),
       StringStruct('Comments',
-                   'Pico con pico-serprog sul J4004 della BC-250. '
-                   'flashrom incluso.')])]),
+                   'Raspberry Pi Pico with pico-serprog. flashrom included. '
+                   'By Mattia Tadini and Claude.')])]),
     VarFileInfo([VarStruct('Translation', [1036, 1200])])]
 )
 """ % (n, n, VERSIONE, NOME, NOME, VERSIONE))

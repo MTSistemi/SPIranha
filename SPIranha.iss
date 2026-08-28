@@ -16,6 +16,7 @@ AppId={{5F2A9C10-7E44-4B8D-9A31-5350495241484E}
 AppName={#Nome}
 AppVersion={#Versione}
 AppPublisher={#Editore}
+AppCopyright=© 2026 Mattia Tadini — GPL-2.0
 DefaultDirName={autopf}\SPIranha
 DefaultGroupName={#Nome}
 DisableProgramGroupPage=yes

@@ -357,9 +357,19 @@ Two other programs travel with it, and neither is covered by that licence:
 - **pico-serprog** — GPLv3, runs on the microcontroller. Its binary *is* here,
   and so is the source it was built from, in `firmware/pico-serprog/`.
 
+## Authors
+
+**Copyright © 2026 Mattia Tadini.** Written by Mattia Tadini and Claude
+(Opus 5) — pair work, recorded commit by commit in the git history rather than
+in a footnote. The hardware, the bench and every decision that mattered are
+Mattia's. See [`AUTHORS`](AUTHORS).
+
 ## Credits
 
-- [flashrom](https://flashrom.org) — the code that actually talks to the chip.
+Not dependencies in the packaging sense: their code is what actually reaches
+the chip.
+
+- [flashrom](https://flashrom.org) — does the erasing and the writing.
 - [`pico-serprog`](https://codeberg.org/libreboot/pico-serprog) by libreboot —
   the firmware that turns an RP2040 into a serprog programmer.
 - [`mothenjoyer69/bc250-documentation`](https://github.com/mothenjoyer69/bc250-documentation)

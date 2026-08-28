@@ -340,3 +340,10 @@ la conferma non si accenda senza la parola giusta.
 ⚠️ Nota di protocollo: **`0x10` è `SYNCNOP`**, e la risposta giusta è `0x15`
 (NAK) **seguito da** `0x06` (ACK). Non è un comando inesistente. Verificato sul
 Pico vero il 27/08/2026.
+
+## Autori
+
+**Copyright © 2026 Mattia Tadini.** Scritto da Mattia Tadini e Claude (Opus 5),
+a quattro mani: la storia dei commit lo dice commit per commit, invece che in
+una nota a fondo pagina. L'hardware, il banco e le decisioni che contavano sono
+di Mattia. Vedi [AUTHORS](../../AUTHORS).

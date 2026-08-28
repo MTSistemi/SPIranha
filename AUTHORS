@@ -1,0 +1,42 @@
+SPIranha
+========
+
+Copyright (C) 2026 Mattia Tadini
+Published under the MTSistemi organisation: https://github.com/MTSistemi
+
+Written by
+----------
+
+  Mattia Tadini      <info@mtsistemi.it>
+  Claude (Opus 5)    co-author on every commit, see Co-Authored-By in the
+                     git history
+
+SPIranha was built by the two of us together: the hardware work, the bench
+testing and every decision that mattered are Mattia's; the code was written
+in pair, and the commit history records it commit by commit rather than in a
+footnote.
+
+The copyright line names Mattia alone because it has to: copyright needs a
+legal person to sit with, and an AI is not one. Credit and copyright are not
+the same thing, and only one of them is a legal question.
+
+Third-party work
+----------------
+
+SPIranha ships two programs it did not write. They are credited here as
+authors, not as dependencies, because their code is what actually reaches the
+chip:
+
+  flashrom            https://flashrom.org — GPL-2.0. Bundled as a binary;
+                      the corresponding source is published with each release.
+
+  pico-serprog        https://codeberg.org/libreboot/pico-serprog — GPLv3.
+                      Copyright (C) 2021 Mate Kukri
+                      Copyright (C) 2023, 2024 Riku Viitanen
+                      based on work by Thomas Roth.
+                      Our patched source is in firmware/pico-serprog/.
+
+The BC-250 J4004 pinout comes from two independent projects that document it
+identically — mothenjoyer69/bc250-documentation and elektricM/amd-bc250-docs.
+Neither is included here; both were read, and agreeing with each other is why
+the diagram could be trusted before anything was wired.
