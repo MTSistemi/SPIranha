@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Il pezzo che chiama flashrom.exe e legge quello che dice.
+"""The piece that calls flashrom.exe and reads what it says.
 
-Qui NON si parla col chip: il codice che cancella e scrive settori resta quello
-di flashrom, che e' collaudato. Questo modulo costruisce la riga di comando
-giusta, lancia il processo e riporta indietro ogni riga di uscita mentre esce.
+This does NOT talk to the chip: the code that erases and writes sectors stays
+flashrom's, which is proven. This module builds the right command line, starts
+the process and hands back every output line as it comes.
 
-Il modulo che chiama passa una funzione `su_riga(testo)`: viene chiamata da un
-thread di lavoro, quindi l'interfaccia deve accodare, non disegnare.
+The caller passes an `on_line(text)` function: it is called from a worker
+thread, so the interface must queue, not draw.
 """
 from __future__ import unicode_literals
 
@@ -15,7 +15,7 @@ import re
 import subprocess
 import threading
 
-# Su Windows i nomi di porta dal COM10 in su vogliono il prefisso.
+# On Windows, port names from COM10 up need the prefix.
 _RE_COM = re.compile(r"^COM(\d+)$", re.IGNORECASE)
 # vendor="Macronix" name="MX25L12835F/MX25L12873F"
 _RE_NOME = re.compile(r'vendor="([^"]*)"\s+name="([^"]*)"')
@@ -32,16 +32,16 @@ _RE_WP_INTERVALLO = re.compile(
 _RE_WP_MODO = re.compile(r"Protection mode:\s*(\S+)", re.IGNORECASE)
 _RE_CANDIDATO = re.compile(r'^\s*"?([A-Za-z0-9][\w./\-]{3,})"?\s*$')
 
-# Quello che flashrom dice mentre lavora, e che serve per la mappa a blocchi.
+# What flashrom says while it works, which is what the block map needs.
 # --progress stampa  [READ:  42%]  a fasi (READ, ERASE, WRITE).
 _RE_FASE = re.compile(r"\[(READ|ERASE|WRITE|VERIFY)\s*:\s*(\d+)%\]")
-# -V stampa un marcatore per ogni blocco cancellato e per l'intervallo scritto:
+# -V prints a marker for every erased block and for the written range:
 #   E(ae0000:aeffff)   W(ae0000:c228ff)
 _RE_BLOCCO = re.compile(r"([EW])\(([0-9a-f]+):([0-9a-f]+)\)")
 
-# -V si accende sempre in scrittura, per avere i marcatori dei blocchi; ma il
-# suo chiacchiericcio interno non deve finire nel registro di chi guarda.
-# Prima si buttano le righe di servizio, poi si tiene solo cio' che dice
+# -V is always on when writing, to get the block markers; but its internal
+# chatter must not end up in the log the user is watching. First the
+# housekeeping lines are dropped, then only what says
 # davvero qualcosa.
 _INTERNE = re.compile(
     r"read_flash:|erase_write:|write_flash:|verify_range:|probe_jedec|"
@@ -60,7 +60,7 @@ if os.name == "nt":
 
 
 def port_for_flashrom(device):
-    """COM6 resta COM6; COM10 diventa \\\\.\\COM10, altrimenti Windows non lo apre."""
+    """COM6 stays COM6; COM10 becomes \\\\.\\COM10, or Windows will not open it."""
     m = _RE_COM.match(device or "")
     if m and int(m.group(1)) >= 10:
         return r"\\.\COM" + m.group(1)
@@ -84,11 +84,11 @@ class Result(object):
 
 
 class Protection(object):
-    """Lo stato del blocco in scrittura di un chip SPI.
+    """The write-lock state of an SPI chip.
 
-    ⚠️ Perche' conta: e' il modo piu' comune in cui una scrittura di BIOS
-    fallisce o, peggio, sembra riuscita e non ha scritto niente. Il chip
-    accetta i comandi e non cambia. Meglio saperlo prima.
+    ⚠️ Why it matters: this is the most common way a BIOS write fails or,
+    worse, appears to succeed while writing nothing. The chip takes the
+    commands and does not change. Better to know beforehand.
     """
 
     def __init__(self, start=None, length=None, description=None,
@@ -112,7 +112,7 @@ class Protection(object):
         return self.start + self.length - 1
 
     def overlaps(self, start, end):
-        """L'intervallo protetto si sovrappone a quello che vogliamo scrivere?"""
+        """Does the protected range overlap the one we want to write?"""
         if not self.active:
             return False
         return not (end < self.start or start > self.end)
@@ -141,13 +141,13 @@ class Chip(object):
 class Flashrom(object):
     def __init__(self, path, programmatore=None):
         self.path = path
-        # Normalmente serprog. Si puo' forzare (per esempio "dummy:...") per
-        # provare tutta la catena senza attaccare niente a niente.
+        # Normally serprog. It can be forced (say "dummy:...") to exercise
+        # the whole chain without anything attached to anything.
         self.programmatore = programmatore
         self._processo = None
         self._block_rect = threading.Lock()
 
-    # -- costruzione della riga di comando ------------------------------
+    # -- building the command line --------------------------------------
     def _programmatore(self, port, baud=115200, spispeed=None):
         if self.programmatore:
             return self.programmatore
@@ -169,7 +169,7 @@ class Flashrom(object):
 
     @staticmethod
     def _eventi(buffer, on_event):
-        """Estrae dal tampone gli eventi completi e restituisce (resto, quanti)."""
+        """Pulls the complete events out of the buffer, returns (rest, how_many)."""
         found_items = []
         for m in _RE_FASE.finditer(buffer):
             found_items.append((m.start(), m.end(),
@@ -194,20 +194,20 @@ class Flashrom(object):
 
     # -- esecuzione ------------------------------------------------------
     def run(self, args, on_line=None, on_event=None, tutto_il_registro=True):
-        """Lancia flashrom e restituisce l'Esito. Bloccante: chiamare da un thread.
+        """Runs flashrom and returns the Result. Blocking: call it from a thread.
 
-        `su_evento(tipo, *dati)` riceve l'avanzamento man mano che esce:
-          ("fase", nome, percento)   da --progress
-          ("cancella", inizio, fine) da -V, un blocco cancellato
-          ("scrive", inizio, fine)   da -V, l'intervallo scritto
-        `tutto_il_registro=False` tiene fuori dal registro il rumore di -V.
+        `on_event(kind, *data)` receives progress as it comes out:
+          ("fase", name, percent)   from --progress
+          ("cancella", start, end)  from -V, one erased block
+          ("scrive", start, end)    from -V, the written range
+        `tutto_il_registro=False` keeps -V's noise out of the log.
         """
         lines = []
 
         def emetti(text):
             if not text or _RUMORE.match(text):
                 return
-            # percentuali e marcatori sono eventi, non testo da leggere
+            # percentages and markers are events, not text to read
             pulito = _RE_BLOCCO.sub("", _RE_FASE.sub("", text)).strip(" .")
             if not pulito:
                 return
@@ -235,9 +235,9 @@ class Flashrom(object):
 
         # flashrom scrive l'avanzamento con \r: si legge a byte e si spezza su
         # entrambi i terminatori, altrimenti la barra non compare mai.
-        # ⚠️ I marcatori E(...)/W(...) e le percentuali NON vanno a capo: escono
-        # in mezzo alle altre righe. Per questo si tiene un tampone a parte su
-        # cui si cercano gli eventi, indipendente dalle righe del registro.
+        # ⚠️ The E(...)/W(...) markers and the percentages do NOT end with a
+        # newline: they come out in the middle of other lines. Hence a
+        # separate buffer to look for events in, independent of the log.
         leftover = bytearray()
         buffer = ""
         try:
@@ -294,7 +294,7 @@ class Flashrom(object):
 
     # -- operazioni -------------------------------------------------------
     def version(self):
-        """La prima riga di `flashrom --version`, o None se non e' flashrom."""
+        """The first line of `flashrom --version`, or None if it is not flashrom."""
         try:
             output = subprocess.check_output(
                 [self.path, "--version"],
@@ -311,11 +311,11 @@ class Flashrom(object):
         return before[0].strip()
 
     def chip_list(self):
-        """Tutti i chip che questo flashrom conosce, letti da lui.
+        """Every chip this flashrom knows, read from flashrom itself.
 
-        ⚠️ Non c\u0027e\u0027 una tabella scritta a mano da nessuna parte: chiedendolo
-        all\u0027eseguibile, l\u0027elenco e\u0027 sempre quello della versione che si sta
-        usando davvero. Una lista nostra invecchierebbe in silenzio.
+        ⚠️ There is no hand-written table anywhere: by asking the
+        executable, the list is always the one belonging to the version
+        actually in use. A list of ours would go stale in silence.
         """
         try:
             output = subprocess.check_output(
@@ -344,10 +344,10 @@ class Flashrom(object):
 
     def unlock(self, port, baud=115200, spispeed=None, chip=None,
                 verbose=False, on_line=None):
-        """Toglie il blocco: --wp-disable e intervallo azzerato.
+        """Removes the lock: --wp-disable and a zeroed range.
 
-        ⚠️ Cambia lo STATO DEL CHIP, non un'impostazione del programma. Va
-        chiesto, non fatto di nascosto.
+        ⚠️ This changes the STATE OF THE CHIP, not a program setting. It has
+        to be asked for, not done quietly.
         """
         args = self.arguments(port, baud, spispeed, chip, verbose,
                               progress=False) + ["--wp-range=0,0", "--wp-disable"]
@@ -362,7 +362,7 @@ class Flashrom(object):
     def read_region(self, layout, region, destination, port, baud=115200,
                       spispeed=None, chip=None, verbose=False, on_line=None,
                       on_event=None):
-        """Legge SOLO una regione del layout: serve alle prove rapide."""
+        """Reads ONLY one region of the layout: for the quick checks."""
         args = self.arguments(port, baud, spispeed, chip, verbose) + \
             ["-l", layout, "-i", "%s:%s" % (region, destination), "-r"]
         return self.run(args, on_line, on_event, tutto_il_registro=verbose)
@@ -371,8 +371,8 @@ class Flashrom(object):
                layout=None, region=None, verbose=False, on_line=None,
                on_event=None):
         # ⚠️ -V si forza sempre in scrittura: e' l'unico modo per avere i
-        # marcatori E(...)/W(...), cioe' i blocchi veri della mappa. Il registro
-        # pero' resta pulito se l'utente non ha chiesto i dettagli.
+        # E(...)/W(...) markers, that is the map's real blocks. The log
+        # still stays clean unless the user asked for the detail.
         args = self.arguments(port, baud, spispeed, chip,
                               verbose=verbose or on_event is not None)
         if layout and region:
@@ -407,12 +407,12 @@ def parse_chip(lines):
 
 
 def parse_protection(lines, esito_ok=True):
-    """Estrae lo stato del blocco da cio' che flashrom ha detto."""
+    """Pulls the lock state out of what flashrom said."""
     text = "\n".join(lines)
     span = _RE_WP_INTERVALLO.search(text)
     mode = _RE_WP_MODO.search(text)
     if not span and not mode:
-        # chip che non sa rispondere, o programmatore che non ce la fa
+        # a chip that cannot answer, or a programmer that cannot ask
         reason = None
         for line in lines:
             if "wp" in line.lower() and ("not support" in line.lower()
@@ -430,7 +430,7 @@ def parse_protection(lines, esito_ok=True):
 
 
 class KnownChip(object):
-    """Una riga dell\u0027elenco di flashrom."""
+    """One line of flashrom's listing."""
 
     def __init__(self, vendor, name, kb=None, kind=None, tested=None):
         self.vendor = vendor
@@ -460,20 +460,20 @@ class KnownChip(object):
         return "<%s %s %s>" % (self.vendor, self.name, self.kind)
 
 
-# Le righe dell'elenco sono a colonne fisse, ma i nomi lunghi vanno a capo
+# The listing's lines are fixed columns, but long names wrap
 # e la continuazione ha la colonna del produttore VUOTA:
 #     Winbond      W25Q32BW/     PREW    4096  SPI
 #                  W25Q32CW/
 #                  W25Q32DW
-# ⚠️ Ricucirle non e' un vezzo: il nome che flashrom accetta e' quello
-# INTERO, "W25Q32BW/W25Q32CW/W25Q32DW". Prendendo solo la prima riga si
+# ⚠️ Stitching them back is not a nicety: the name flashrom accepts is
+# the WHOLE one, "W25Q32BW/W25Q32CW/W25Q32DW". Taking only the first
 # sceglierebbe un modello che poi flashrom rifiuta.
 _INIZIO_ELENCO = "Supported flash chips"
 _LARGHEZZA_PRODUTTORE = 29
 
 
 def parse_chip_list(lines):
-    """Le righe di `flashrom -L` diventano ChipNoto."""
+    """The lines of `flashrom -L` become KnownChip objects."""
     out = []
     inside = False
     for line in lines:
@@ -489,14 +489,14 @@ def parse_chip_list(lines):
         vendor = text[:_LARGHEZZA_PRODUTTORE].strip()
         resto = text[_LARGHEZZA_PRODUTTORE:]
         if not vendor:
-            # continuazione del nome di sopra
+            # continuation of the name above
             if out and resto.strip():
                 out[-1].name += resto.strip()
             continue
         fields = re.split(r"\s{2,}", resto.strip())
         fields = [c for c in fields if c]
         if len(fields) < 2:
-            # una riga senza dimensione ne' tipo non e' una riga di chip
+            # a line without a size or a type is not a chip line
             continue
         name = fields[0]
         kind = fields[-1]
@@ -511,12 +511,12 @@ def parse_chip_list(lines):
 
 
 def find_executable(app_folder, extra=None):
-    """Cerca flashrom.exe: dentro l'eseguibile, accanto, in una sottocartella,
-    nel PATH.
+    """Looks for flashrom.exe: inside the executable, beside it, in a
+    subfolder, on the PATH.
 
-    `extra` sono cartelle da guardare per prime: nell'eseguibile unico ci si
-    passa la cartella temporanea dove PyInstaller scompatta cio' che ha dentro,
-    cosi' il programma portatile si porta dietro il suo flashrom.
+    `extra` are folders to look at first: in the one-file executable this is
+    given the temporary folder where PyInstaller unpacks what it carries, so
+    the portable program brings its own flashrom along.
     """
     names_of = ["flashrom.exe", "flashrom"] if os.name == "nt" else ["flashrom"]
     radici = list(extra or []) + [app_folder]
@@ -539,10 +539,11 @@ def find_executable(app_folder, extra=None):
 
 
 def read_layout(path):
-    """[(nome, inizio, fine)] dal file di layout di flashrom.
+    """[(name, start, end)] from a flashrom layout file.
 
-    ⚠️ Il parser di flashrom non accetta commenti: qui li tolleriamo solo per
-    non far sparire righe buone, ma il file che gli passiamo resta il suo.
+    ⚠️ flashrom's own parser accepts no comments: we tolerate them here only
+    so that good lines do not disappear, but the file we hand it stays
+    flashrom's.
     """
     regions = []
     with open(path, "rb") as f:

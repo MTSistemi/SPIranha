@@ -1,35 +1,36 @@
 # -*- coding: utf-8 -*-
-"""Lo schema elettrico per i chip a 1,8 V.
+"""The schematic for 1.8 V chips.
 
-Il problema, in due righe: l'RP2040 parla a 3,3 V e un chip a 1,8 V regge
-1,95 V sui piedini. Collegarlo diretto e' come dargli il doppio della
-tensione prevista. E non funzionerebbe nemmeno al contrario: un 1 logico a
-1,8 V non arriva alla soglia d'ingresso dell'RP2040, che vuole almeno
-0,7 x 3,3 = 2,31 V, quindi il MISO si leggerebbe a caso anche nel caso
-fortunato in cui il chip sopravvive.
+The problem in two lines: the RP2040 speaks at 3.3 V and a 1.8 V chip is
+rated for 1.95 V on its pins. Wiring it straight is handing it nearly twice
+what it expects. And it would not work the other way round either: a logic
+one at 1.8 V never reaches the RP2040's input threshold, which wants at
+least 0.7 x 3.3 = 2.31 V, so MISO would read at random even in the lucky
+case where the chip survives.
 
-SERVONO DUE COSE, e vanno insieme:
-  1. alimentare il chip a 1,8 V, che il Pico non ha: un regolatore dal 3V3;
-  2. tradurre i livelli nei due versi.
+TWO THINGS ARE NEEDED, and they go together:
+  1. power the chip at 1.8 V, which the Pico does not have: a regulator off
+     the 3V3;
+  2. translate the levels in both directions.
 
-QUALE TRADUTTORE. Qui e' disegnato quello a MOSFET (il montaggio classico di
-Philips AN97055): quattro BSS138 e otto resistenze, roba da cassetto, e
-funziona nei due versi da solo. Ha un limite vero e va detto: la salita del
-segnale la fa la resistenza, non il transistor. Con 1 kOhm si tengono 4 MHz;
-con i 10 kOhm dello schema classico -- che vengono dall'I2C a 100 kHz -- la
-salita va sui 700 ns e gia' a 1 MHz le due letture non coincidono.
+WHICH TRANSLATOR. The one drawn here is the MOSFET one (the classic Philips
+AN97055 arrangement): four BSS138 and eight resistors, parts from a drawer,
+and it works both ways on its own. It has a real limit and it should be
+said: the rising edge is made by the resistor, not by the transistor. With
+1 kOhm you hold 4 MHz; with the textbook 10 kOhm -- which come from 100 kHz
+I2C -- the rise goes to 700 ns and the two reads already disagree at 1 MHz.
 
-Se il chip e' grande e la pazienza poca, un integrato a direzione fissa
-(TI SN74LVC8T245PWR) tiene i 12 MHz senza fare una piega: le direzioni
-dell'SPI sono fisse -- SCLK, MOSI e CS vanno sempre verso il chip, MISO
-sempre verso il Pico -- quindi la traduzione automatica non serve. Il
-TXS0108E invece no: e' fatto per bus a collettore aperto (I2C) e sull'SPI
-push-pull si comporta male.
+If the chip is big and patience short, a fixed-direction part (TI
+SN74LVC8T245PWR) holds 12 MHz without blinking: the SPI directions are
+fixed -- SCLK, MOSI and CS always towards the chip, MISO always towards the
+Pico -- so automatic translation is not needed. The TXS0108E is not the
+answer: it is built for open-drain buses (I2C) and behaves badly on
+push-pull SPI.
 
-⚠️ I MODELLI STANNO IN PEZZI, e ci stanno apposta. «Un MOSFET» e «un
-regolatore» non bastano a comprare i pezzi giusti: sul MOSFET conta la
-tensione di soglia e il 2N7002 -- stesso contenitore, stesso prezzo -- col
-gate a 1,8 V non accende proprio.
+⚠️ THE PART NUMBERS ARE IN PARTS, and they are there on purpose. "A MOSFET"
+and "a regulator" are not enough to buy the right things: on the MOSFET what
+counts is the gate threshold, and a 2N7002 -- same package, same price --
+does not turn on at all with its gate at 1.8 V.
 """
 from __future__ import unicode_literals
 
@@ -43,7 +44,7 @@ import theme as T
 
 # ------------------------------------------------------------------ dati
 
-# I quattro segnali che passano dall'adattatore, e come sono orientati.
+# The four signals that go through the adapter, and which way they face.
 CHANNELS = (
     ("SCLK", "GP2", "6  CLK", "verso"),
     ("MOSI", "GP3", "5  DI", "verso"),
@@ -53,17 +54,18 @@ CHANNELS = (
 
 # LA DISTINTA, con sigle vere.
 #
-# ⚠️ Sul MOSFET la specifica che conta non e' la corrente, e' la tensione di
-# soglia: il gate sta a 1,8 V, quindi serve un Vgs(th) sotto 1,5 V. Il BSS138
-# ce l'ha (0,5-1,5 V). Il 2N7002, che gli somiglia e costa uguale, arriva a
-# 2,5 V e col gate a 1,8 V non accende: e' l'errore piu' facile da fare qui.
+# ⚠️ On the MOSFET the spec that matters is not the current, it is the gate
+# threshold: the gate sits at 1.8 V, so Vgs(th) must be under 1.5 V. The
+# BSS138 has it (0.5-1.5 V). The 2N7002, which looks like it and costs the
+# same, goes up to 2.5 V and never turns on with its gate at 1.8 V: the
+# easiest mistake to make here.
 #
-# ⚠️ E le resistenze sono da 1 kΩ, non i 10 kΩ dello schema classico: quelli
+# ⚠️ And the resistors are 1 kΩ, not the textbook 10 kΩ: those
 # vengono dall'I2C a 100 kHz. Qui la salita del segnale la fa la resistenza,
-# e con 10 kΩ su una trentina di picofarad si va sui 700 ns -- piu' del mezzo
+# and with 10 kΩ over some thirty picofarads it goes to 700 ns -- more than
 # periodo a 1 MHz. Con 1 kΩ si scende a ~70 ns e si tengono i 4 MHz.
-# ⚠️ La colonna «cosa» e' bilingue anche per la virgola: 1,5 V in italiano e
-# 1.5 V in inglese. Le sigle dei modelli invece non si traducono.
+# ⚠️ The "what" column is bilingual down to the comma: 1,5 V in Italian and
+# 1.5 V in English. The part numbers, on the other hand, are not translated.
 PARTS = (
     ("Q1-Q4", {"it": "N-MOSFET · Vgs(th) < 1,5 V · SOT-23",
                "en": "N-MOSFET · Vgs(th) < 1.5 V · SOT-23"},
@@ -80,7 +82,7 @@ PARTS = (
 
 
 def value_for(chunk, language="it"):
-    """La colonna «cosa» del pezzo, nella lingua giusta."""
+    """The part's "what" column, in the right language."""
     text = chunk[1]
     if isinstance(text, dict):
         return text.get(language) or text.get("it") or ""
@@ -89,8 +91,8 @@ def value_for(chunk, language="it"):
 NOTES = ("ad_nota1", "ad_nota3", "ad_nota5", "ad_nota6")
 
 # --------------------------------------------------------------- geometria
-# Un canale solo, disegnato in grande: gli altri tre sono identici e
-# disegnarli tutti e quattro non aggiunge un'informazione, aggiunge righe.
+# One channel only, drawn large: the other three are identical and drawing
+# all four adds no information, only lines.
 RAIL_HIGH_Y = 132              # barra dei 3,3 V
 RAIL_LOW_Y = 300             # barra degli 1,8 V
 CHANNEL_Y = 216                 # il segnale, in mezzo alle due barre
@@ -98,16 +100,17 @@ X_RAIL0, X_RAIL1 = 56, 620     # da dove a dove arrivano le due barre
 X_PICO, X_CHIP = 112, 560      # dove comincia e finisce il filo del segnale
 X_MOSFET = 336                    # il transistor, al centro
 X_R_ALTA, X_R_BASSA = 232, 440  # le due resistenze di tiraggio
-# ⚠️ La presa del regolatore sta PRIMA dell'inizio del segnale (x=112): messa
-# in mezzo, il suo filo attraversava la linea del segnale e sembrava toccarla.
+# ⚠️ The regulator's tap sits BEFORE the signal starts (x=112): put in the
+# middle, its wire crossed the signal line and looked like it touched it.
 X_IN, X_OUT = 76, 500
 LDO_X, LDO_Y = 216, 400        # il regolatore, sotto
 # ⚠️ La colonna di destra ha tre riquadri e arriva a 720: misurato, non
-# stimato. Se ALT_AD e' piu' corto dell'altezza vera, la scala si calcola su
-# un disegno che non c'e' e l'ultima nota finisce fuori dalla finestra.
+# measured, not guessed. If SHIFTER_HEIGHT is shorter than the real height,
+# the scale is computed for a drawing that does not exist and the last note
+# ends up outside the window.
 SHIFTER_HEIGHT = 720
-# ⚠️ Nel PDF va SOLO il circuito: la colonna di destra diventa una
-# tabella vera nella seconda pagina, che in stampa si legge meglio di
+# ⚠️ Only the circuit goes into the PDF: the right-hand column becomes a
+# real table on the second page, which reads better on paper than
 # un riquadro fotografato.
 DRAWING_AREA = (10, 60, 700, 600)
 LDO_L, LDO_A = 140, 44
@@ -119,7 +122,7 @@ class LevelShifter(wiring.Diagram):
     def __init__(self, parent, tm, L):
         wiring.Diagram.__init__(self, parent, tm, L, clip=True)
         self.title(L("ad_titolo"))
-        # ⚠️ 800 di altezza, non 700: il contenuto naturale arriva a 720 e
+        # ⚠️ 800 tall, not 700: the natural content reaches 720 and
         # con la scala guidata dalla larghezza diventano ~755 pixel.
         # Misurato: a occhio l'ultima nota restava fuori.
         self.geometry("1080x800")
@@ -146,7 +149,7 @@ class LevelShifter(wiring.Diagram):
         self._text(20, 18, self.L("ad_titolo"), T.FG, self._font(12, True))
         self._text(21, 37, self.L("ad_sotto"), T.MUT, self._font(8))
 
-        # il tasto per la stampa: una pillola disegnata, come il resto
+        # the print button: a drawn pill, like everything else
         larghezza_pillola = 96
         x0 = (real_width / self.k) - larghezza_pillola - 16
         self._rect(x0, 14, x0 + larghezza_pillola, 38, "#1D2937", "#2A3846",
@@ -175,7 +178,7 @@ class LevelShifter(wiring.Diagram):
                 filetypes=[("PDF", "*.pdf")])
             if not path:
                 return None
-        # ⚠️ Il tasto non deve finire nel PDF: e' un comando, non un disegno.
+        # ⚠️ The button must not end up in the PDF: it is a control, not drawing.
         self.canvas.delete("pdf")
         area = [self._s(v) for v in DRAWING_AREA]
         drawing = printing.svg_from_canvas(self.canvas, area)
@@ -199,8 +202,8 @@ class LevelShifter(wiring.Diagram):
 
     # -- le due alimentazioni ---------------------------------------------
     def _draw_rails(self):
-        # ⚠️ Le scritte vanno SOPRA la barra, non a sinistra: a sinistra
-        # occupavano lo spazio da cui scende la presa del regolatore.
+        # ⚠️ The labels go ABOVE the rail, not to its left: on the left they
+        # took the space the regulator's tap comes down through.
         for y, label_for, colour, x_da in (
                 (RAIL_HIGH_Y, self.L("ad_rail_alto"), T.WIRE["VCC"], X_RAIL0),
                 (RAIL_LOW_Y, self.L("ad_rail_basso"), "#F0A93B",
@@ -215,8 +218,8 @@ class LevelShifter(wiring.Diagram):
     def _draw_channel(self):
         colour = T.WIRE["MOSI"]
 
-        # ⚠️ Il filo NON passa dietro al transistor: il transistor lo
-        # interrompe, ed e' tutto il punto del montaggio.
+        # ⚠️ The wire does NOT run behind the transistor: the transistor
+        # breaks it, and that is the whole point of the arrangement.
         self._wire([(X_PICO, CHANNEL_Y), (X_MOSFET - 40, CHANNEL_Y)], colour)
         self._wire([(X_MOSFET + 40, CHANNEL_Y), (X_CHIP, CHANNEL_Y)], colour)
 
@@ -225,20 +228,20 @@ class LevelShifter(wiring.Diagram):
         self._text(X_CHIP, CHANNEL_Y - 14, self.L("ad_lato_chip"), "#B9C7D3",
                     self._font(7, True), anchor="e")
 
-        # le due resistenze di tiraggio, una per lato
+        # the two pull-ups, one per side
         self._draw_resistor(X_R_ALTA, RAIL_HIGH_Y, CHANNEL_Y, "R5", "1k")
         self._draw_resistor(X_R_BASSA, RAIL_LOW_Y, CHANNEL_Y, "R1", "1k")
 
         self._draw_mosfet(X_MOSFET, CHANNEL_Y)
 
-        # ⚠️ Il verso del transistor non e' simmetrico: il source guarda il
+        # ⚠️ The transistor is not symmetric: the source faces the
         # lato a 1,8 V. Montato al contrario il MOSFET conduce sempre e i due
-        # lati restano attaccati, cioe' il chip prende 3,3 V lo stesso.
+        # sides stay connected, which means the chip gets 3.3 V anyway.
         self._text(X_IN + 28, RAIL_LOW_Y + 24, self.L("ad_verso"),
                     "#93A5B4", self._font(7), anchor="nw", width=340)
 
     def _draw_resistor(self, x, y_rail, y_segnale, ref, value_for):
-        """Resistenza verticale fra la barra e il filo del segnale."""
+        """A vertical resistor between the rail and the signal wire."""
         middle = (y_rail + y_segnale) / 2.0
         top, bottom = middle - 22, middle + 22
         self._wire([(x, y_rail), (x, top)], "#5E7488")
@@ -246,7 +249,7 @@ class LevelShifter(wiring.Diagram):
         self._rect(x - 11, top, x + 11, bottom, "#141A21", "#7C8B99")
         self._text(x + 18, middle - 7, ref, "#93A5B4", self._font(7, True))
         self._text(x + 18, middle + 6, value_for, "#6E8296", self._font(7))
-        # il pallino di giunzione: senza, un incrocio sembra un incrocio
+        # the junction dot: without it a crossing just looks like a crossing
         self._draw_junction(x, y_segnale)
 
     def _draw_junction(self, x, y):
@@ -256,18 +259,18 @@ class LevelShifter(wiring.Diagram):
                               outline="")
 
     def _draw_mosfet(self, x, y):
-        """Un N-MOSFET fra i due lati: drain a 3,3 V, source a 1,8 V.
+        """An N-MOSFET between the two sides: drain at 3.3 V, source at 1.8 V.
 
-        ⚠️ Il drain sta dalla parte del Pico e il source da quella del chip,
-        e non sono intercambiabili: e' il diodo interno fra source e drain,
-        piu' il gate fisso a 1,8 V, a far funzionare la traduzione nei due
-        versi. Al contrario il transistor resta acceso e i due lati sono
-        semplicemente collegati.
+        ⚠️ The drain is on the Pico side and the source on the chip
+        side, and they are not interchangeable: it is the body diode between
+        source and drain, plus the gate tied at 1.8 V, that makes the
+        translation work both ways. The other way round the transistor stays
+        on and the two sides are simply joined.
         """
-        # ⚠️ Simbolo coricato: la corrente passa da sinistra a destra come il
-        # segnale, cosi' il filo resta dritto e si vede che il transistor sta
-        # IN MEZZO. Col simbolo in piedi i collegamenti facevano un giro che
-        # sembrava un rettangolo, non un transistor.
+        # ⚠️ Symbol laid on its side: current goes left to right like the
+        # signal, so the wire stays straight and you can see the transistor
+        # sits IN BETWEEN. Stood upright, the connections made a loop that
+        # looked like a rectangle, not a transistor.
         wide = 32
         y_canale = y + 13           # le tre barrette del canale
         y_gate = y + 22             # la placca di gate, staccata sotto
@@ -285,11 +288,11 @@ class LevelShifter(wiring.Diagram):
                     (x - wide + 6, y_canale)], "#8FA2B2")
         self._wire([(x + wide - 6, y_canale), (x + wide - 6, y),
                     (X_MOSFET + 40, y)], "#8FA2B2")
-        # il gate sta fisso a 1,8 V: e' quello che fa funzionare tutto
+        # the gate is tied to 1.8 V: that is what makes the whole thing work
         self._wire([(x, y_gate), (x, RAIL_LOW_Y)], "#F0A93B")
         self._draw_junction(x, RAIL_LOW_Y)
 
-        # ⚠️ le sigle sotto il filo, non sopra: sopra finivano sul cavetto
+        # ⚠️ the letters below the wire, not above: above they landed on it
         self._text(x - wide - 3, y + 4, "D", "#93A5B4",
                     self._font(6.5, True, mono=True), anchor="e")
         self._text(x + wide + 3, y + 4, "S", "#93A5B4",
@@ -310,7 +313,7 @@ class LevelShifter(wiring.Diagram):
                     self._font(6.5), anchor="center")
 
         middle = y0 + LDO_A / 2.0
-        # ingresso dal 3,3 (preso a sinistra di tutto), uscita sugli 1,8
+        # input from the 3.3 (tapped left of everything), output onto the 1.8
         self._wire([(X_IN, RAIL_HIGH_Y), (X_IN, middle), (x0, middle)],
                    T.WIRE["VCC"])
         self._draw_junction(X_IN, RAIL_HIGH_Y)
@@ -318,7 +321,7 @@ class LevelShifter(wiring.Diagram):
                    "#F0A93B")
         self._draw_junction(X_OUT, RAIL_LOW_Y)
 
-        # i due condensatori, uno per lato: senza, il regolatore oscilla
+        # the two capacitors, one per side: without them the regulator oscillates
         self._draw_capacitor(X_IN + 60, middle, "C1")
         self._draw_capacitor(X_OUT - 44, middle, "C2")
         self._draw_junction(X_IN + 60, middle)
@@ -371,8 +374,8 @@ class LevelShifter(wiring.Diagram):
         background = self._frame_around("tabella", x, y, x + wiring.COL_WIDTH,
                                self.L("ad_tabella"))
 
-        # --- la distinta: sigla e valore su una riga, i modelli sotto
-        # ⚠️ I modelli servono: "un MOSFET" e "un regolatore" non bastano a
+        # --- the bill of materials: ref and value on one line, models below
+        # ⚠️ The part numbers earn their place: "a MOSFET" and "a regulator"
         # comprare i pezzi giusti, e sul MOSFET la scelta sbagliata (2N7002)
         # sembra identica e non funziona.
         y1 = background + 14
@@ -420,7 +423,7 @@ class LevelShifter(wiring.Diagram):
 
 
 def open_window(parent, tm, L):
-    """Apre lo schema dell'adattatore, o riporta davanti quello aperto."""
+    """Opens the adapter schematic, or brings the open one to the front."""
     existing = getattr(parent, "_shifter_window", None)
     if existing is not None and existing.winfo_exists():
         existing.deiconify()
