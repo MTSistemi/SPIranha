@@ -110,6 +110,10 @@ def build_exe():
     else:
         print("⚠️ firmware/pico_serprog.uf2 is missing: no firmware install "
               "from the executable")
+    # ⚠️ The icon travels inside as a FILE too, not only as the exe's
+    # resource: --icon sets what Explorer shows, while the window itself
+    # needs a real .ico to hand to Tk, or it keeps the blue feather.
+    args += ["--add-data", "%s%s." % (icon_path, os.pathsep)]
     args.append(os.path.join(HERE, "SPIranha.pyw"))
     if run(args) != 0:
         sys.exit("PyInstaller failed")

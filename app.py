@@ -191,6 +191,7 @@ class App(tk.Tk):
         self._messages = []              # Messages to redraw when the language changes
 
         self.theme = T.Theme(self)
+        self._set_window_icon()
         self._build_ui()
         self._retranslate()
         self.detect_ports()
@@ -898,6 +899,26 @@ class App(tk.Tk):
             button.state(["!disabled"] if self.flash and not self.busy
                           else ["disabled"])
 
+
+    def _set_window_icon(self):
+        """The window's own icon.
+
+        ⚠️ Not the same thing as the executable's icon, and this is worth
+        saying because it was wrong: PyInstaller's --icon only sets the
+        resource on the .exe, which is what Explorer shows. The window keeps
+        Tk's blue feather until it is told otherwise, and that is what people
+        actually look at while the program runs.
+        """
+        for root in (getattr(sys, "_MEIPASS", None), app_folder()):
+            if not root:
+                continue
+            path = os.path.join(root, "SPIranha.ico")
+            if os.path.isfile(path):
+                try:
+                    self.iconbitmap(path)
+                except tk.TclError:
+                    pass          # a window without its icon still works
+                return
 
     # ------------------------------------------------- firmware del Pico
     def _firmware_path(self):
