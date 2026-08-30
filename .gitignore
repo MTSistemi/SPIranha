@@ -7,7 +7,6 @@ __pycache__/
 *.pyc
 
 # generated
-SPIranha.ico
 tests/work/
 tests/work-gui/
 tests/short.rom

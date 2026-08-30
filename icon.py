@@ -1,112 +1,144 @@
 # -*- coding: utf-8 -*-
-"""Generates the program icon, without depending on any imaging library.
+"""Builds SPIranha.ico from the artwork, without any imaging library.
 
     python icon.py
 
-Writes `SPIranha.ico`. The drawing follows the theme: slate background, an
-accent-blue chip with amber pins along its sides. It is redrawn at every size
-rather than scaling one image, so it stays legible at 16 px.
+Reads `docs/img/icon-768.png` and writes `SPIranha.ico`.
 
-⚠️ Pillow is not needed: the ICO format is written by hand (BMP entries for
-the small sizes, one PNG entry for the 256, compressed with zlib from the
-standard library).
+⚠️ Why 768 and not any other size: it divides exactly by 16, 32, 48, 64,
+128 and 256, so every size in the icon is a plain box average of the same
+file. No resampling library, no interpolation choices, and the result does
+not depend on which machine ran the build.
+
+⚠️ The artwork the .ico is built from carries NO text. The labels
+(MISO/MOSI/SCLK/CS) belong to `icon-hero.png`, which is meant to be looked
+at large. Four lines of text inside 16 pixels are four grey smudges, and
+what survives down there is the shape and the four wire colours.
+
+⚠️ Pillow is not needed: PNG is read and the ICO written by hand (BMP
+entries for the small sizes, a PNG entry for the 256), with zlib from the
+standard library.
 """
 from __future__ import unicode_literals
 
+import os
 import struct
 import zlib
 
-INK = (0x0B, 0x11, 0x19)
-BORDER = (0x24, 0x32, 0x3F)
-ACCENT_COLOUR = (0x2F, 0x9B, 0xE0)
-ACCENT_COLOUR2 = (0x00, 0x70, 0xB0)
-PIN_COLOUR = (0xC9, 0xA2, 0x27)
-DARK = (0x08, 0x13, 0x1C)
+HERE = os.path.dirname(os.path.abspath(__file__))
+ARTWORK = os.path.join(HERE, "docs", "img", "icon-768.png")
 
-SIZES = (16, 32, 48, 64)
-BIG_SIZE = 4          # sovracampionamento, per bordi non seghettati
+SIZES = (16, 32, 48, 64, 128)
+BIG_SIZE = 256
 
 
 class Surface(object):
-    """A bare RGBA canvas: fills, rectangles and round corners."""
+    """A bare RGBA canvas: a list of rows of (r, g, b, a)."""
 
-    def __init__(self, side):
+    def __init__(self, side, rows=None):
         self.side = side
-        self.px = [[(0, 0, 0, 0)] * side for _ in range(side)]
-
-    def rect(self, x0, y0, x1, y1, colour, radius=0):
-        r, g, b = colour
-        for y in range(max(0, int(y0)), min(self.side, int(y1) + 1)):
-            for x in range(max(0, int(x0)), min(self.side, int(x1) + 1)):
-                if radius:
-                    # nothing is drawn outside the corner arcs
-                    for cx, cy in ((x0 + radius, y0 + radius), (x1 - radius, y0 + radius),
-                                   (x0 + radius, y1 - radius), (x1 - radius, y1 - radius)):
-                        inside_x = (x < x0 + radius) if cx < (x0 + x1) / 2 \
-                            else (x > x1 - radius)
-                        inside_y = (y < y0 + radius) if cy < (y0 + y1) / 2 \
-                            else (y > y1 - radius)
-                        if inside_x and inside_y:
-                            if (x - cx) ** 2 + (y - cy) ** 2 > radius ** 2:
-                                break
-                    else:
-                        self.px[y][x] = (r, g, b, 255)
-                    continue
-                self.px[y][x] = (r, g, b, 255)
+        self.px = rows if rows is not None else \
+            [[(0, 0, 0, 0)] * side for _ in range(side)]
 
     def scaled(self, factor):
-        """The mean of every factor×factor square: that is the antialiasing."""
+        """The mean of every factor×factor square: that is the resampling."""
         side = self.side // factor
         small = Surface(side)
         for y in range(side):
+            row = small.px[y]
             for x in range(side):
                 r = g = b = a = 0
                 for dy in range(factor):
+                    source = self.px[y * factor + dy]
                     for dx in range(factor):
-                        pr, pg, pb, pa = self.px[y * factor + dy][x * factor + dx]
+                        pr, pg, pb, pa = source[x * factor + dx]
+                        # ⚠️ the colours are weighted by alpha: averaging a
+                        # transparent pixel's colour in would darken the edge
+                        # with whatever happens to sit behind it.
                         r += pr * pa
                         g += pg * pa
                         b += pb * pa
                         a += pa
                 n = factor * factor
-                if a:
-                    small.px[y][x] = (r // a, g // a, b // a, a // n)
-                else:
-                    small.px[y][x] = (0, 0, 0, 0)
+                row[x] = (r // a, g // a, b // a, a // n) if a else (0, 0, 0, 0)
         return small
 
 
-def draw(side):
-    """The mark, redrawn at the size asked for."""
-    big = Surface(side * BIG_SIZE)
-    L = side * BIG_SIZE
-    u = L / 64.0                       # the unit: the drawing is laid out on 64
+# ------------------------------------------------------------------- reading
 
-    big.rect(0, 0, L - 1, L - 1, INK, radius=int(10 * u))
-    big.rect(int(1 * u), int(1 * u), L - 1 - int(1 * u), L - 1 - int(1 * u),
-                      BORDER, radius=int(9 * u))
-    big.rect(int(2 * u), int(2 * u), L - 1 - int(2 * u), L - 1 - int(2 * u),
-                      INK, radius=int(8 * u))
+def read_png(path):
+    """An 8-bit RGB/RGBA PNG, as a Surface. Enough for our own artwork."""
+    with open(path, "rb") as f:
+        data = f.read()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("%s is not a PNG" % path)
+    position = 8
+    width = height = depth = kind = None
+    body = bytearray()
+    while position < len(data):
+        (length,) = struct.unpack_from(">I", data, position)
+        name = data[position + 4:position + 8]
+        chunk = data[position + 8:position + 8 + length]
+        position += 12 + length
+        if name == b"IHDR":
+            width, height, depth, kind = struct.unpack(">IIBB", chunk[:10])
+        elif name == b"IDAT":
+            body += chunk
+        elif name == b"IEND":
+            break
+    if depth != 8 or kind not in (2, 6):
+        raise ValueError("only 8-bit RGB or RGBA is read here, not %s/%s"
+                         % (depth, kind))
+    if width != height:
+        raise ValueError("the artwork must be square, this is %dx%d"
+                         % (width, height))
 
-    # i piedini, tre per lato
-    for index in range(3):
-        y = int((21 + index * 11) * u)
-        high = max(1, int(4 * u))
-        big.rect(int(7 * u), y, int(20 * u), y + high, PIN_COLOUR)
-        big.rect(L - 1 - int(20 * u), y, L - 1 - int(7 * u), y + high, PIN_COLOUR)
+    step = 4 if kind == 6 else 3
+    raw = zlib.decompress(bytes(body))
+    stride = width * step
+    rows = []
+    previous = bytearray(stride)
+    position = 0
+    for _y in range(height):
+        which = raw[position]
+        line = bytearray(raw[position + 1:position + 1 + stride])
+        position += 1 + stride
+        _unfilter(which, line, previous, step)
+        row = []
+        for x in range(0, stride, step):
+            if step == 4:
+                row.append((line[x], line[x + 1], line[x + 2], line[x + 3]))
+            else:
+                row.append((line[x], line[x + 1], line[x + 2], 255))
+        rows.append(row)
+        previous = line
+    return Surface(width, rows)
 
-    # the chip body
-    big.rect(int(18 * u), int(16 * u), L - 1 - int(18 * u),
-                      L - 1 - int(16 * u), ACCENT_COLOUR2, radius=int(3 * u))
-    big.rect(int(20 * u), int(18 * u), L - 1 - int(20 * u),
-                      L - 1 - int(18 * u), ACCENT_COLOUR, radius=int(2 * u))
-    # la tacca del piedino 1
-    big.rect(int(24 * u), int(22 * u), int(30 * u), int(28 * u), DARK,
-                      radius=int(3 * u))
-    return big.scaled(BIG_SIZE)
+
+def _unfilter(which, line, previous, step):
+    """The five PNG filters, undone in place. See RFC 2083, §6."""
+    if which == 0:
+        return
+    for i in range(len(line)):
+        left = line[i - step] if i >= step else 0
+        up = previous[i]
+        corner = previous[i - step] if i >= step else 0
+        if which == 1:
+            line[i] = (line[i] + left) & 0xFF
+        elif which == 2:
+            line[i] = (line[i] + up) & 0xFF
+        elif which == 3:
+            line[i] = (line[i] + (left + up) // 2) & 0xFF
+        elif which == 4:
+            p = left + up - corner
+            pa, pb, pc = abs(p - left), abs(p - up), abs(p - corner)
+            best = left if (pa <= pb and pa <= pc) else (up if pb <= pc else corner)
+            line[i] = (line[i] + best) & 0xFF
+        else:
+            raise ValueError("unknown PNG filter %d" % which)
 
 
-# ------------------------------------------------------------------ formati
+# ------------------------------------------------------------------ formats
 
 def bmp_entry(canvas):
     """One ICO entry as a 32-bit BMP, rows from the bottom up."""
@@ -115,13 +147,10 @@ def bmp_entry(canvas):
                                side * side * 4, 0, 0, 0, 0)
     body = bytearray()
     for y in range(side - 1, -1, -1):
-        for x in range(side):
-            r, g, b, a = canvas.px[y][x]
+        for r, g, b, a in canvas.px[y]:
             body += bytes((b, g, r, a))
-    mask = bytearray()
     line = ((side + 31) // 32) * 4
-    mask += bytes(line * side)
-    return heading + bytes(body) + bytes(mask)
+    return heading + bytes(body) + bytes(line * side)
 
 
 def png_entry(canvas):
@@ -131,8 +160,7 @@ def png_entry(canvas):
     raw = bytearray()
     for y in range(side):
         raw.append(0)               # filter "none"
-        for x in range(side):
-            r, g, b, a = canvas.px[y][x]
+        for r, g, b, a in canvas.px[y]:
             raw += bytes((r, g, b, a))
 
     def chunk(name, data):
@@ -146,11 +174,15 @@ def png_entry(canvas):
             + chunk(b"IEND", b""))
 
 
-def write(path="SPIranha.ico"):
+def write(path=None, artwork=ARTWORK):
+    path = path or os.path.join(HERE, "SPIranha.ico")
+    big = read_png(artwork)
     images = []
     for side in SIZES:
-        images.append((side, bmp_entry(draw(side))))
-    images.append((256, png_entry(draw(256))))
+        if big.side % side:
+            raise ValueError("%d does not divide %d exactly" % (side, big.side))
+        images.append((side, bmp_entry(big.scaled(big.side // side))))
+    images.append((BIG_SIZE, png_entry(big.scaled(big.side // BIG_SIZE))))
 
     header = struct.pack("<HHH", 0, 1, len(images))
     spare = len(header) + 16 * len(images)
@@ -166,7 +198,5 @@ def write(path="SPIranha.ico"):
 
 
 if __name__ == "__main__":
-    import os
-    path = write(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                   "SPIranha.ico"))
-    print("scritta %s (%d byte)" % (path, os.path.getsize(path)))
+    written = write()
+    print("written %s (%d bytes)" % (written, os.path.getsize(written)))

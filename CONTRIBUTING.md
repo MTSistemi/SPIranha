@@ -18,7 +18,7 @@ Convenience is not a good enough reason.
 Run both test suites on Windows:
 
 ```bash
-python tests\test_gui.py        # 165 checks, no hardware
+python tests\test_gui.py        # 167 checks, no hardware
 python tests\test_full.py   # 44 checks, needs flashrom built with 'dummy'
 ```
 
@@ -45,10 +45,16 @@ result means something is genuinely wrong.
 
 ## House style
 
-The code is written in Italian: identifiers, comments and docstrings. That is
-deliberate and consistent — please follow it rather than mixing languages in the
-same file. User-facing strings never appear inline: they live in `i18n.py` with
-an Italian and an English version, and both must be filled in.
+The code is written in English: file names, identifiers, comments and
+docstrings. The audience for source code is not the person who wrote it, and
+a repository on GitHub is open to anyone. Please follow it rather than mixing
+languages in the same file.
+
+Two places stay Italian on purpose, and neither is an exception to the rule
+above: the `"it"` half of every entry in `i18n.py`, because the program speaks
+both languages, and `docs/it/`, which is the translated documentation.
+User-facing strings never appear inline — they live in `i18n.py` with an
+Italian and an English version, and both must be filled in.
 
 Comments explain **why**, and flag traps with `⚠️`. The repository is full of
 notes like "this looks wrong but is correct, and here is why" — those exist

@@ -50,9 +50,12 @@ VERSION = "1.2.1"
 def prepare_resources():
     """Icon and file properties: they matter for something you hand out."""
     icon_path = os.path.join(HERE, "SPIranha.ico")
+    # ⚠️ No fallback here, on purpose. This used to regenerate a different,
+    # older mark whenever the file was missing, so an executable could go
+    # out carrying the wrong icon and nothing would say so. The icon is
+    # committed; regenerating it is a deliberate act.
     if not os.path.isfile(icon_path):
-        print("Generating the icon")
-        run([sys.executable, os.path.join(HERE, "icon.py")])
+        sys.exit("SPIranha.ico is missing. Rebuild it with: python icon.py")
     version = os.path.join(HERE, "build", "version.txt")
     parts = VERSION.split(".") + ["0", "0", "0", "0"]
     n = tuple(int(p) for p in parts[:4])

@@ -36,6 +36,16 @@ chip:
                       based on work by Thomas Roth.
                       Our patched source is in firmware/pico-serprog/.
 
+The icon
+--------
+
+The piranha in docs/img/icon-hero.png was generated with Google Gemini from a
+prompt written for this project, then cropped, masked and packed into
+SPIranha.ico by icon.py. It is included here so nobody has to guess where it
+came from: no artist was commissioned, and no existing artwork was traced.
+The four wire colours in it are not decoration -- they are the same ones the
+program draws in theme.py, so the icon and the wiring diagram agree.
+
 The BC-250 J4004 pinout comes from two independent projects that document it
 identically — mothenjoyer69/bc250-documentation and elektricM/amd-bc250-docs.
 Neither is included here; both were read, and agreeing with each other is why

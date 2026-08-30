@@ -1,3 +1,5 @@
+<img src="docs/img/icon-hero.png" alt="" width="160" align="right">
+
 # SPIranha
 
 **Program BIOS and SPI flash chips with a plain Raspberry Pi Pico.**
@@ -320,7 +322,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 165 checks, no hardware needed
+python tests\test_gui.py     # 167 checks, no hardware needed
 python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 
