@@ -223,8 +223,8 @@ def prova(finestra):
 
 
         # 13. anagrafica: i due identificativi della stessa scheda
-        import anagrafica
-        a = anagrafica.Anagrafica()
+        import boards
+        a = boards.Anagrafica()
         a.imposta_nome("banco 1", run="5303284738DE6E1C")
         controlla("nome ritrovato dal seriale in esecuzione",
                   a.nome(run="5303284738DE6E1C") == "banco 1")
@@ -239,7 +239,7 @@ def prova(finestra):
                   str(a.come_elenco()))
 
         # due voci separate che si rivelano la stessa scheda: si fondono
-        b = anagrafica.Anagrafica()
+        b = boards.Anagrafica()
         b.imposta_nome("visto acceso", run="AAAA")
         b.imposta_nome("visto in bootsel", boot="BBBB")
         b.collega("AAAA", "BBBB")
@@ -247,12 +247,12 @@ def prova(finestra):
                   str(b.come_elenco()))
         controlla("tiene il nome gia' dato", b.nome(boot="BBBB") == "visto acceso")
 
-        vuota = anagrafica.Anagrafica()
+        vuota = boards.Anagrafica()
         vuota.imposta_nome("tolgo", run="CCCC")
         vuota.imposta_nome("", run="CCCC")
         controlla("nome vuoto dimentica la scheda", vuota.come_elenco() == [])
         controlla("coda del seriale per la conferma",
-                  anagrafica.coda("5303284738DE6E1C") == "6E1C")
+                  boards.coda("5303284738DE6E1C") == "6E1C")
 
         # 14. la conferma accetta SOLO la parola chiesta
         vera_attesa = finestra.wait_window
@@ -359,7 +359,7 @@ def prova(finestra):
 
         # 17. regioni ricavate dall'immagine: IFD, FMAP, AMD
         import struct as _st
-        import regioni as _rg
+        import regions as _rg
 
         # --- descrittore Intel: firma a 0x10, FRBA e numero regioni in FLMAP0
         intel = bytearray(b"\xff" * (2 * 1024 * 1024))
@@ -451,7 +451,7 @@ def prova(finestra):
 
 
         # 18. profili di scheda
-        import profili as _pf
+        import profiles as _pf
         controlla("profilo sconosciuto: si torna al predefinito",
                   _pf.prendi("scheda-che-non-esiste").chiave == _pf.PREDEFINITO)
         controlla("i nomi dei profili cambiano lingua",
@@ -498,7 +498,7 @@ def prova(finestra):
         # 19. i due schemi si disegnano davvero
         # ⚠️ Nessuna prova apriva il disegno: un errore li' si sarebbe visto
         # solo aprendolo a mano.
-        import schema as _sc
+        import wiring as _sc
         for pinza in (False, True):
             finestra_schema = _sc.Schema(finestra, finestra.tema, finestra.L,
                                          pinza=pinza)
@@ -679,7 +679,7 @@ def prova(finestra):
 
 
         # 22. la tensione del chip, dedotta dal modello
-        import tensione as _tv
+        import voltage as _tv
         for nome, atteso in (("MX25L12835F/MX25L12873F", 3.3),
                              ("MX25U12835F", 1.8),
                              ("W25Q128.V", 3.3),
@@ -724,7 +724,7 @@ def prova(finestra):
         finestra.var_adattatore.set(0)
 
         # 23. lo schema dell'adattatore si disegna
-        import adattatore as _ad
+        import level_shifter as _ad
         finestra_ad = _ad.Adattatore(finestra, finestra.tema, finestra.L)
         # ⚠️ La misura conta: senza geometria la tela e' larga un pixel, la
         # scala finisce al minimo e i caratteri, che sotto i 6 punti non
@@ -819,7 +819,7 @@ def prova(finestra):
                   valori[1] == finestra.profilo.chip[0], str(valori[:3]))
 
         # 25. la finestra di ricerca filtra e restituisce il chip scelto
-        import ricerca as _rc
+        import chip_search as _rc
         scelti = []
         finestra_r = _rc.Ricerca(finestra, finestra.tema, finestra.L, elenco,
                                  scelti.append)
@@ -843,7 +843,7 @@ def prova(finestra):
 
 
         # 26. la pagina da stampare: colori rovesciati e disegno dentro
-        import stampa as _st
+        import printing as _st
         import xml.etree.ElementTree as _xml
 
         # ⚠️ Rovesciare la luminosita' NON e' fare il negativo: il rosso deve

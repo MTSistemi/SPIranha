@@ -10,7 +10,7 @@ do:
 
 They open and close the window by themselves; there is nothing to click.
 
-*Versione italiana: [`docs/it/prove-LEGGIMI.md`](../docs/it/prove-LEGGIMI.md).*
+*Versione italiana: [`docs/it/tests-README.md`](../docs/it/tests-README.md).*
 
 ## `test_gui.py` — 165 checks
 

@@ -37,9 +37,9 @@ import os
 import tkinter.messagebox as messagebox
 import tkinter.filedialog as filedialog
 
-import schema
-import stampa
-import tema as T
+import wiring
+import printing
+import theme as T
 
 # ------------------------------------------------------------------ dati
 
@@ -113,11 +113,11 @@ AREA_DISEGNO = (10, 60, 700, 600)
 LDO_L, LDO_A = 140, 44
 
 
-class Adattatore(schema.Schema):
+class Adattatore(wiring.Schema):
     """La finestra dello schema elettrico: riusa i pennelli di Schema."""
 
     def __init__(self, padre, tm, L):
-        schema.Schema.__init__(self, padre, tm, L, pinza=True)
+        wiring.Schema.__init__(self, padre, tm, L, pinza=True)
         self.title(L("ad_titolo"))
         # ⚠️ 800 di altezza, non 700: il contenuto naturale arriva a 720 e
         # con la scala guidata dalla larghezza diventano ~755 pixel.
@@ -129,7 +129,7 @@ class Adattatore(schema.Schema):
         self._attesa = None
         larghezza = max(self.tela.winfo_width(), 300)
         altezza = max(self.tela.winfo_height(), 240)
-        self.k = max(0.52, min(larghezza / float(schema.LARG),
+        self.k = max(0.52, min(larghezza / float(wiring.LARG),
                                altezza / float(ALT_AD), 1.7))
         self.tela.delete("all")
         self._testata_ad(larghezza)
@@ -164,7 +164,7 @@ class Adattatore(schema.Schema):
     def esporta_pdf(self, percorso=None):
         """Il disegno e la distinta in un PDF stampabile."""
         if percorso is None:
-            if stampa.trova_chrome() is None:
+            if printing.trova_chrome() is None:
                 messagebox.showwarning(self.L("ad_titolo"),
                                        self.L("ad_pdf_niente_chrome"),
                                        parent=self)
@@ -178,13 +178,13 @@ class Adattatore(schema.Schema):
         # ⚠️ Il tasto non deve finire nel PDF: e' un comando, non un disegno.
         self.tela.delete("pdf")
         area = [self._s(v) for v in AREA_DISEGNO]
-        disegno = stampa.svg_da_tela(self.tela, area)
-        pagina = stampa.html_adattatore(
+        disegno = printing.svg_da_tela(self.tela, area)
+        pagina = printing.html_adattatore(
             disegno, self.L,
             [(p[0], valore(p, self.L.codice), p[2]) for p in PEZZI],
             CANALI, NOTE, self.L("ad_gia_pronti"),
             self.L("ad_titolo"), self.L("ad_sotto"))
-        fatto, motivo = stampa.in_pdf(pagina, percorso)
+        fatto, motivo = printing.in_pdf(pagina, percorso)
         self.disegna()
         if not fatto:
             messagebox.showerror(self.L("ad_titolo"),
@@ -345,8 +345,8 @@ class Adattatore(schema.Schema):
 
     # -- colonna di destra: pezzi e note ----------------------------------
     def _colonna_ad(self):
-        x = schema.COL_X
-        y = schema.TITOLO_Y - 12
+        x = wiring.COL_X
+        y = wiring.TITOLO_Y - 12
         riga = y + 38
 
         for etichetta, dx in ((self.L("ad_col_segnale"), 26),
@@ -368,7 +368,7 @@ class Adattatore(schema.Schema):
                         tag="tabella")
             riga += 20
 
-        fondo = self._riquadra("tabella", x, y, x + schema.COL_LARG,
+        fondo = self._riquadra("tabella", x, y, x + wiring.COL_LARG,
                                self.L("ad_tabella"))
 
         # --- la distinta: sigla e valore su una riga, i modelli sotto
@@ -383,22 +383,22 @@ class Adattatore(schema.Schema):
                         self._car(7.5, True, mono=True), tag="distinta")
             self._testo(x + 74, riga, valore(pezzo, self.L.codice),
                         "#B9C7D3", self._car(7),
-                        ancora="nw", larghezza=schema.COL_LARG - 90,
+                        ancora="nw", larghezza=wiring.COL_LARG - 90,
                         tag="distinta")
             limiti = self.tela.bbox("distinta")
             riga = (limiti[3] / self.k) + 4 if limiti else riga + 14
             identificativo = self._testo(x + 74, riga, modelli, "#7C8B99",
                                          self._car(6.5), ancora="nw",
-                                         larghezza=schema.COL_LARG - 90,
+                                         larghezza=wiring.COL_LARG - 90,
                                          tag="distinta")
             limiti = self.tela.bbox(identificativo)
             riga = (limiti[3] / self.k) + 11 if limiti else riga + 24
 
         identificativo = self._testo(x + 15, riga + 2, self.L("ad_gia_pronti"),
                                      "#8FC2E3", self._car(6.5), ancora="nw",
-                                     larghezza=schema.COL_LARG - 30,
+                                     larghezza=wiring.COL_LARG - 30,
                                      tag="distinta")
-        fondo = self._riquadra("distinta", x, y1, x + schema.COL_LARG,
+        fondo = self._riquadra("distinta", x, y1, x + wiring.COL_LARG,
                                self.L("ad_distinta"))
 
         y2 = fondo + 14
@@ -411,11 +411,11 @@ class Adattatore(schema.Schema):
                                   outline="", tags="avvisi")
             identificativo = self._testo(x + 26, riga, self.L(chiave), "#B9C7D3",
                                          self._car(7), ancora="nw",
-                                         larghezza=schema.COL_LARG - 42,
+                                         larghezza=wiring.COL_LARG - 42,
                                          tag="avvisi")
             limiti = self.tela.bbox(identificativo)
             riga += ((limiti[3] - limiti[1]) / self.k if limiti else 34) + 15
-        self._riquadra("avvisi", x, y2, x + schema.COL_LARG,
+        self._riquadra("avvisi", x, y2, x + wiring.COL_LARG,
                        self.L("ad_note_titolo"))
 
 

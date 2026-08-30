@@ -340,7 +340,7 @@ missing. The BC-250 images are not in this repository; point
 Italian and English, switchable live from the dropdown at the top right. The
 layout is responsive: two columns when there is room, one when there is not.
 
-The Italian documentation is in [`docs/it/LEGGIMI.md`](docs/it/LEGGIMI.md).
+The Italian documentation is in [`docs/it/README.md`](docs/it/README.md).
 
 ## Licence
 

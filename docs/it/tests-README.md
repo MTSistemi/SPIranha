@@ -55,5 +55,5 @@ Verifica anche le due sicurezze che contano davvero:
   solo con `SCRIVI`.
 
 ⚠️ Serve `..\flashrom\flashrom.exe` (compilato con il programmatore `dummy`
-attivo, vedi `flashrom\PROVENIENZA.md`). Le prove scrivono in `prove\lavoro\`,
+attivo, vedi `flashrom\PROVENANCE.md`). Le prove scrivono in `tests\lavoro\`,
 che si può cancellare.

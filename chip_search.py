@@ -19,8 +19,8 @@ from __future__ import unicode_literals
 import tkinter as tk
 from tkinter import ttk
 
-import tema as T
-import tensione as V
+import theme as T
+import voltage as V
 
 
 class Ricerca(tk.Toplevel):

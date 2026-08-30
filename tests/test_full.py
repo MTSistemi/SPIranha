@@ -240,14 +240,14 @@ def prova(finestra):
                   os.path.isfile(os.path.join(LAVORO, "SPIranha.log")))
 
         # ---- 8. la mappa ha visto passare i blocchi veri ------------
-        import mappa as M
+        import chipmap as M
         stati = set(finestra.mappa.stati)
         controlla("mappa: blocchi verificati", M.VERIFICATO in stati)
         controlla("mappa: nessun blocco diverso", M.DIVERSO not in stati,
                   str(sorted(stati)))
 
         # ---- 9. confronto e layout generato ------------------------
-        import analisi as A
+        import analysis as A
         conf = A.confronta(A.leggi(STOCK), A.leggi(ATTESO))
         controlla("confronto: un intervallo allineato",
                   len(conf["allineati"]) == 1,
@@ -268,7 +268,7 @@ def prova(finestra):
         # ⚠️ Qui non si fabbrica niente: e' il dump di una BC-250, che non ha
         # ne' descrittore Intel ne' FMAP. Se il riconoscimento AMD si rompe,
         # su questa scheda la funzione smette di servire a qualcosa.
-        import regioni as _rg
+        import regions as _rg
         dati_stock = A.leggi(STOCK)
         origine, trovate = _rg.trova(dati_stock)
         nomi = dict((r.nome, r) for r in trovate)

@@ -54,7 +54,7 @@ def prepara_risorse():
     icona = os.path.join(QUI, "SPIranha.ico")
     if not os.path.isfile(icona):
         print("Genero l'icona")
-        esegui([sys.executable, os.path.join(QUI, "icona.py")])
+        esegui([sys.executable, os.path.join(QUI, "icon.py")])
     versione = os.path.join(QUI, "build", "versione.txt")
     parti = VERSIONE.split(".") + ["0", "0", "0", "0"]
     n = tuple(int(p) for p in parti[:4])

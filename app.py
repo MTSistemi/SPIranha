@@ -7,7 +7,7 @@ confrontare, tenere la BC-250 staccata, rileggere prima di riattaccare — qui l
 impone il programma, e il tasto di scrittura resta spento finche' non tornano.
 
 Il codice che tocca il chip e' flashrom: qui si costruiscono i comandi e si
-guardano gli esiti. La veste e' il tema «quadro strumenti» (vedi tema.py).
+guardano gli esiti. La veste e' il tema «quadro strumenti» (vedi theme.py).
 """
 from __future__ import unicode_literals
 
@@ -24,20 +24,20 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-import adattatore
-import analisi as A
-import anagrafica
-import confronto
+import level_shifter
+import analysis as A
+import boards
+import compare
 import flashrom as fr
-import mappa as M
+import chipmap as M
 import pico
-import profili
-import regioni as reg
-import ricerca
-import schema
-import tensione as V
+import profiles
+import regions as reg
+import chip_search
+import wiring
+import voltage as V
 import serprog
-import tema as T
+import theme as T
 from i18n import LINGUE, NOMI_LINGUA, Lingua
 
 APPNOME = "SPIranha"
@@ -154,7 +154,7 @@ class App(tk.Tk):
         # stato della procedura: ogni requisito e' una condizione per scrivere
         self.chip = None                 # fr.Chip identificato
         self.protezione = None           # fr.Protezione, letta col chip
-        self.profilo = profili.prendi(self.conf.get("profilo"))
+        self.profilo = profiles.prendi(self.conf.get("profilo"))
         self.fw_scheda = None            # versione dichiarata dal programmatore
         self.chip_a_18 = None            # il chip vuole 1,8 V? None = non si sa
         self.chip_noti = []              # l'elenco che flashrom dichiara
@@ -170,7 +170,7 @@ class App(tk.Tk):
         self.inizio_fase = None
         self.intervallo_scritto = None
         self.intervallo_lettura = (0, 16 * 1024 * 1024 - 1)
-        self.schede_note = anagrafica.Anagrafica(self.conf.get("schede"))
+        self.schede_note = boards.Anagrafica(self.conf.get("schede"))
         self.scheda_bootsel = None       # RP2040 in attesa di firmware
         self.attesa_bootsel = None
 
@@ -830,14 +830,14 @@ class App(tk.Tk):
         self._invalida_lettura()
 
     def apri_adattatore(self):
-        adattatore.apri(self, self.tema, self.L)
+        level_shifter.apri(self, self.tema, self.L)
 
     def apri_schema(self):
-        schema.apri(self, self.tema, self.L,
-                    pinza=self.profilo.collegamento == profili.PINZA)
+        wiring.apri(self, self.tema, self.L,
+                    pinza=self.profilo.collegamento == profiles.PINZA)
 
     def apri_confronto(self):
-        confronto.apri(self, self.tema, self.L, self.var_cartella.get().strip())
+        compare.apri(self, self.tema, self.L, self.var_cartella.get().strip())
 
     # -------------------------------------------------------- flashrom
     def _imposta_flashrom(self, percorso, silenzioso=False):
@@ -959,7 +959,7 @@ class App(tk.Tk):
             if not self.chip_noti:
                 self.msg_chip.mostra("cerca_vuoto", AMBRA)
                 return
-            ricerca.apri(self, self.tema, self.L, self.chip_noti,
+            chip_search.apri(self, self.tema, self.L, self.chip_noti,
                          self._modello_scelto, self.var_chip.get().strip())
 
         self._carica_elenco_chip(poi=apri)
@@ -973,15 +973,15 @@ class App(tk.Tk):
             misura=A.leggibile(chip.byte) if chip.byte else "?"), "io")
 
     def _riempi_profili(self):
-        nomi = profili.nomi(self.L.codice)
+        nomi = profiles.nomi(self.L.codice)
         self.combo_profilo.configure(values=[n for _c, n in nomi])
         self.var_profilo.set(self.profilo.testo("nome", self.L.codice))
 
     def _cambia_profilo(self, _evento=None):
         scelto = self.var_profilo.get()
-        for chiave, nome in profili.nomi(self.L.codice):
+        for chiave, nome in profiles.nomi(self.L.codice):
             if nome == scelto:
-                self.profilo = profili.prendi(chiave)
+                self.profilo = profiles.prendi(chiave)
                 break
         self._riempi_modelli()
         self._invalida_chip()
@@ -1002,7 +1002,7 @@ class App(tk.Tk):
     def _confronta_col_profilo(self):
         """Dove la scheda vera si scosta da quello che il profilo prevede."""
         nomi_regioni = [n for n, _a, _b in getattr(self, "regioni", ())]
-        return profili.scostamenti(
+        return profiles.scostamenti(
             self.profilo,
             chip_trovato=self.chip.nome if self.chip else None,
             byte_trovati=self.chip.byte if self.chip else None,
@@ -1197,7 +1197,7 @@ class App(tk.Tk):
 
         In BOOTSEL comanda la scheda-disco; altrimenti il programmatore
         collegato. Sono due identificativi diversi della stessa cosa, vedi
-        anagrafica.py.
+        boards.py.
         """
         if self.scheda_bootsel is not None:
             boot = self.scheda_bootsel.seriale
@@ -1351,7 +1351,7 @@ class App(tk.Tk):
         if scheda.seriale:
             secondo = self.L("fw_azzera_due", unita=scheda.lettera,
                              seriale=scheda.seriale)
-            parola = anagrafica.coda(scheda.seriale)
+            parola = boards.coda(scheda.seriale)
         else:
             secondo = self.L("fw_azzera_due_senza", unita=scheda.lettera)
             parola = self.L("parola_cancella")
@@ -1998,7 +1998,7 @@ class App(tk.Tk):
             self.msg_scrittura.mostra("reg_niente", AMBRA)
             self.registro("   %s" % self.L("reg_niente"))
             return
-        radice = os.path.splitext(percorso)[0] + "-regioni.layout"
+        radice = os.path.splitext(percorso)[0] + "-regions.layout"
         try:
             with open(radice, "wb") as f:
                 f.write(reg.come_layout(trovate, len(dati)).encode("ascii"))

@@ -19,7 +19,7 @@ from __future__ import unicode_literals
 
 import tkinter as tk
 
-import tema as T
+import theme as T
 
 # stati di un blocco
 IGNOTO = 0        # non ancora toccato

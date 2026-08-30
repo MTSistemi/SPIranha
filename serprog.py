@@ -143,7 +143,7 @@ def elenca_porte():
     """[(dispositivo, descrizione, e_probabilmente_il_pico, seriale)] ordinate.
 
     ⚠️ Il seriale e' quello che la scheda espone MENTRE GIRA il firmware (16
-    cifre): non e' lo stesso che mostra in BOOTSEL. Vedi anagrafica.py.
+    cifre): non e' lo stesso che mostra in BOOTSEL. Vedi boards.py.
     """
     if not SERIALE:
         return []

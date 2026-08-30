@@ -28,7 +28,7 @@ from __future__ import unicode_literals
 import tkinter as tk
 from tkinter import ttk
 
-import tema as T
+import theme as T
 
 # ------------------------------------------------------- dati, non disegno
 

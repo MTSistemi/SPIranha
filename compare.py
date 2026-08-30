@@ -12,9 +12,9 @@ import os
 import tkinter as tk
 from tkinter import filedialog, ttk
 
-import analisi as A
-import mappa as M
-import tema as T
+import analysis as A
+import chipmap as M
+import theme as T
 
 
 class Confronto(tk.Toplevel):

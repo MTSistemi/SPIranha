@@ -20,7 +20,7 @@ costruisce le righe di comando giuste, le esegue e legge gli esiti.
 `flashrom.exe` è in `flashrom\`, **compilato da noi** il 27/08/2026 dal sorgente
 ufficiale v1.7.0 (flashrom.org non pubblica binari Windows). È autonomo: non
 gli serve nessuna DLL esterna, non serve MSYS2 installato. Dettagli, checksum e
-opzioni di compilazione in [flashrom/PROVENIENZA.md](flashrom/PROVENIENZA.md).
+opzioni di compilazione in [flashrom-PROVENANCE.md](flashrom-PROVENANCE.md).
 
 Se un giorno lo si sposta, il programma lo cerca accanto all'eseguibile, in
 `flashrom\` e nel `PATH`; se non lo trova mostra una fascia rossa con
@@ -241,7 +241,7 @@ marca temporale Sectigo, così la firma resta valida anche quando il certificato
 scadrà.
 
 ```bash
-python costruisci.py --setup --firma
+python build.py --setup --sign
 ```
 
 L'ordine conta ed è quello: si costruisce l'exe, **lo si firma**, poi si
@@ -294,7 +294,7 @@ Due strade per togliere l'avviso, secondo a chi va il programma:
 2. **Anche fuori.** Serve un certificato OV o EV di una CA, intestato a
    MTSistemi. Dal 2023 questi certificati stanno su token hardware o HSM: una
    volta collegato il token a questa macchina, `.\firma.ps1 -Elenca` lo vede e
-   `costruisci.py --setup --firma` firma con quello senza altre modifiche.
+   `build.py --setup --sign` firma con quello senza altre modifiche.
 
 ## Come si avvia
 
@@ -308,7 +308,7 @@ Per farne un eseguibile unico, in un ambiente virtuale tutto suo (il Python di
 sistema non viene toccato):
 
 ```bash
-python costruisci.py --setup
+python build.py --setup
 ```
 
 Escono `dist\ProgrammatoreBIOS.exe` e, se c'è Inno Setup 6,
@@ -320,17 +320,27 @@ Escono `dist\ProgrammatoreBIOS.exe` e, se c'è Inno Setup 6,
 |---|---|
 | `app.py` | la finestra e i requisiti di scrittura |
 | `flashrom.py` | costruisce i comandi, lancia il processo, legge le risposte |
-| `serprog.py` | interroga il Pico (NOP, Q_IFACE, Q_PGMNAME, Q_BUSTYPE, SYNCNOP) |
+| `serprog.py` | interroga il Pico e il chip (JEDEC, SFDP) |
+| `pico.py` | BOOTSEL, formato UF2, installazione e ritorno a nuovo |
 | `i18n.py` | le scritte in italiano e in inglese |
-| `costruisci.py` | l'eseguibile e l'installatore |
-| `analisi.py` | confronto, prova a secco, firme, layout generato |
-| `mappa.py` | la mappa a blocchi e la sua legenda |
-| `confronto.py` | la finestra di confronto fra immagini |
-| `prove\` | 58 controlli automatici, vedi [prove/LEGGIMI.md](prove/LEGGIMI.md) |
+| `build.py` | l'eseguibile e l'installatore |
+| `analysis.py` | confronto, prova a secco, firme, layout generato |
+| `regions.py` | le regioni lette dall'immagine (IFD, FMAP, struttura AMD) |
+| `profiles.py` | i profili di scheda |
+| `voltage.py` | la tensione del chip dedotta dal modello |
+| `boards.py` | i nomi dati ai programmatori |
+| `chipmap.py` | la mappa a blocchi e la sua legenda |
+| `compare.py` | la finestra di confronto fra immagini |
+| `chip_search.py` | la ricerca fra i modelli che flashrom conosce |
+| `wiring.py` | lo schema dei collegamenti |
+| `level_shifter.py` | lo schema dell'adattatore a 1,8 V |
+| `printing.py` | la stampa in PDF |
+| `theme.py` | il tema «quadro strumenti» |
+| `tests\` | i controlli automatici, vedi [tests-README.md](tests-README.md) |
 
 ## Com'è stato collaudato
 
-`prove\prova_completa.py` fa girare la finestra vera con flashrom vero su un
+`tests	est_full.py` fa girare la finestra vera con flashrom vero su un
 chip da 16 MiB **emulato**: parte dal BIOS originale, scrive la sola regione
 `uefi` presa dal BIOS modificato, e controlla che il risultato sia identico byte
 per byte a `bc250-risultato-atteso.rom`. È la stessa identica operazione che si

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Genera l'icona del programma, senza dipendere da librerie grafiche.
 
-    python icona.py
+    python icon.py
 
 Scrive `SPIranha.ico`. Il disegno segue il tema: fondo ardesia, un chip
 blu accento con i piedini ambra ai lati. Si ridisegna a ogni misura invece di

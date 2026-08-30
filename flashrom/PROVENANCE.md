@@ -4,7 +4,7 @@
 pre-built either. It has to be compiled — this file says exactly how, so that
 anyone can reproduce the same binary.
 
-*Versione italiana: [`docs/it/flashrom-PROVENIENZA.md`](../docs/it/flashrom-PROVENIENZA.md).*
+*Versione italiana: [`docs/it/flashrom-PROVENANCE.md`](../docs/it/flashrom-PROVENANCE.md).*
 
 ## Why build it
 
