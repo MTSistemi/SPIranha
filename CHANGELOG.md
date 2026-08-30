@@ -13,7 +13,7 @@ speaks Italian and English, and the Italian documentation stays Italian.
 
 ### Fixed
 - **The name given to a board was lost on upgrade.** Up to 1.2.0 the board
-  registry stored it under , and the new code only looked for ,
+  registry stored it under `nome`, and the new code only looked for `name`,
   so a named programmer came back anonymous. Found on the bench, installing
   1.2.1 over 1.2.0 with the board on the desk.
 - **Three attribute names looked up by string** were left behind by the
