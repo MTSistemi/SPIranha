@@ -29,6 +29,15 @@ speaks Italian and English, and the Italian documentation stays Italian.
   run as inline Python and were still importing the modules by their old
   names.
 
+### Added
+- **A new icon**: a piranha with the four SPI wires in its mouth, coloured the
+  way `theme.py` colours them in the wiring diagram — green MISO, blue MOSI,
+  amber SCLK, violet CS — so the icon and the diagram agree, and red stays
+  what it is everywhere else: the power line. The `.ico` is built by
+  `icon.py` from a committed PNG, without any imaging library, and carries no
+  text: four lines of text inside 16 pixels are four grey smudges. The
+  labelled version lives in the README.
+
 ### Changed
 - **Settings are stored under English names** (`language`, `folder`,
   `profile`, …). A `config.json` written by an earlier version is migrated on
