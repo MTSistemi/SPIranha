@@ -44,7 +44,7 @@ def prepare_venv():
         sys.exit("the dependencies will not install (the network is needed)")
 
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 
 
 def prepare_resources():

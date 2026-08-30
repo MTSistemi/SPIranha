@@ -4,6 +4,38 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/1.1.0/), and
 the project uses [semantic versioning](https://semver.org/).
 
+## [1.2.1] — 2026-08-30
+
+Housekeeping that turned into four fixes. The whole codebase is now in
+English — file names, identifiers, comments, translation keys — because the
+audience for source code is not the person who wrote it. The interface still
+speaks Italian and English, and the Italian documentation stays Italian.
+
+### Fixed
+- **Three attribute names looked up by string** were left behind by the
+  rename, so the code silently found nothing: the window no longer reflowed
+  between one and two columns, the region names never reached the write
+  confirmation, and the theme fallback for a detached window did nothing.
+- **A profile mismatch would have crashed the message**: the fields passed in
+  (`atteso`, `trovato`, `quali`) no longer matched the holes in the sentence
+  (`{expected}`, `{hit}`, `{which}`).
+- **The installer referenced a file that no longer exists**
+  (`docs\it\LEGGIMI.md`), which stopped the setup from being built at all.
+- **CI was red for three commits** without anyone noticing: two of its checks
+  run as inline Python and were still importing the modules by their old
+  names.
+
+### Changed
+- **Settings are stored under English names** (`language`, `folder`,
+  `profile`, …). A `config.json` written by an earlier version is migrated on
+  first load, profile `generico` included: nothing is lost.
+- **Backups are named `<profile>-read-`, `-verify-` and `-after-`** instead of
+  the Italian prefixes. The comparison with the previous backup still accepts
+  the old names, so the files already on disk keep being compared.
+- Translation keys, canvas tags, ttk styles, thread states, log tags and the
+  CSS classes of the printable page are all in English, and the printed page
+  now declares the language it was produced in.
+
 ## [1.2.0] — 2026-08-28
 
 Everything below came after the first release, and most of it came from a
