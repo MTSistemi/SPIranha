@@ -146,7 +146,7 @@ modello** e se ne sceglie uno (per questa scheda: `MX25L12835F/MX25L12873F`).
 ### 3. Lettura e backup
 **Leggi e verifica** legge il chip **due volte** e confronta gli md5:
 
-- uguali → la prima lettura resta come `bc250-letto-<data>.rom`, la seconda si
+- uguali → la prima lettura resta come `bc250-read-<data>.rom`, la seconda si
   cancella, e il programma dice se l'impronta è una di quelle note (il BIOS
   originale della scheda, o il risultato atteso);
 - diversi → messaggio rosso. Collegamento incerto: si ricontrollano i fili e si

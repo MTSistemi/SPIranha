@@ -38,21 +38,21 @@ PICO_LEFT = [
     (11, "GP8"), (12, "GP9"), (13, "GND"), (14, "GP10"), (15, "GP11"),
     (16, "GP12"), (17, "GP13"), (18, "GND"), (19, "GP14"), (20, "GP15"),
 ]
-PICO_RIGHT = [   # dal basso verso l'alto, come sono numerati davvero
+PICO_RIGHT = [   # bottom to top, the way they are really numbered
     (21, "GP16"), (22, "GP17"), (23, "GND"), (24, "GP18"), (25, "GP19"),
     (26, "GP20"), (27, "GP21"), (28, "GND"), (29, "GP22"), (30, "RUN"),
     (31, "GP26"), (32, "GP27"), (33, "AGND"), (34, "GP28"), (35, "ADC_VREF"),
     (36, "3V3 OUT"), (37, "3V3_EN"), (38, "GND"), (39, "VSYS"), (40, "VBUS"),
 ]
 
-J4004 = [   # (colonna, fila, numero, nome)
+J4004 = [   # (column, row, number, name)
     (0, "bassa", 1, "VCC"), (0, "alta", 2, "GND"),
     (1, "bassa", 3, "CS"), (1, "alta", 4, "SCLK"),
     (2, "bassa", 5, "MISO"), (2, "alta", 6, "MOSI"),
     (3, "bassa", 7, None), (3, "alta", 8, "UNK"),
 ]
 
-CONNECTIONS = [   # (segnale, piedino Pico, nome Pico, piedino J4004)
+CONNECTIONS = [   # (signal, Pico pin, Pico name, J4004 pin)
     ("VCC", 36, "3V3 OUT", 1),
     ("GND", 3, "GND", 2),
     ("CS", 7, "GP5", 3),
@@ -61,18 +61,18 @@ CONNECTIONS = [   # (segnale, piedino Pico, nome Pico, piedino J4004)
     ("MOSI", 5, "GP3", 6),
 ]
 
-WARNINGS = ("sch_av1", "sch_av2", "sch_av3", "sch_av4")
+WARNINGS = ("sch_warn1", "sch_warn2", "sch_warn3", "sch_warn4")
 
-# ---------------------------------------------------- il chip nudo (SOIC-8)
+# ------------------------------------------------- the bare chip (SOIC-8)
 # Standard SOIC-8 SPI flash pinout, seen from above: 1-4 going down
-# a sinistra, 5-8 risalendo a destra, tacca in alto.
+# down the left, 5-8 back up the right, notch at the top.
 #
 # ⚠️ The wires are NOT drawn here, and it is not laziness: on a SOIC-8 the
-# segnali stanno su DUE lati opposti (CS e MISO da una parte, MOSI e SCLK
+# signals sit on TWO opposite sides (CS and MISO on one, MOSI and SCLK on the
 # other), so in reality the wires cross and that is that. A drawing that
 # showed them tidy would be prettier than the truth and less useful: what
 # counts here are the pin NUMBERS and the signal colour.
-SOIC8 = [   # (lato, numero, nome, segnale o None)
+SOIC8 = [   # (side, number, name, signal or None)
     ("sx", 1, "/CS", "CS"),
     ("sx", 2, "DO", "MISO"),
     ("sx", 3, "/WP", None),
@@ -83,7 +83,7 @@ SOIC8 = [   # (lato, numero, nome, segnale o None)
     ("dx", 8, "VCC", "VCC"),
 ]
 
-CLIP_CONNECTIONS = [   # (segnale, piedino Pico, nome Pico, piedino del chip)
+CLIP_CONNECTIONS = [   # (signal, Pico pin, Pico name, chip pin)
     ("VCC", 36, "3V3 OUT", 8),
     ("GND", 3, "GND", 4),
     ("CS", 7, "GP5", 1),
@@ -92,14 +92,14 @@ CLIP_CONNECTIONS = [   # (segnale, piedino Pico, nome Pico, piedino del chip)
     ("MOSI", 5, "GP3", 5),
 ]
 
-CLIP_WARNINGS = ("sch_pz_av1", "sch_pz_av2", "sch_pz_av3", "sch_pz_av4")
+CLIP_WARNINGS = ("sch_clip_warn1", "sch_clip_warn2", "sch_clip_warn3", "sch_clip_warn4")
 
 # chip geometry: narrow body, pads sticking out
 CHIP_X0, CHIP_X1 = 206, 286          # corpo
 CHIP_Y0 = 268
 CHIP_PITCH = 40
 PAD_CHIP = 26                     # quanto sporge la piazzola
-CHIP_HALF_H = 13                     # mezza altezza della piazzola
+CHIP_HALF_H = 13                     # half the height of the pad
 
 # --------------------------------------------------------------- geometria
 # Everything in "natural" coordinates: multiplied by k when drawn.
@@ -109,9 +109,9 @@ WIDTH, HEIGHT = 1030, 566
 # (SCLK, MOSI, MISO, CS) come out of pins 4-7, which on the Pico are on the
 # LEFT side. Putting J4004 over there makes the four wires run straight, and
 # only power and ground -- which come out on the right -- have to go around.
-# Col connettore a destra giravano in quattro, e il disegno diventava un
-# groviglio di cornici.
-PICO_X, PICO_Y = 430, 140           # scheda Pico
+# With the header on the right all four had to go around, and the drawing
+# turned into a tangle of frames.
+PICO_X, PICO_Y = 430, 140           # the Pico board
 PICO_W, PICO_H = 190, 358
 PIN_PITCH, FIRST_PIN_Y = 16, 170
 PAD_LEN, PAD_H = 11, 8
@@ -119,18 +119,18 @@ PAD_LEN, PAD_H = 11, 8
 # ⚠️ The header is drawn with its pads further apart than they really are:
 # the real pitch is 2.54 mm and the note says so. Spreading them lets the
 # number and the name fit INSIDE the pad, the one place they do not end up
-# ai cavetti. Posizioni, verso e piedino 1 restano quelli veri.
+# for the wires. Positions, orientation and pin 1 stay the real ones.
 HEADER_COLS = [170, 216, 262, 308]     # colonne del J4004
 HEADER_ROWS = {"alta": 292, "bassa": 356}
 PAD_HEADER = 15
 
 # GND comes off pin 3, not pin 38: it is on the left side next to the
-# quattro segnali (3-4-5-6-7 contigui, un solo pettine da cinque) e cosi' UN
+# four signals (3-4-5-6-7 contiguous, a single five-way comb) so that only
 # ONE wire -- the 3V3 -- has to go around the board.
-VCC_LANE_Y = 520                 # corsia sotto, per il solo VCC
-VCC_X = 686                   # verticale a destra della scheda
-GND_LANE_X = 140                   # verticale a sinistra, appena fuori dal guscio
-LANES = (420, 440)             # rientri sotto a sinistra: MISO, CS
+VCC_LANE_Y = 520                 # the lane below, for VCC alone
+VCC_X = 686                   # vertical to the right of the board
+GND_LANE_X = 140                   # vertical on the left, just outside the shell
+LANES = (420, 440)             # returns below on the left: MISO, CS
 RETURN_X = (350, 368)          # verticali corrispondenti
 
 TITLE_Y, NOTE_Y = 62, 76
@@ -144,7 +144,7 @@ def pico_pin_y(number):
 
 
 class Diagram(tk.Toplevel):
-    """La finestra dello schema: si ridisegna in scala quando cambia misura."""
+    """The wiring window: it redraws to scale when the size changes."""
 
     def __init__(self, parent, tm, L, clip=False):
         tk.Toplevel.__init__(self, parent, background=T.INK)
@@ -154,14 +154,14 @@ class Diagram(tk.Toplevel):
         # chip, which is every other case
         self.clip = clip
         self.k = 1.0
-        self._attesa = None
-        self.title(L("sch_titolo_pinza" if clip else "sch_titolo"))
+        self._redraw_after = None
+        self.title(L("sch_title_clip" if clip else "sch_title"))
         self.geometry("1060x630")
         self.minsize(660, 420)
 
         self.canvas = tk.Canvas(self, background=T.INK, highlightthickness=0, bd=0)
         # ⚠️ Below a certain size the drawing cannot shrink any further:
-        # i caratteri hanno un minimo leggibile e il testo cresce rispetto al
+        # fonts have a legible minimum and the text grows against the
         # rest. Without a scrollbar the last notes simply disappeared.
         self.bar = ttk.Scrollbar(self, orient="vertical",
                                    command=self.canvas.yview)
@@ -185,10 +185,10 @@ class Diagram(tk.Toplevel):
         self.canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
 
     # ------------------------------------------------------------- scala
-    def _maybe_redraw(self, _evento=None):
-        if self._attesa:
-            self.after_cancel(self._attesa)
-        self._attesa = self.after(70, self.draw)
+    def _maybe_redraw(self, _event_of=None):
+        if self._redraw_after:
+            self.after_cancel(self._redraw_after)
+        self._redraw_after = self.after(70, self.draw)
 
     def _s(self, *values):
         """Coordinates to scale. Returns a number or a list, as it was given."""
@@ -196,11 +196,11 @@ class Diagram(tk.Toplevel):
             return values[0] * self.k
         return [v * self.k for v in values]
 
-    def _font(self, points, grassetto=False, mono=False):
+    def _font(self, points, bold=False, mono=False):
         """A font to scale, never below what can be read."""
         family = self.theme.mono if mono else self.theme.ui
         size_text = max(6, int(round(points * self.k)))
-        return (family, size_text, "bold") if grassetto else (family, size_text)
+        return (family, size_text, "bold") if bold else (family, size_text)
 
     # ------------------------------------------------------------ pennelli
     def _text(self, x, y, text, colour=T.FG, font=None, anchor="w",
@@ -218,7 +218,7 @@ class Diagram(tk.Toplevel):
                                           width=thickness, dash=dash,
                                           tags=tag or ())
 
-    def _frame_around(self, tag, x0, y0, x1, title, margine=13):
+    def _frame_around(self, tag, x0, y0, x1, title, margin=13):
         """Draws the box AROUND what is already there, by measuring it.
 
         ⚠️ The content used to be written inside a box whose height was
@@ -228,7 +228,7 @@ class Diagram(tk.Toplevel):
         top.
         """
         bounds = self.canvas.bbox(tag)
-        background = (bounds[3] / self.k) + margine if bounds else y0 + 46
+        background = (bounds[3] / self.k) + margin if bounds else y0 + 46
         background_colour = self._rect(x0, y0, x1, background)
         self.canvas.tag_lower(background_colour)
         self._text(x0 + 11, y0 + 12, T.micro(title), T.MUT, self._font(7, True))
@@ -243,17 +243,17 @@ class Diagram(tk.Toplevel):
         hand-drawn and does not even pass through the given points. The routes
         here are orthogonal and must stay that way, with only the round join.
         """
-        piatti = []
+        plates = []
         for x, y in points:
-            piatti += [self._s(x), self._s(y)]
-        for width, tinta in ((max(3.2, 5.2 * self.k), "#060B10"),
+            plates += [self._s(x), self._s(y)]
+        for width, tint in ((max(3.2, 5.2 * self.k), "#060B10"),
                                  (max(1.8, 2.9 * self.k), colour)):
-            self.canvas.create_line(*piatti, fill=tinta, width=width,
+            self.canvas.create_line(*plates, fill=tint, width=width,
                                   capstyle="round", joinstyle="round")
 
     # ------------------------------------------------------------ disegno
     def draw(self):
-        self._attesa = None
+        self._redraw_after = None
         width = max(self.canvas.winfo_width(), 300)
         height = max(self.canvas.winfo_height(), 240)
         self.k = max(0.52, min(width / float(WIDTH), height / float(HEIGHT), 1.7))
@@ -281,12 +281,12 @@ class Diagram(tk.Toplevel):
         # under it would cover it
         T.gradient(self.canvas, real_width, top)
         self.canvas.create_line(0, top, real_width, top, fill=T.LINE)
-        self._text(20, 18, self.L("sch_titolo_pinza" if self.clip
-                                   else "sch_titolo"), T.FG, self._font(12, True))
-        self._text(21, 37, self.L("sch_sotto_pinza" if self.clip
-                                   else "sch_sotto"), T.MUT, self._font(8))
+        self._text(20, 18, self.L("sch_title_clip" if self.clip
+                                   else "sch_title"), T.FG, self._font(12, True))
+        self._text(21, 37, self.L("sch_sub_clip" if self.clip
+                                   else "sch_sub"), T.MUT, self._font(8))
 
-    # -- il Pico ----------------------------------------------------------
+    # -- the Pico ---------------------------------------------------------
     def _draw_pico(self):
         t = self.canvas
         x1, y1 = PICO_X + PICO_W, PICO_Y + PICO_H
@@ -295,7 +295,7 @@ class Diagram(tk.Toplevel):
                     self._font(7, True))
         # ⚠️ anchor "nw": with vertical centring the first line of a note
         # that wraps climbs ABOVE the given point, onto the heading.
-        self._text(PICO_X, NOTE_Y - 4, self.L("sch_pico_nota"), "#5E7488",
+        self._text(PICO_X, NOTE_Y - 4, self.L("sch_pico_note"), "#5E7488",
                     self._font(7), anchor="nw", width=230)
 
         # circuito stampato
@@ -317,12 +317,12 @@ class Diagram(tk.Toplevel):
 
                 if side == "sx":
                     pad0, pad1 = PICO_X - PAD_LEN, PICO_X
-                    x_num, x_nome, anchor = PICO_X + 6, PICO_X + 21, "w"
+                    x_num, x_name, anchor = PICO_X + 6, PICO_X + 21, "w"
                 else:
                     pad0, pad1 = x1, x1 + PAD_LEN
-                    x_num, x_nome, anchor = x1 - 6, x1 - 21, "e"
+                    x_num, x_name, anchor = x1 - 6, x1 - 21, "e"
 
-                if colour:      # alone, perche' salti all'occhio
+                if colour:      # a halo, so it catches the eye
                     self._rect(pad0 - 2.5, y - PAD_H / 2.0 - 2.5,
                                pad1 + 2.5, y + PAD_H / 2.0 + 2.5, "", colour)
                 self._rect(pad0, y - PAD_H / 2.0, pad1, y + PAD_H / 2.0,
@@ -331,10 +331,10 @@ class Diagram(tk.Toplevel):
                             "#8FA6B8" if not colour else "#E4EDF4",
                             self._font(6.5, bool(colour), mono=True), anchor=anchor)
                 # for GND the pin name is already the signal: no repeating
-                label_for = name
+                label = name
                 if colour and signal != name:
-                    label_for = "%s · %s" % (name, signal)
-                self._text(x_nome, y, label_for,
+                    label = "%s · %s" % (name, signal)
+                self._text(x_name, y, label,
                             colour or "#7E9C8C", self._font(7, bool(colour)),
                             anchor=anchor)
 
@@ -381,14 +381,14 @@ class Diagram(tk.Toplevel):
         self._text(cx, y1 - 26, "SWD", "#5E8A72", self._font(6),
                     anchor="center")
 
-    # -- il connettore -----------------------------------------------------
+    # -- the header -------------------------------------------------------
     def _draw_header_pins(self):
         x0, x1 = HEADER_COLS[0] - PAD_HEADER - 9, HEADER_COLS[3] + PAD_HEADER + 9
         y0, y1 = HEADER_ROWS["alta"] - PAD_HEADER - 9, HEADER_ROWS["bassa"] + PAD_HEADER + 9
 
         self._text(x0, TITLE_Y, T.micro(self.L("sch_conn")), T.MUT,
                     self._font(7, True))
-        self._text(x0, NOTE_Y - 4, self.L("sch_conn_nota"), "#5E7488",
+        self._text(x0, NOTE_Y - 4, self.L("sch_conn_note"), "#5E7488",
                     self._font(7), anchor="nw", width=210)
 
         self._rect(x0, y0, x1, y1, "#171E26", "#2E3A46")
@@ -402,10 +402,10 @@ class Diagram(tk.Toplevel):
         self._text(x0 - 20, HEADER_ROWS["bassa"], "1", "#E4EDF4",
                     self._font(7, True, mono=True), anchor="e")
 
-        per_numero = {c[3]: c[0] for c in CONNECTIONS}
-        for column, fila, number, name in J4004:
-            x, y = HEADER_COLS[column], HEADER_ROWS[fila]
-            signal = per_numero.get(number)
+        by_number = {c[3]: c[0] for c in CONNECTIONS}
+        for column, row_, number, name in J4004:
+            x, y = HEADER_COLS[column], HEADER_ROWS[row_]
+            signal = by_number.get(number)
             colour = T.WIRE[signal] if signal else None
             if name is None:
                 self._rect(x - PAD_HEADER, y - PAD_HEADER, x + PAD_HEADER, y + PAD_HEADER, "", "#39434E",
@@ -418,11 +418,11 @@ class Diagram(tk.Toplevel):
             self._rect(x - PAD_HEADER, y - PAD_HEADER, x + PAD_HEADER, y + PAD_HEADER,
                        colour or "#20262E", colour or "#3A4652")
             # number and name INSIDE the pad: outside they would end up under the wires
-            scuro = bool(colour)
+            dark = bool(colour)
             self._text(x, y - 5, str(number),
-                        "#0A1017" if scuro else "#54657A",
+                        "#0A1017" if dark else "#54657A",
                         self._font(6, mono=True), anchor="center")
-            self._text(x, y + 6, name, "#0A1017" if scuro else "#7C8B99",
+            self._text(x, y + 6, name, "#0A1017" if dark else "#7C8B99",
                         self._font(6.5, True), anchor="center")
 
         # ⚠️ Moved right of the VCC riser (x = HEADER_COLS[0]): the red wire
@@ -433,7 +433,7 @@ class Diagram(tk.Toplevel):
         self._text(HEADER_COLS[0] + 34, 456, self.L("sch_unk"), "#93A5B4",
                     self._font(7), anchor="nw", width=200)
 
-    # -- il chip nudo, preso con la pinza ----------------------------------
+    # -- the bare chip, taken with the clip -------------------------------
     def _draw_bare_chip(self):
         """The SOIC-8 seen from above, pins coloured by signal.
 
@@ -441,14 +441,14 @@ class Diagram(tk.Toplevel):
         connection is read from the NUMBERS and the colours, which is also how
         it is actually done -- looking at the notch and counting pins.
         """
-        y_fine = CHIP_Y0 + 3 * CHIP_PITCH
+        y_end = CHIP_Y0 + 3 * CHIP_PITCH
         self._text(CHIP_X0 - PAD_CHIP, TITLE_Y, T.micro(self.L("sch_chip")), T.MUT,
                     self._font(7, True))
-        self._text(CHIP_X0 - PAD_CHIP, NOTE_Y - 4, self.L("sch_chip_nota"),
+        self._text(CHIP_X0 - PAD_CHIP, NOTE_Y - 4, self.L("sch_chip_note"),
                     "#5E7488", self._font(7), anchor="nw", width=230)
 
         # corpo del contenitore
-        self._rect(CHIP_X0, CHIP_Y0 - 30, CHIP_X1, y_fine + 30, "#12171D", "#39434E")
+        self._rect(CHIP_X0, CHIP_Y0 - 30, CHIP_X1, y_end + 30, "#12171D", "#39434E")
         # the notch: this is how you tell which end pin 1 is at
         cx, cy = self._s((CHIP_X0 + CHIP_X1) / 2.0, CHIP_Y0 - 30)
         r = self._s(13)
@@ -464,19 +464,19 @@ class Diagram(tk.Toplevel):
                               outline="")
 
         for side, number, name, signal in SOIC8:
-            fila = (number - 1) if side == "sx" else (8 - number)
-            y = CHIP_Y0 + fila * CHIP_PITCH
+            row_ = (number - 1) if side == "sx" else (8 - number)
+            y = CHIP_Y0 + row_ * CHIP_PITCH
             colour = T.WIRE.get(signal) if signal else None
             if side == "sx":
                 x0, x1 = CHIP_X0 - PAD_CHIP, CHIP_X0
-                x_num, ancora_num = CHIP_X0 - PAD_CHIP - 8, "e"
+                x_num, anchor_num = CHIP_X0 - PAD_CHIP - 8, "e"
             else:
                 x0, x1 = CHIP_X1, CHIP_X1 + PAD_CHIP
-                x_num, ancora_num = CHIP_X1 + PAD_CHIP + 8, "w"
+                x_num, anchor_num = CHIP_X1 + PAD_CHIP + 8, "w"
             self._rect(x0, y - CHIP_HALF_H, x1, y + CHIP_HALF_H,
                        colour or "#2A323B", colour or "#3A4652")
             self._text(x_num, y, str(number), "#8FA2B2",
-                        self._font(7, True, mono=True), anchor=ancora_num)
+                        self._font(7, True, mono=True), anchor=anchor_num)
             # the name goes INSIDE the body, on its own pin's side
             self._text(CHIP_X0 + 10 if side == "sx" else CHIP_X1 - 10, y, name,
                         colour or "#6E8296", self._font(7, True),
@@ -484,7 +484,7 @@ class Diagram(tk.Toplevel):
 
         # ⚠️ /WP and /HOLD held low = the chip takes the commands and writes
         # nothing. The same silent failure as the write protection.
-        self._text(CHIP_X0 - PAD_CHIP, y_fine + 58, self.L("sch_wp_nota"), "#93A5B4",
+        self._text(CHIP_X0 - PAD_CHIP, y_end + 58, self.L("sch_wp_note"), "#93A5B4",
                     self._font(7), anchor="nw", width=210)
 
     # -- i cavetti ---------------------------------------------------------
@@ -495,7 +495,7 @@ class Diagram(tk.Toplevel):
         miso_x, cs_x = RETURN_X
 
         # the wires stop at the EDGE of the pad, not at its centre: inside
-        # stanno numero e nome
+        # is where the number and the name sit
         top = HEADER_ROWS["alta"] - PAD_HEADER
         bottom = HEADER_ROWS["bassa"] + PAD_HEADER
 
@@ -509,7 +509,7 @@ class Diagram(tk.Toplevel):
         self._wire([(sx, pico_pin_y(7)), (cs_x, pico_pin_y(7)), (cs_x, cs_lane),
                     (HEADER_COLS[1], cs_lane), (HEADER_COLS[1], bottom)], T.WIRE["CS"])
 
-        # GND esce anche lui a sinistra e rientra di fianco: la sua piazzola
+        # GND comes out on the left as well and returns alongside: its pad
         # sits in the top row, in the same column as VCC
         self._wire([(sx, pico_pin_y(3)), (GND_LANE_X, pico_pin_y(3)), (GND_LANE_X, HEADER_ROWS["alta"]),
                     (HEADER_COLS[0] - PAD_HEADER, HEADER_ROWS["alta"])], T.WIRE["GND"])
@@ -523,42 +523,42 @@ class Diagram(tk.Toplevel):
         y = TITLE_Y - 12
 
         line = y + 38
-        for label_for, dx in ((self.L("sch_col_segnale"), 30),
+        for label, dx in ((self.L("sch_col_signal"), 30),
                               (self.L("sch_col_pico"), 130),
                               (self.L("sch_col_chip" if self.clip
                                       else "sch_col_conn"), 215)):
-            self._text(x + dx, line, T.micro(label_for), "#55697C",
-                        self._font(6, True), tag="tabella")
+            self._text(x + dx, line, T.micro(label), "#55697C",
+                        self._font(6, True), tag="table")
         line += 15
 
-        for signal, pin_pico, nome_pico, pin_conn in (
+        for signal, pin_pico, pico_name, pin_conn in (
                 CLIP_CONNECTIONS if self.clip else CONNECTIONS):
             colour = T.WIRE[signal]
             a, b, c = self._s(x + 12, line, x + 23)
-            self.canvas.create_line(a, b, c, b, fill=colour, tags="tabella",
+            self.canvas.create_line(a, b, c, b, fill=colour, tags="table",
                                   width=max(2.0, 3.0 * self.k), capstyle="round")
             self._text(x + 30, line, signal, colour, self._font(8, True),
-                        tag="tabella")
-            self._text(x + 130, line, "%2d  %s" % (pin_pico, nome_pico), T.FG,
-                        self._font(7, mono=True), tag="tabella")
+                        tag="table")
+            self._text(x + 130, line, "%2d  %s" % (pin_pico, pico_name), T.FG,
+                        self._font(7, mono=True), tag="table")
             self._text(x + 215, line, "%d  %s" % (pin_conn, signal), T.FG,
-                        self._font(7, mono=True), tag="tabella")
+                        self._font(7, mono=True), tag="table")
             line += 21
 
         a, b = self._s(x + 12, line - 8)
         self.canvas.create_line(a, b, self._s(x + COL_WIDTH - 12), b, fill=T.LINE,
-                              tags="tabella")
+                              tags="table")
         # ⚠️ anchor "nw", not "w": centred vertically, wrapping text extends
         # ABOVE the given point too, and it landed on the rule.
         self._text(x + 12, line - 1,
-                    self.L("sch_pz_nota" if self.clip else "sch_gnd_nota"),
+                    self.L("sch_clip_note" if self.clip else "sch_gnd_note"),
                     "#6E8296",
                     self._font(7), anchor="nw", width=COL_WIDTH - 24,
-                    tag="tabella")
+                    tag="table")
 
         # the box fits what is inside it, not the other way round
-        background = self._frame_around("tabella", x, y, x + COL_WIDTH,
-                               self.L("sch_tabella"))
+        background = self._frame_around("table", x, y, x + COL_WIDTH,
+                               self.L("sch_table"))
 
         # --- avvisi
         y2 = background + 14
@@ -569,16 +569,16 @@ class Diagram(tk.Toplevel):
             a, b = self._s(x + 15, line + 4)
             r = self._s(3)
             self.canvas.create_oval(a - r, b - r, a + r, b + r, fill=colour,
-                                  outline="", tags="avvisi")
+                                  outline="", tags="warnings")
             board_id = self._text(x + 26, line, self.L(key), "#B9C7D3",
                                          self._font(7), anchor="nw",
-                                         width=COL_WIDTH - 42, tag="avvisi")
-            # ogni avviso scende di quanto occupa DAVVERO: in inglese e in
+                                         width=COL_WIDTH - 42, tag="warnings")
+            # every warning drops by what it REALLY takes up: in English and
             # Italian the line counts are not the same
             bounds = self.canvas.bbox(board_id)
             line += ((bounds[3] - bounds[1]) / self.k if bounds else 34) + 15
 
-        self._frame_around("avvisi", x, y2, x + COL_WIDTH, self.L("sch_av_titolo"))
+        self._frame_around("warnings", x, y2, x + COL_WIDTH, self.L("sch_warn_title"))
 
         # The pinout sources are no longer in the drawing: they stay in the
         # documentation and at the top of this file, where they serve whoever
@@ -593,12 +593,12 @@ def open_window(parent, tm, L, clip=False):
     """
     existing = getattr(parent, "_wiring_window", None)
     if existing is not None and existing.winfo_exists():
-        if getattr(existing, "pinza", False) == clip:
+        if getattr(existing, "clip", False) == clip:
             existing.deiconify()
             existing.lift()
             existing.focus_set()
             return existing
         existing.destroy()
     window = Diagram(parent, tm, L, clip=clip)
-    parent._finestra_schema = window
+    parent._wiring_window = window
     return window

@@ -28,19 +28,19 @@ sys.path.insert(0, ROOT_DIR)
 # ⚠️ Settings go to a throw-away folder: these tests build the REAL
 # window and save, and without this they rewrote the configuration of
 # whoever was using the program.
-os.environ["SPIRANHA_CONFIG"] = os.path.join(HERE, "config-di-prova")
+os.environ["SPIRANHA_CONFIG"] = os.path.join(HERE, "config-for-tests")
 
 
-import common as comune  # noqa: E402
+import common as common_  # noqa: E402
 
-BACKUP = comune.backup_or_skip()
-EXE = comune.flashrom_or_skip()
-WORK_DIR = os.path.join(HERE, "lavoro")
+BACKUP = common_.backup_or_skip()
+EXE = common_.flashrom_or_skip()
+WORK_DIR = os.path.join(HERE, "work")
 
 import app as module  # noqa: E402
 import flashrom as fr  # noqa: E402
 
-STOCK, EXPECTED, LAYOUT = comune.test_files(BACKUP)
+STOCK, EXPECTED, LAYOUT = common_.test_files(BACKUP)
 FAKE_CHIP = os.path.join(WORK_DIR, "chip-emulato.rom")
 
 results = []
@@ -48,7 +48,7 @@ results = []
 
 def check(name, condition, extra=""):
     results.append((name, bool(condition)))
-    print("%-52s %s %s" % (name, "ok" if condition else "FALLITO", extra))
+    print("%-52s %s %s" % (name, "ok" if condition else "FAILED", extra))
     return bool(condition)
 
 
@@ -58,8 +58,8 @@ def md5(path):
 
 def pump_until_idle(window, seconds=300):
     """Spins the event loop until the operation is done."""
-    scadenza = time.time() + seconds
-    while window.busy and time.time() < scadenza:
+    deadline = time.time() + seconds
+    while window.busy and time.time() < deadline:
         window.update()
         time.sleep(0.02)
     window.update()
@@ -70,7 +70,7 @@ def dummy_programmer():
     return "dummy:emulate=W25Q128FV,image=%s" % FAKE_CHIP
 
 
-def _scrivi_temp(text):
+def _write_temp(text):
     path = os.path.join(WORK_DIR, "layout-generato.txt")
     with open(path, "wb") as f:
         f.write(text.encode("ascii"))
@@ -81,11 +81,11 @@ def checks(window):
     try:
         # the emulated chip starts out with the board's STOCK BIOS
         shutil.copyfile(STOCK, FAKE_CHIP)
-        check("chip emulato = BIOS originale", md5(FAKE_CHIP) == md5(STOCK))
+        check("emulated chip = stock BIOS", md5(FAKE_CHIP) == md5(STOCK))
 
-        window.flash = fr.Flashrom(EXE, programmatore=dummy_programmer())
+        window.flash = fr.Flashrom(EXE, programmer=dummy_programmer())
         window.flashrom_version = window.flash.version() or ""
-        check("flashrom risponde", "flashrom" in window.flashrom_version.lower(),
+        check("flashrom answers", "flashrom" in window.flashrom_version.lower(),
                   window.flashrom_version)
         window.var_folder.set(WORK_DIR)
         window._update_flashrom_banner()
@@ -93,93 +93,93 @@ def checks(window):
         # ---- 1. identificazione ------------------------------------
         window.identify_chip()
         pump_until_idle(window)
-        check("chip identificato", window.chip is not None,
+        check("chip identified", window.chip is not None,
                   window.chip.description if window.chip else "")
-        check("dimensione riconosciuta = 16 MiB",
+        check("size recognised = 16 MiB",
                   window.chip and window.chip.size == 16 * 1024 * 1024)
 
-        check("protezione letta insieme al chip",
+        check("protection read together with the chip",
                   window.protection is not None)
-        check("il chip emulato non e' protetto",
+        check("the emulated chip is not protected",
                   window.protection is not None
                   and window.protection.supported
                   and not window.protection.active,
                   (window.protection.mode or "?") if window.protection else "")
 
-        # ---- 2. lettura doppia -------------------------------------
+        # ---- 2. the double read ------------------------------------
         window.read_and_verify()
         pump_until_idle(window)
-        check("lettura doppia verificata",
+        check("double read verified",
                   window.verified_read == md5(STOCK),
                   str(window.verified_read)[:12])
-        read_bytes = [f for f in os.listdir(WORK_DIR) if f.startswith("bc250-letto-")]
-        verifiche = [f for f in os.listdir(WORK_DIR) if f.startswith("bc250-verifica-")]
-        check("backup salvato", len(read_bytes) == 1, str(read_bytes))
-        check("seconda lettura cancellata", verifiche == [], str(verifiche))
-        check("impronta nota riconosciuta",
+        read_bytes = [f for f in os.listdir(WORK_DIR) if f.startswith("bc250-read-")]
+        verifications = [f for f in os.listdir(WORK_DIR) if f.startswith("bc250-verify-")]
+        check("backup saved", len(read_bytes) == 1, str(read_bytes))
+        check("second read deleted", verifications == [], str(verifications))
+        check("known fingerprint recognised",
                   any("originale" in r for r in window.log_lines))
 
         # ---- 3. the block when the two reads disagree ---------------
-        vero_md5 = module.md5_of_file
-        chiamate = {"n": 0}
+        real_md5 = module.md5_of_file
+        calls = {"n": 0}
 
-        def md5_ballerino(path, stop_flag=None):
-            chiamate["n"] += 1
-            reale = vero_md5(path, stop_flag)
-            return reale if chiamate["n"] % 2 else "0" * 32   # il primo mente
+        def md5_wobbly(path, stop_flag=None):
+            calls["n"] += 1
+            real = real_md5(path, stop_flag)
+            return real if calls["n"] % 2 else "0" * 32   # the first one lies
 
         window.verified_read = None
-        module.md5_of_file = md5_ballerino
+        module.md5_of_file = md5_wobbly
         window.read_and_verify()
         pump_until_idle(window)
-        module.md5_of_file = vero_md5
-        check("letture diverse -> lettura NON validata",
+        module.md5_of_file = real_md5
+        check("reads disagree -> read NOT validated",
                   window.verified_read is None)
-        check("letture diverse -> scrittura bloccata",
+        check("reads disagree -> write blocked",
                   "disabled" in window.b_write.state())
-        rimaste = [f for f in os.listdir(WORK_DIR) if f.startswith("bc250-verifica-")]
-        check("letture diverse -> tengo entrambi i file", len(rimaste) == 1)
+        left_behind = [f for f in os.listdir(WORK_DIR) if f.startswith("bc250-verify-")]
+        check("reads disagree -> both files kept", len(left_behind) == 1)
 
-        # rimetto a posto una lettura buona
-        for f in rimaste:
+        # put a good read back in place
+        for f in left_behind:
             os.remove(os.path.join(WORK_DIR, f))
         window.read_and_verify()
         pump_until_idle(window)
-        check("lettura buona rifatta", window.verified_read == md5(STOCK))
+        check("good read taken again", window.verified_read == md5(STOCK))
 
-        # ---- 4. la finestra di conferma ----------------------------
-        vera_attesa = window.wait_window
+        # ---- 4. the confirmation dialog ----------------------------
+        real_wait = window.wait_window
         window.wait_window = lambda *a, **k: None
-        dialog = module.Confirm(window, window.L, "prova")
-        window.wait_window = vera_attesa
-        check("conferma: parte spenta", "disabled" in dialog.ok.state())
+        dialog = module.Confirm(window, window.L, "test")
+        window.wait_window = real_wait
+        check("confirm: starts disabled", "disabled" in dialog.ok.state())
         dialog.variable.set("scrivo")
         window.update()
-        check("conferma: parola sbagliata resta spenta",
+        check("confirm: the wrong word leaves it disabled",
                   "disabled" in dialog.ok.state())
         dialog.variable.set("SCRIVI")
         window.update()
-        check("conferma: parola giusta accende",
+        check("confirm: the right word enables it",
                   "disabled" not in dialog.ok.state())
         dialog.destroy()
 
-        # ---- 5. la qualifica del collegamento ----------------------
+        # ---- 5. qualifying the link --------------------------------
         window.qualify_link()
         pump_until_idle(window, 300)
-        check("qualifica: sceglie una velocità",
+        check("qualify: it picks a speed",
                   window.var_speed.get() in module.SPEEDS,
                   repr(window.var_speed.get()))
-        check("qualifica: ripulisce i file di prova",
+        check("qualify: it cleans up its test files",
                   not any(f.startswith("qualifica-") for f in os.listdir(WORK_DIR)),
                   str([f for f in os.listdir(WORK_DIR) if f.startswith("qualifica-")]))
-        # la qualifica invalida la lettura: si rifa'
+        # qualifying voids the read: it has to be taken again
         window.read_and_verify()
         pump_until_idle(window)
-        check("lettura rifatta dopo la qualifica",
+        check("read taken again after qualifying",
                   window.verified_read == md5(STOCK))
 
-        # ---- 6. la prova a secco -----------------------------------
-        window.var_mode.set("regione")
+        # ---- 6. the dry run ----------------------------------------
+        window.var_mode.set("region")
         window.var_image.set(EXPECTED)
         window.var_layout.set(LAYOUT)
         window._reload_regions()
@@ -188,114 +188,114 @@ def checks(window):
         window.var_mains_off.set(1)
         window._update_write_state()
 
-        check("senza prova a secco non si scrive",
+        check("no write without a dry run",
                   window._missing_requirements() == ["prova a secco"],
                   str(window._missing_requirements()))
         window.dry_run()
         pump_until_idle(window, 300)
         dry = window.dry
-        check("prova a secco eseguita", dry is not None)
-        check("prova a secco: md5 = risultato atteso",
+        check("dry run done", dry is not None)
+        check("dry run: md5 = expected result",
                   dry and dry.md5 == md5(EXPECTED),
                   (dry.md5[:8] if dry else "") + " vs " + md5(EXPECTED)[:8])
-        check("prova a secco: un solo intervallo",
+        check("dry run: a single span",
                   dry and len(dry.changes) == 1,
                   str([(hex(a), hex(b)) for a, b in (dry.changes if dry else [])]))
-        check("prova a secco: niente fuori regione",
+        check("dry run: nothing outside the region",
                   dry and dry.outside == [])
-        check("prova a secco: byte contati",
+        check("dry run: bytes counted",
                   dry and dry.bytes_changed == 1321026,
                   str(dry.bytes_changed if dry else 0))
 
-        # ---- 7. la scrittura della sola regione uefi ---------------
-        vera_conferma = module.Confirm
+        # ---- 7. writing the uefi region alone ----------------------
+        real_confirm = module.Confirm
 
-        class ConfermaFinta(object):
+        class FakeConfirm(object):
             def __init__(self, *a, **k):
                 self.confirmed = True
 
-        module.Confirm = ConfermaFinta
+        module.Confirm = FakeConfirm
 
-        check("tutti i requisiti soddisfatti",
+        check("every requirement met",
                   window._missing_requirements() == [],
                   str(window._missing_requirements()))
-        check("tasto scrivi acceso", "disabled" not in window.b_write.state())
+        check("write button enabled", "disabled" not in window.b_write.state())
 
         window.write()
         pump_until_idle(window, 600)
-        module.Confirm = vera_conferma
+        module.Confirm = real_confirm
 
-        check("il chip emulato ora e' il risultato atteso",
+        check("the emulated chip is now the expected result",
                   md5(FAKE_CHIP) == md5(EXPECTED),
                   "%s vs %s" % (md5(FAKE_CHIP)[:8], md5(EXPECTED)[:8]))
-        check("verifica finale: nessuna differenza",
+        check("final check: no difference",
                   any("nessuna differenza" in r or "no difference" in r
                       for r in window.log_lines))
-        check("verifica finale: regione coerente",
+        check("final check: region is coherent",
                   any("coerente" in r or "coherent" in r
                       for r in window.log_lines),
                   next((r for r in window.log_lines if "coerent" in r), ""))
-        check("rilettura di controllo salvata",
-                  any(f.startswith("bc250-dopo-") for f in os.listdir(WORK_DIR)))
-        check("registro su file",
+        check("verification re-read saved",
+                  any(f.startswith("bc250-after-") for f in os.listdir(WORK_DIR)))
+        check("log written to file",
                   os.path.isfile(os.path.join(WORK_DIR, "SPIranha.log")))
 
         # ---- 8. la mappa ha visto passare i blocchi veri ------------
         import chipmap as M
         states = set(window.chip_map.states)
-        check("mappa: blocchi verificati", M.VERIFIED in states)
-        check("mappa: nessun blocco diverso", M.MISMATCH not in states,
+        check("map: blocks verified", M.VERIFIED in states)
+        check("map: no mismatched block", M.MISMATCH not in states,
                   str(sorted(states)))
 
         # ---- 9. confronto e layout generato ------------------------
         import analysis as A
         settings = A.compare_images(A.read(STOCK), A.read(EXPECTED))
-        check("confronto: un intervallo allineato",
+        check("comparison: one aligned span",
                   len(settings["allineati"]) == 1,
                   str([(hex(a), hex(b)) for a, b in settings["allineati"]]))
-        check("confronto: confini veri noti",
+        check("comparison: the true bounds are known",
                   settings["esatti"] == [(0xAE0088, 0xC228C9)],
                   str([(hex(a), hex(b)) for a, b in settings["esatti"]]))
         text = A.make_layout(settings["allineati"], 16 * 1024 * 1024, "uefi")
-        atteso_layout = ("00000000:00adffff salta0\n"
+        expected_layout = ("00000000:00adffff skip0\n"
                          "00ae0000:00c22fff uefi\n"
-                         "00c23000:00ffffff salta2\n")
-        check("layout generato copre tutto il chip", text == atteso_layout,
+                         "00c23000:00ffffff skip2\n")
+        check("generated layout covers the whole chip", text == expected_layout,
                   repr(text))
-        check("layout generato accettato da flashrom",
-                  len(fr.read_layout(_scrivi_temp(text))) == 3)
+        check("generated layout accepted by flashrom",
+                  len(fr.read_layout(_write_temp(text))) == 3)
 
-        # ---- 10. regioni ricavate dal dump vero, e usate davvero -----
+        # ---- 10. regions derived from the real dump, and really used -
         # ⚠️ Nothing is fabricated here: it is a BC-250 dump, which has
         # neither an Intel descriptor nor an FMAP. If the AMD detection
         # breaks, on this board the feature stops being any use.
         import regions as _rg
-        dati_stock = A.read(STOCK)
-        source, found = _rg.find_regions(dati_stock)
-        names_of = dict((r.name, r) for r in found)
-        check("dump vero: struttura AMD riconosciuta", source == "amd",
+        stock_data = A.read(STOCK)
+        source, found = _rg.find_regions(stock_data)
+        by_name = dict((r.name, r) for r in found)
+        check("real dump: AMD structure recognised", source == "amd",
                   str(source))
-        check("dump vero: immagine BIOS individuata",
-                  "bios" in names_of and names_of["bios"].start == 0xE02000,
-                  str(sorted(names_of)))
-        check("dump vero: configurazione memoria individuata",
-                  "apcb" in names_of, str(sorted(names_of)))
+        check("real dump: BIOS image located",
+                  "bios" in by_name and by_name["bios"].start == 0xE02000,
+                  str(sorted(by_name)))
+        check("real dump: memory configuration located",
+                  "apcb" in by_name, str(sorted(by_name)))
 
-        percorso_regioni = os.path.join(WORK_DIR, "regioni.layout")
-        with open(percorso_regioni, "wb") as f:
-            f.write(_rg.as_layout(found, len(dati_stock)).encode("ascii"))
-        estratto = os.path.join(WORK_DIR, "solo-bios.rom")
-        result = window.flash.read_region(percorso_regioni, "bios",
-                                             estratto, "dummy")
-        check("flashrom legge la regione ricavata", result.ok,
+        regions_path = os.path.join(WORK_DIR, "regioni.layout")
+        with open(regions_path, "wb") as f:
+            f.write(_rg.as_layout(found, len(stock_data)).encode("ascii"))
+        extracted = os.path.join(WORK_DIR, "bios-only.rom")
+        result = window.flash.read_region(regions_path, "bios",
+                                             extracted, "dummy")
+        check("flashrom reads the derived region", result.ok,
                   " ".join(result.lines[-2:]))
         if result.ok:
-            with open(estratto, "rb") as f:
-                letto = f.read()
-            region = names_of["bios"]
-            check("i byte estratti sono quelli della regione",
-                      letto == dati_stock[region.start:region.end + 1],
-                      "%d byte, attesi %d" % (len(letto), region.size))
+            with open(extracted, "rb") as f:
+                read_back = f.read()
+            region = by_name["bios"]
+            check("the extracted bytes are the region's",
+                      read_back == stock_data[region.start:region.end + 1],
+                      "%d byte, attesi %d" % (len(read_back), region.size))
 
     except Exception:
         traceback.print_exc()
@@ -312,9 +312,9 @@ def main():
     window.after(300, lambda: checks(window))
     window.mainloop()
     failed = [n for n, ok in results if not ok]
-    print("\n%d controlli, %d falliti" % (len(results), len(failed)))
+    print("\n%d checks, %d failed" % (len(results), len(failed)))
     for n in failed:
-        print("   FALLITO:", n)
+        print("   FAILED:", n)
     return 1 if failed else 0
 
 

@@ -23,8 +23,8 @@ ERASED = b"\xff"
 ZERO = b"\x00"
 
 # Signatures we can recognise in this flash, verified on the real dump
-# di una BC-250 vera (BIOS P3.00): _FVH x7, NVAR x958, APCB a
-# 0xAB1000, $PSP a 0x8E0000.
+# of a real BC-250 (BIOS P3.00): _FVH x7, NVAR x958, APCB at
+# 0xAB1000, $PSP at 0x8E0000.
 SIGNATURES = (
     (b"_FVH", "fv", "volume UEFI", "UEFI firmware volume"),
     (b"NVAR", "nvar", "variabili UEFI", "UEFI variables"),
@@ -86,7 +86,7 @@ def exact_spans(a, b, spans):
 
 
 def compare_images(a, b, grain=SECTOR):
-    """Il confronto completo: blocchi, intervalli allineati, confini veri."""
+    """The whole comparison: blocks, aligned spans, true bounds."""
     indices = differing_blocks(a, b, grain)
     aligned = merge_runs(indices, grain, limit=len(a))
     exact = exact_spans(a, b, aligned)
@@ -102,7 +102,7 @@ def compare_images(a, b, grain=SECTOR):
 
 # ---------------------------------------------------------------- struttura
 
-def signatures(data, massimo=4000):
+def signatures(data, biggest=4000):
     """Where the known structures sit. Only the first `massimo` per signature:
     NVAR alone shows up nearly a thousand times and listing them all helps
     nobody."""
@@ -110,7 +110,7 @@ def signatures(data, massimo=4000):
     for sig, key, _it, _en in SIGNATURES:
         positions = []
         position = data.find(sig)
-        while position != -1 and len(positions) < massimo:
+        while position != -1 and len(positions) < biggest:
             positions.append(position)
             position = data.find(sig, position + 1)
         if positions:
@@ -121,11 +121,11 @@ def signatures(data, massimo=4000):
 def describe(start, end, signature_map, language="it"):
     """What sits in this range, in words."""
     inside = []
-    for sig, key, testo_it, testo_en in SIGNATURES:
+    for sig, key, text_it, text_en in SIGNATURES:
         positions = signature_map.get(key, ())
         count = sum(1 for p in positions if start <= p <= end)
         if count:
-            name = testo_it if language == "it" else testo_en
+            name = text_it if language == "it" else text_en
             inside.append("%s%s" % (name, " ×%d" % count if count > 1 else ""))
     return ", ".join(inside)
 
@@ -150,7 +150,7 @@ def coherence(data, start, end, signature_map=None):
     return results
 
 
-# ------------------------------------------------------------- prova a secco
+# ----------------------------------------------------------------- dry run
 
 class DryRun(object):
     """The result of working out how the flash will look after the write."""
@@ -158,9 +158,9 @@ class DryRun(object):
     def __init__(self):
         self.outcome = None        # bytes: l'immagine attesa
         self.md5 = None
-        self.changes = []             # intervalli (allineati) che cambiano
+        self.changes = []             # the (aligned) spans that change
         self.changes_exact = []
-        self.outside = []              # ⚠️ intervalli che cadono FUORI dalla regione
+        self.outside = []              # ⚠️ spans that fall OUTSIDE the region
         self.bytes_changed = 0
         self.nothing_to_do = False
         self.error = None
@@ -169,9 +169,9 @@ class DryRun(object):
 def dry_run(current, source_image, region=None, md5=None):
     """Works out the image the write will produce, without writing anything.
 
-    `attuale`  = what is on the chip right now (the verified read)
-    `sorgente` = the image to be written
-    `regione`  = (start, end) when writing a single region, None for all
+    `current` = what is on the chip right now (the verified read)
+    `source`  = the image to be written
+    `region`  = (start, end) when writing a single region, None for all
 
     The check that matters is `fuori`: if the source image differs from the
     current one ALSO outside the chosen region, those differences will NOT be
@@ -206,9 +206,9 @@ def dry_run(current, source_image, region=None, md5=None):
     # the region, which the write would not carry over
     if region is not None:
         start, end = region
-        tutti = merge_runs(differing_blocks(current, source_image), SECTOR,
+        every = merge_runs(differing_blocks(current, source_image), SECTOR,
                        limit=len(current))
-        result.outside = [(a, b) for a, b in tutti if b < start or a > end]
+        result.outside = [(a, b) for a, b in every if b < start or a > end]
     return result
 
 
@@ -223,17 +223,17 @@ def make_layout(spans, total_size, name="modificata"):
     """
     lines = []
     position = 0
-    contatore = 0
+    counter = 0
     for start, end in sorted(spans):
         if start > position:
-            lines.append((position, start - 1, "salta%d" % contatore))
-            contatore += 1
-        label_for = name if len(spans) == 1 else "%s%d" % (name, contatore)
-        lines.append((start, end, label_for))
-        contatore += 1
+            lines.append((position, start - 1, "skip%d" % counter))
+            counter += 1
+        label = name if len(spans) == 1 else "%s%d" % (name, counter)
+        lines.append((start, end, label))
+        counter += 1
         position = end + 1
     if position < total_size:
-        lines.append((position, total_size - 1, "salta%d" % contatore))
+        lines.append((position, total_size - 1, "skip%d" % counter))
     return "".join("%08x:%08x %s\n" % (a, b, n) for a, b, n in lines)
 
 
@@ -245,10 +245,10 @@ def is_aligned(start, end, grain=SECTOR):
 
 def human_size(size):
     """Dimensione a misura d'uomo."""
-    for drive, soglia in (("MiB", 1024 * 1024), ("KiB", 1024)):
-        if size >= soglia:
-            value_for = size / float(soglia)
-            return ("%.0f %s" if value_for >= 100 else "%.1f %s") % (value_for, drive)
+    for drive, threshold in (("MiB", 1024 * 1024), ("KiB", 1024)):
+        if size >= threshold:
+            value = size / float(threshold)
+            return ("%.0f %s" if value >= 100 else "%.1f %s") % (value, drive)
     return "%d B" % size
 
 

@@ -37,8 +37,8 @@ IFD_NAMES = ("fd", "bios", "me", "gbe", "pd", "reg5", "bios2", "reg7",
 # ---------------------------------------------------------------------- FMAP
 
 FMAP_SIGNATURE = b"__FMAP__"
-FMAP_HEADER = struct.Struct("<8sBBQI32sH")     # firma, ver, base, dim, nome, n
-FMAP_AREA = struct.Struct("<II32sH")          # inizio, dimensione, nome, flag
+FMAP_HEADER = struct.Struct("<8sBBQI32sH")     # signature, ver, base, size, name, n
+FMAP_AREA = struct.Struct("<II32sH")          # start, size, name, flags
 FMAP_ALIGNMENT = 64
 MAX_AREAS = 400
 
@@ -60,12 +60,12 @@ class Region(object):
         return "<%s 0x%06X-0x%06X>" % (self.name, self.start, self.end)
 
 
-def _pulisci(name):
+def _clear(name):
     """The names arrive as fixed-length fields, padded with trailing zeros."""
     if isinstance(name, bytes):
         name = name.split(b"\x00")[0].decode("ascii", "replace")
     return "".join(c if (c.isalnum() or c in "-_") else "_"
-                   for c in name.strip()).strip("_") or "senza_nome"
+                   for c in name.strip()).strip("_") or "unnamed"
 
 
 def ifd_regions(data):
@@ -82,9 +82,9 @@ def ifd_regions(data):
         position = base + index * 4
         if position + 4 > len(data):
             break
-        value_for = struct.unpack_from("<I", data, position)[0]
-        start = (value_for & 0x7FFF) << 12
-        end = (((value_for >> 16) & 0x7FFF) << 12) | 0xFFF
+        value = struct.unpack_from("<I", data, position)[0]
+        start = (value & 0x7FFF) << 12
+        end = (((value >> 16) & 0x7FFF) << 12) | 0xFFF
         # ⚠️ base > limit is not a read error: it is how the descriptor
         # says "this region does not exist on this board".
         if start > end or end >= len(data):
@@ -107,33 +107,33 @@ def fmap_regions(data):
             continue
         if position + FMAP_HEADER.size > len(data):
             continue
-        _f, maggiore, _minore, _base, _dim, name, count = FMAP_HEADER.unpack_from(
+        _f, major, _minore, _base, _dim, name, count = FMAP_HEADER.unpack_from(
             data, position)
-        if maggiore != 1 or not 0 < count <= MAX_AREAS:
+        if major != 1 or not 0 < count <= MAX_AREAS:
             continue
-        fine_elenco = position + FMAP_HEADER.size + count * FMAP_AREA.size
-        if fine_elenco > len(data):
+        list_end = position + FMAP_HEADER.size + count * FMAP_AREA.size
+        if list_end > len(data):
             continue
         out = []
-        buona = True
+        good = True
         for index in range(count):
             a = position + FMAP_HEADER.size + index * FMAP_AREA.size
-            start, total_size, label_for, _flag = FMAP_AREA.unpack_from(data, a)
+            start, total_size, label, _flag = FMAP_AREA.unpack_from(data, a)
             if total_size == 0:
                 continue          # segnaposto: dichiarata e vuota
             if start + total_size > len(data):
-                buona = False     # non e' la FMAP di questa immagine
+                good = False     # not this image's own FMAP
                 break
-            out.append(Region(_pulisci(label_for), start,
+            out.append(Region(_clear(label), start,
                                  start + total_size - 1, "fmap"))
-        if buona and out:
+        if good and out:
             out.sort(key=lambda r: (r.start, r.end))
             return out
 
 
 # ----------------------------------------------------------------- AMD (EFS)
 
-# La struttura AMD sta in uno di questi punti fissi, e in nessun altro.
+# The AMD structure sits at one of these fixed spots, and nowhere else.
 EFS_OFFSETS = (0xFA0000, 0xF20000, 0xE20000, 0xC20000, 0x820000, 0x20000)
 EFS_SIGNATURE = 0x55AA55AA
 PSP_SIGNATURES = (b"$PSP", b"$PL2")
@@ -142,7 +142,7 @@ BHD_SIGNATURES = (b"$BHD", b"$BL2")
 # ⚠️ The addresses in the AMD structures are the ones the CPU sees
 # (0xFF8E0000), not offsets in the file: they have to be brought back
 # inside the image.
-def _in_immagine(address, total_size):
+def _into_image(address, total_size):
     if not address or address in (0xFFFFFFFF, 0xFFFFFFFFFFFFFFFF):
         return None
     offset = address & (total_size - 1) if total_size else address
@@ -153,11 +153,11 @@ def _in_immagine(address, total_size):
 # which is less convenient but is not a lie.
 PSP_NAMES = {0x00: "amd_pubkey", 0x01: "psp_bootloader", 0x02: "psp_os",
             0x08: "smu", 0x12: "smu2", 0x24: "sec_gasket", 0x28: "mp2"}
-BHD_NAMES = {0x60: "apcb", 0x61: "apob", 0x62: "bios", 0x63: "apcb_scorta",
+BHD_NAMES = {0x60: "apcb", 0x61: "apob", 0x62: "bios", 0x63: "apcb_spare",
             0x68: "bios_l2", 0x70: "bios_dir_l2"}
 
 
-def _direttorio(data, position, signatures, pitch, formato):
+def _directory(data, position, signatures, pitch, fmt):
     """Reads an AMD directory.
 
     Returns (signature, entries, table_end, contents_end): the table and the
@@ -172,28 +172,28 @@ def _direttorio(data, position, signatures, pitch, formato):
     count = struct.unpack_from("<I", data, position + 8)[0]
     if not 0 < count <= 256:
         return None, [], None, None
-    fine_tabella = position + 16 + count * pitch
-    if fine_tabella > len(data):
+    table_end = position + 16 + count * pitch
+    if table_end > len(data):
         return None, [], None, None
     entries = []
-    last = fine_tabella - 1
+    last = table_end - 1
     for index in range(count):
-        chunks = formato.unpack_from(data, position + 16 + index * pitch)
-        # tipo, poi (a distanza fissa in tutti e due i formati) dimensione e
+        chunks = fmt.unpack_from(data, position + 16 + index * pitch)
+        # the kind, then (at a fixed distance in both formats) the size and
         # address; the BHD also carries the destination in memory at the
         # end, which is no use here and must not be mistaken for the
         # address in the file
         kind, total_size, address = chunks[0], chunks[3], chunks[4]
-        start = _in_immagine(address, len(data))
+        start = _into_image(address, len(data))
         if start is None or not total_size or start + total_size > len(data):
             continue
         entries.append((kind, start, total_size))
         last = max(last, start + total_size - 1)
-    return (sig.decode("ascii", "replace"), entries, fine_tabella - 1, last)
+    return (sig.decode("ascii", "replace"), entries, table_end - 1, last)
 
 
-_VOCE_PSP = struct.Struct("<BBHIQ")        # tipo, sub, rsvd, dimensione, dove
-_VOCE_BHD = struct.Struct("<BBHIQQ")       # tipo, regione, flag, dim, dove, dest
+_PSP_ENTRY = struct.Struct("<BBHIQ")        # kind, sub, rsvd, size, where
+_BHD_ENTRY = struct.Struct("<BBHIQQ")       # kind, region, flags, size, where, dest
 
 
 def amd_regions(data):
@@ -218,19 +218,19 @@ def amd_regions(data):
     out = [Region("efs", posizione_efs, posizione_efs + IFD_SECTOR - 1, "amd")]
     fields = struct.unpack_from("<9I", data, posizione_efs)
     # +0x10 psp vecchio, +0x14 psp nuovo, +0x18/0x1C/0x20 direttori BIOS
-    visti = set()
-    for index, signatures, pitch, formato, name in (
-            (4, PSP_SIGNATURES, 16, _VOCE_PSP, "psp"),
-            (5, PSP_SIGNATURES, 16, _VOCE_PSP, "psp"),
-            (6, BHD_SIGNATURES, 24, _VOCE_BHD, "bios_dir"),
-            (7, BHD_SIGNATURES, 24, _VOCE_BHD, "bios_dir"),
-            (8, BHD_SIGNATURES, 24, _VOCE_BHD, "bios_dir")):
-        position = _in_immagine(fields[index], total_size)
-        sig, entries, fine_tabella, last = _direttorio(
-            data, position, signatures, pitch, formato)
-        if sig is None or position in visti:
+    seen = set()
+    for index, signatures, pitch, fmt, name in (
+            (4, PSP_SIGNATURES, 16, _PSP_ENTRY, "psp"),
+            (5, PSP_SIGNATURES, 16, _PSP_ENTRY, "psp"),
+            (6, BHD_SIGNATURES, 24, _BHD_ENTRY, "bios_dir"),
+            (7, BHD_SIGNATURES, 24, _BHD_ENTRY, "bios_dir"),
+            (8, BHD_SIGNATURES, 24, _BHD_ENTRY, "bios_dir")):
+        position = _into_image(fields[index], total_size)
+        sig, entries, table_end, last = _directory(
+            data, position, signatures, pitch, fmt)
+        if sig is None or position in seen:
             continue
-        visti.add(position)
+        seen.add(position)
         if pitch == 16:
             # for the PSP the whole area is what matters: the pieces are
             # many and nobody rewrites them one at a time
@@ -238,7 +238,7 @@ def amd_regions(data):
             continue
         # the BIOS directory's entries, on the other hand, are few and are
         # the ones that really matter: the UEFI image, the memory config
-        out.append(Region(name, position, fine_tabella, "amd"))
+        out.append(Region(name, position, table_end, "amd"))
         for kind, start, how_many in entries:
             out.append(Region(BHD_NAMES.get(kind, "bios_0x%02X" % kind),
                                  start, start + how_many - 1, "amd"))
@@ -257,9 +257,9 @@ def find_regions(data):
     if found:
         # On Intel the two maps coexist: the FMAP describes the inside of
         # the BIOS region. The extra areas are added, without duplicates.
-        gia = set((r.start, r.end) for r in found)
+        already = set((r.start, r.end) for r in found)
         for region in fmap_regions(data):
-            if (region.start, region.end) not in gia:
+            if (region.start, region.end) not in already:
                 found.append(region)
         found.sort(key=lambda r: (r.start, r.end))
         return "ifd", found

@@ -112,7 +112,7 @@ It also covers everything added later:
   reports the region coherent (`UEFI volume ×1`);
 - the **chip map** ends up entirely green, with not one red block;
 - the **generated layout** has the same three ranges as the hand-written
-  `bc250-layout.txt` (only the filler region names differ: `salta0`/`salta2`
+  `bc250-layout.txt` (only the filler region names differ: `skip0`/`skip2`
   instead of `prima`/`dopo`), and flashrom parses it back.
 
 And the two safety rails that actually matter:
@@ -130,7 +130,7 @@ And the two safety rails that actually matter:
 | | |
 |---|---|
 | `flashrom.exe` | built with the `dummy` programmer — see [`flashrom/PROVENANCE.md`](../flashrom/PROVENANCE.md) |
-| BC-250 BIOS images | `bc250-stock.rom`, `bc250-risultato-atteso.rom`, `bc250-layout.txt` |
+| BC-250 BIOS images | `bc250-stock.rom`, `bc250-expected-result.rom`, `bc250-layout.txt` |
 
 Point `SPIRANHA_BIOS_BACKUP` at the folder holding the images, or put them in a
 `bios-backup` folder next to the project.
@@ -138,4 +138,4 @@ Point `SPIRANHA_BIOS_BACKUP` at the folder holding the images, or put them in a
 When something is missing both suites **skip with an explanation and exit 0**,
 rather than failing. A red result means something is genuinely wrong.
 
-Scratch files go into `tests\lavoro\`, which can be deleted.
+Scratch files go into `tests\work\`, which can be deleted.

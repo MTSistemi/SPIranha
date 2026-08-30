@@ -26,14 +26,14 @@ import voltage as V
 class ChipSearch(tk.Toplevel):
     """The search window. Whoever opens it passes what to do with the pick."""
 
-    def __init__(self, parent, tm, L, chip, on_pick, iniziale=""):
+    def __init__(self, parent, tm, L, chip, on_pick, initial=""):
         tk.Toplevel.__init__(self, parent, background=T.INK)
         self.theme = tm
         self.L = L
         self.on_pick = on_pick
-        self.tutti = [c for c in chip if c.spi]
+        self.every = [c for c in chip if c.spi]
         self.shown = []
-        self.title(L("cerca_titolo"))
+        self.title(L("search_title"))
         self.geometry("760x520")
         self.minsize(520, 360)
         self.transient(parent)
@@ -47,8 +47,8 @@ class ChipSearch(tk.Toplevel):
 
         header = tk.Frame(frame, background=T.INK)
         header.grid(row=0, column=0, sticky="ew")
-        tk.Label(header, text=L("cerca_titolo"), background=T.INK,
-                 foreground=T.FG, font=tm.f_titolo).pack(side="left")
+        tk.Label(header, text=L("search_title"), background=T.INK,
+                 foreground=T.FG, font=tm.f_title).pack(side="left")
         self.var_count = tk.StringVar()
         tk.Label(header, textvariable=self.var_count, background=T.INK,
                  foreground=T.MUT, font=tm.f_text).pack(side="right")
@@ -56,10 +56,10 @@ class ChipSearch(tk.Toplevel):
         line = tk.Frame(frame, background=T.INK)
         line.grid(row=1, column=0, sticky="ew", pady=(10, 8))
         line.columnconfigure(1, weight=1)
-        tk.Label(line, text=T.micro(L("cerca_campo")), background=T.INK,
+        tk.Label(line, text=T.micro(L("search_field")), background=T.INK,
                  foreground=T.MUT, font=tm.f_micro).grid(row=0, column=0,
                                                          sticky="w")
-        self.var_filter = tk.StringVar(value=iniziale)
+        self.var_filter = tk.StringVar(value=initial)
         self.field = ttk.Entry(line, textvariable=self.var_filter,
                                font=tm.f_text)
         self.field.grid(row=0, column=1, sticky="ew", padx=(8, 0))
@@ -69,29 +69,29 @@ class ChipSearch(tk.Toplevel):
         table.grid(row=2, column=0, sticky="nsew")
         table.columnconfigure(0, weight=1)
         table.rowconfigure(0, weight=1)
-        columns = ("produttore", "modello", "misura", "volt", "prove")
+        columns = ("vendor", "model", "size", "volt", "tested")
         self.tree = ttk.Treeview(table, columns=columns, show="headings",
-                                  style="Cerca.Treeview", selectmode="browse")
-        for key, width, anchor in (("produttore", 120, "w"),
-                                          ("modello", 290, "w"),
-                                          ("misura", 80, "e"),
+                                  style="Search.Treeview", selectmode="browse")
+        for key, width, anchor in (("vendor", 120, "w"),
+                                          ("model", 290, "w"),
+                                          ("size", 80, "e"),
                                           ("volt", 70, "e"),
-                                          ("prove", 70, "center")):
+                                          ("tested", 70, "center")):
             # ⚠️ the heading lines up like its column: centred over a wide
             # column it looked like it belonged to the one next to it
-            self.tree.heading(key, text=T.micro(L("cerca_col_" + key)),
+            self.tree.heading(key, text=T.micro(L("search_col_" + key)),
                                anchor=anchor)
             self.tree.column(key, width=width, anchor=anchor,
-                              stretch=(key == "modello"))
+                              stretch=(key == "model"))
         self.tree.grid(row=0, column=0, sticky="nsew")
         bar = ttk.Scrollbar(table, orient="vertical",
                               command=self.tree.yview)
         bar.grid(row=0, column=1, sticky="ns")
         self.tree.configure(yscrollcommand=bar.set)
-        # ⚠️ i chip a 1,8 V si vedono a colpo d'occhio: e' l'errore che costa
-        # un chip, non un messaggio
-        self.tree.tag_configure("bassa", foreground="#F0A93B")
-        self.tree.tag_configure("ignota", foreground=T.MUT)
+        # ⚠️ 1.8 V chips stand out at a glance: that is the mistake which
+        # costs a chip, not a message
+        self.tree.tag_configure("low", foreground="#F0A93B")
+        self.tree.tag_configure("unknown", foreground=T.MUT)
 
         self.tree.bind("<Double-Button-1>", lambda _e: self.pick())
         self.tree.bind("<Return>", lambda _e: self.pick())
@@ -101,13 +101,13 @@ class ChipSearch(tk.Toplevel):
 
         footer = tk.Frame(frame, background=T.INK)
         footer.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-        tk.Label(footer, text=L("cerca_nota"), background=T.INK,
+        tk.Label(footer, text=L("search_note"), background=T.INK,
                  foreground="#6E8296", font=tm.f_micro,
                  wraplength=430, justify="left").pack(side="left")
-        ttk.Button(footer, text=L("cerca_annulla"), style="Ghost.TButton",
+        ttk.Button(footer, text=L("search_cancel"), style="Ghost.TButton",
                    command=self.destroy).pack(side="right")
-        self.b_pick = ttk.Button(footer, text=L("cerca_scegli"),
-                                   style="Primario.TButton", command=self.pick)
+        self.b_pick = ttk.Button(footer, text=L("search_pick"),
+                                   style="Primary.TButton", command=self.pick)
         self.b_pick.pack(side="right", padx=(0, 8))
 
         self._filter()
@@ -116,44 +116,44 @@ class ChipSearch(tk.Toplevel):
     # --------------------------------------------------------------- stile
     def _style(self):
         s = ttk.Style(self)
-        s.configure("Cerca.Treeview", background=T.PANEL, fieldbackground=T.PANEL,
+        s.configure("Search.Treeview", background=T.PANEL, fieldbackground=T.PANEL,
                     foreground=T.FG, bordercolor=T.LINE, borderwidth=0,
                     rowheight=max(20, self.theme.f_text[1] * 2),
                     font=self.theme.f_text)
-        s.configure("Cerca.Treeview.Heading", background=T.SIDEBAR,
+        s.configure("Search.Treeview.Heading", background=T.SIDEBAR,
                     foreground=T.MUT, relief="flat", font=self.theme.f_micro)
-        s.map("Cerca.Treeview.Heading", background=[("active", T.PANEL2)])
-        s.map("Cerca.Treeview", background=[("selected", T.ACCENT2)],
+        s.map("Search.Treeview.Heading", background=[("active", T.PANEL2)])
+        s.map("Search.Treeview", background=[("selected", T.ACCENT2)],
               foreground=[("selected", "#FFFFFF")])
 
     # ------------------------------------------------------------- filtro
     def _filter(self):
         # every word must appear: "win 128" finds the 128 Mbit Winbonds
-        parole = [p for p in self.var_filter.get().lower().split() if p]
+        words = [p for p in self.var_filter.get().lower().split() if p]
         self.tree.delete(*self.tree.get_children())
         self.shown = []
-        for chip in self.tutti:
+        for chip in self.every:
             text = ("%s %s" % (chip.vendor, chip.name)).lower()
-            if all(p in text for p in parole):
+            if all(p in text for p in words):
                 self.shown.append(chip)
         for index, chip in enumerate(self.shown[:600]):
-            volts, _famiglia = V.voltage_of(chip.name)
-            label_for = ("bassa" if volts == V.LOW
-                         else ("" if volts else "ignota"))
+            volts, _family = V.voltage_of(chip.name)
+            label = ("low" if volts == V.LOW
+                         else ("" if volts else "unknown"))
             self.tree.insert(
                 "", "end", iid=str(index),
-                values=(chip.vendor, chip.name, _misura(chip.kb),
+                values=(chip.vendor, chip.name, _measure(chip.kb),
                         _volt(volts, self.L.code), chip.tested or "—"),
-                tags=(label_for,) if label_for else ())
-        self.var_count.set(self.L("cerca_conteggio",
+                tags=(label,) if label else ())
+        self.var_count.set(self.L("search_count",
                                       how_many=len(self.shown),
-                                      total=len(self.tutti)))
+                                      total=len(self.every)))
 
     def _focus_first(self):
-        figli = self.tree.get_children()
-        if figli:
-            self.tree.selection_set(figli[0])
-            self.tree.focus(figli[0])
+        children = self.tree.get_children()
+        if children:
+            self.tree.selection_set(children[0])
+            self.tree.focus(children[0])
             self.tree.focus_set()
 
     def _pick_first(self):
@@ -163,10 +163,10 @@ class ChipSearch(tk.Toplevel):
 
     # ------------------------------------------------------------- scelta
     def pick(self):
-        selezione = self.tree.selection()
-        if not selezione:
+        selection = self.tree.selection()
+        if not selection:
             return
-        index = int(selezione[0])
+        index = int(selection[0])
         if index >= len(self.shown):
             return
         chip = self.shown[index]
@@ -175,14 +175,14 @@ class ChipSearch(tk.Toplevel):
 
 
 def _volt(volts, language="it"):
-    """1,8 V in italiano, 1.8 V in inglese: il separatore decimale cambia."""
+    """1,8 V in Italian, 1.8 V in English: the decimal separator changes."""
     if volts is None:
         return "?"
     text = "%.1f V" % volts
     return text.replace(".", ",") if language == "it" else text
 
 
-def _misura(kb):
+def _measure(kb):
     if not kb:
         return "?"
     if kb >= 1024:
@@ -190,7 +190,7 @@ def _misura(kb):
     return "%d KiB" % kb
 
 
-def open_window(parent, tm, L, chip, on_pick, iniziale=""):
+def open_window(parent, tm, L, chip, on_pick, initial=""):
     """Opens the search, or brings the open one back to the front."""
     existing = getattr(parent, "_search_window", None)
     if existing is not None and existing.winfo_exists():
@@ -198,6 +198,6 @@ def open_window(parent, tm, L, chip, on_pick, iniziale=""):
         existing.lift()
         existing.focus_set()
         return existing
-    window = ChipSearch(parent, tm, L, chip, on_pick, iniziale)
-    parent._finestra_ricerca = window
+    window = ChipSearch(parent, tm, L, chip, on_pick, initial)
+    parent._search_window = window
     return window

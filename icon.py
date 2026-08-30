@@ -28,7 +28,7 @@ BIG_SIZE = 4          # sovracampionamento, per bordi non seghettati
 
 
 class Surface(object):
-    """Una tela RGBA elementare: riempimenti, rettangoli e angoli tondi."""
+    """A bare RGBA canvas: fills, rectangles and round corners."""
 
     def __init__(self, side):
         self.side = side
@@ -42,11 +42,11 @@ class Surface(object):
                     # nothing is drawn outside the corner arcs
                     for cx, cy in ((x0 + radius, y0 + radius), (x1 - radius, y0 + radius),
                                    (x0 + radius, y1 - radius), (x1 - radius, y1 - radius)):
-                        dentro_x = (x < x0 + radius) if cx < (x0 + x1) / 2 \
+                        inside_x = (x < x0 + radius) if cx < (x0 + x1) / 2 \
                             else (x > x1 - radius)
-                        dentro_y = (y < y0 + radius) if cy < (y0 + y1) / 2 \
+                        inside_y = (y < y0 + radius) if cy < (y0 + y1) / 2 \
                             else (y > y1 - radius)
-                        if dentro_x and dentro_y:
+                        if inside_x and inside_y:
                             if (x - cx) ** 2 + (y - cy) ** 2 > radius ** 2:
                                 break
                     else:
@@ -55,9 +55,9 @@ class Surface(object):
                 self.px[y][x] = (r, g, b, 255)
 
     def scaled(self, factor):
-        """Media di ogni quadrato fattore×fattore: e' l'antialiasing."""
+        """The mean of every factor×factor square: that is the antialiasing."""
         side = self.side // factor
-        piccola = Surface(side)
+        small = Surface(side)
         for y in range(side):
             for x in range(side):
                 r = g = b = a = 0
@@ -70,17 +70,17 @@ class Surface(object):
                         a += pa
                 n = factor * factor
                 if a:
-                    piccola.px[y][x] = (r // a, g // a, b // a, a // n)
+                    small.px[y][x] = (r // a, g // a, b // a, a // n)
                 else:
-                    piccola.px[y][x] = (0, 0, 0, 0)
-        return piccola
+                    small.px[y][x] = (0, 0, 0, 0)
+        return small
 
 
 def draw(side):
-    """Il marchio, ridisegnato alla misura richiesta."""
+    """The mark, redrawn at the size asked for."""
     big = Surface(side * BIG_SIZE)
     L = side * BIG_SIZE
-    u = L / 64.0                       # unita': il disegno e' pensato su 64
+    u = L / 64.0                       # the unit: the drawing is laid out on 64
 
     big.rect(0, 0, L - 1, L - 1, INK, radius=int(10 * u))
     big.rect(int(1 * u), int(1 * u), L - 1 - int(1 * u), L - 1 - int(1 * u),
@@ -91,9 +91,9 @@ def draw(side):
     # i piedini, tre per lato
     for index in range(3):
         y = int((21 + index * 11) * u)
-        alto = max(1, int(4 * u))
-        big.rect(int(7 * u), y, int(20 * u), y + alto, PIN_COLOUR)
-        big.rect(L - 1 - int(20 * u), y, L - 1 - int(7 * u), y + alto, PIN_COLOUR)
+        high = max(1, int(4 * u))
+        big.rect(int(7 * u), y, int(20 * u), y + high, PIN_COLOUR)
+        big.rect(L - 1 - int(20 * u), y, L - 1 - int(7 * u), y + high, PIN_COLOUR)
 
     # the chip body
     big.rect(int(18 * u), int(16 * u), L - 1 - int(18 * u),
@@ -111,38 +111,38 @@ def draw(side):
 def bmp_entry(canvas):
     """One ICO entry as a 32-bit BMP, rows from the bottom up."""
     side = canvas.side
-    intestazione = struct.pack("<IiiHHIIiiII", 40, side, side * 2, 1, 32, 0,
+    heading = struct.pack("<IiiHHIIiiII", 40, side, side * 2, 1, 32, 0,
                                side * side * 4, 0, 0, 0, 0)
     body = bytearray()
     for y in range(side - 1, -1, -1):
         for x in range(side):
             r, g, b, a = canvas.px[y][x]
             body += bytes((b, g, r, a))
-    maschera = bytearray()
+    mask = bytearray()
     line = ((side + 31) // 32) * 4
-    maschera += bytes(line * side)
-    return intestazione + bytes(body) + bytes(maschera)
+    mask += bytes(line * side)
+    return heading + bytes(body) + bytes(mask)
 
 
 def png_entry(canvas):
     """One ICO entry as a PNG: allowed from Vista onwards, and for the 256 it
     is the only sensible way."""
     side = canvas.side
-    grezzo = bytearray()
+    raw = bytearray()
     for y in range(side):
-        grezzo.append(0)               # filtro «nessuno»
+        raw.append(0)               # filter "none"
         for x in range(side):
             r, g, b, a = canvas.px[y][x]
-            grezzo += bytes((r, g, b, a))
+            raw += bytes((r, g, b, a))
 
     def chunk(name, data):
-        blocco = name + data
-        return struct.pack(">I", len(data)) + blocco + \
-            struct.pack(">I", zlib.crc32(blocco) & 0xFFFFFFFF)
+        block = name + data
+        return struct.pack(">I", len(data)) + block + \
+            struct.pack(">I", zlib.crc32(block) & 0xFFFFFFFF)
 
     return (b"\x89PNG\r\n\x1a\n"
             + chunk(b"IHDR", struct.pack(">IIBBBBB", side, side, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(bytes(grezzo), 9))
+            + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
             + chunk(b"IEND", b""))
 
 
@@ -154,14 +154,14 @@ def write(path="SPIranha.ico"):
 
     header = struct.pack("<HHH", 0, 1, len(images))
     spare = len(header) + 16 * len(images)
-    entries, corpi = b"", b""
+    entries, bodies = b"", b""
     for side, data in images:
         entries += struct.pack("<BBBBHHII", side & 0xFF, side & 0xFF, 0, 0, 1, 32,
                             len(data), spare)
-        corpi += data
+        bodies += data
         spare += len(data)
     with open(path, "wb") as f:
-        f.write(header + entries + corpi)
+        f.write(header + entries + bodies)
     return path
 
 

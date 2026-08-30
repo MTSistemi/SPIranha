@@ -63,7 +63,7 @@ RULES = (
     (r"EN25[QFP]", HIGH, "EON EN25Q/F/P"),
 )
 
-_COMPILATE = tuple((re.compile(e, re.IGNORECASE), v, n) for e, v, n in RULES)
+_COMPILED = tuple((re.compile(e, re.IGNORECASE), v, n) for e, v, n in RULES)
 
 
 def voltage_of(name):
@@ -80,8 +80,8 @@ def voltage_of(name):
         chunk = chunk.strip()
         if not chunk:
             continue
-        for espressione, volts, family in _COMPILATE:
-            if espressione.search(chunk):
+        for expression, volts, family in _COMPILED:
+            if expression.search(chunk):
                 found.append((volts, family))
                 break
     if not found:
@@ -95,7 +95,7 @@ def voltage_of(name):
 
 def is_low_voltage(name):
     """Does this chip want 1.8 V? None = unknown, go and read the datasheet."""
-    volts, _famiglia = voltage_of(name)
+    volts, _family = voltage_of(name)
     if volts is None:
         return None
     return volts == LOW

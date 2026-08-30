@@ -81,18 +81,18 @@ class Board(object):
         return self.drive[:2]
 
     def __repr__(self):
-        return "<Scheda %s %s>" % (self.letter, self.model)
+        return "<Board %s %s>" % (self.letter, self.model)
 
 
 # ------------------------------------------------------------ finding
 
-def _unita_rimovibili():
+def _removable_drives():
     if os.name != "nt":
         return []
     found = []
-    maschera = ctypes.windll.kernel32.GetLogicalDrives()
+    mask = ctypes.windll.kernel32.GetLogicalDrives()
     for index in range(26):
-        if not (maschera >> index) & 1:
+        if not (mask >> index) & 1:
             continue
         drive = "%s:\\" % chr(ord("A") + index)
         try:
@@ -103,7 +103,7 @@ def _unita_rimovibili():
     return found
 
 
-def _leggi_informazioni(path):
+def _read_info(path):
     """INFO_UF2.TXT -> (model, board id). The file is two lines."""
     model = board_id = None
     try:
@@ -132,29 +132,29 @@ def is_rp2040(model, board_id):
 def boards_in_bootsel():
     """The RP2040 boards waiting for firmware, right now."""
     found = []
-    for drive in _unita_rimovibili():
-        informazioni = os.path.join(drive, INFO_FILE)
-        if not os.path.isfile(informazioni):
+    for drive in _removable_drives():
+        info = os.path.join(drive, INFO_FILE)
+        if not os.path.isfile(info):
             continue
-        model, board_id = _leggi_informazioni(informazioni)
+        model, board_id = _read_info(info)
         # copying onto some random disk would do no harm, but no good
         # either
         if not is_rp2040(model, board_id):
             continue
-        liberi = 0
+        free_bytes = 0
         try:
-            liberi = shutil.disk_usage(drive).free
+            free_bytes = shutil.disk_usage(drive).free
         except OSError:
             pass
-        found.append(Board(drive, model, board_id, liberi,
+        found.append(Board(drive, model, board_id, free_bytes,
                               serial=serial_of_drive(drive)))
     return found
 
 
 # the serial the bootloader exposes is inside the device path:
 #   USBSTOR\DISK&VEN_RPI&PROD_RP2&REV_3\9&25F25AF4&0&E0C9125B0D9B&0
-_RE_SERIALE = re.compile(r"&([0-9A-F]{8,20})&\d+$", re.IGNORECASE)
-_CACHE_SERIALI = {}
+_RE_SERIAL = re.compile(r"&([0-9A-F]{8,20})&\d+$", re.IGNORECASE)
+_SERIAL_CACHE = {}
 
 
 def serial_of_drive(drive):
@@ -168,8 +168,8 @@ def serial_of_drive(drive):
     letter = (drive or "")[:1].upper()
     if not letter:
         return None
-    if letter in _CACHE_SERIALI:
-        return _CACHE_SERIALI[letter]
+    if letter in _SERIAL_CACHE:
+        return _SERIAL_CACHE[letter]
     serial = None
     if os.name == "nt":
         command = (
@@ -190,20 +190,20 @@ def serial_of_drive(drive):
         for line in output.splitlines():
             if "|" not in line:
                 continue
-            disco, path = line.split("|", 1)
-            if disco.strip().upper().startswith(letter + ":"):
-                hit = _RE_SERIALE.search(path.strip())
+            disk, path = line.split("|", 1)
+            if disk.strip().upper().startswith(letter + ":"):
+                hit = _RE_SERIAL.search(path.strip())
                 if hit:
                     serial = hit.group(1).upper()
                 break
-    _CACHE_SERIALI[letter] = serial
+    _SERIAL_CACHE[letter] = serial
     return serial
 
 
 def forget_serials():
     """To be called when a board goes away: the letter could come back on a
     different one."""
-    _CACHE_SERIALI.clear()
+    _SERIAL_CACHE.clear()
 
 
 # ------------------------------------------------------------ formato UF2
@@ -241,7 +241,7 @@ def read_uf2(path):
     if not data or len(data) % BLOCK:
         raise ValueError("non e' un UF2: la lunghezza non e' multipla di 512")
     blocks = len(data) // BLOCK
-    indirizzi = []
+    addresses = []
     families = set()
     for index in range(blocks):
         chunk = data[index * BLOCK:(index + 1) * BLOCK]
@@ -249,17 +249,17 @@ def read_uf2(path):
             struct.unpack("<IIIIIIII", chunk[:32])
         end = struct.unpack("<I", chunk[-4:])[0]
         if m0 != MAGIC0 or m1 != MAGIC1 or end != MAGIC_END:
-            raise ValueError("blocco %d: le magie non tornano" % index)
+            raise ValueError("block %d: the magic numbers do not add up" % index)
         if total != blocks:
-            raise ValueError("blocco %d: dice %d blocchi, il file ne ha %d"
+            raise ValueError("block %d: it says %d blocks, the file has %d"
                              % (index, total, blocks))
         if number != index:
-            raise ValueError("blocco %d: si dichiara il numero %d" % (index, number))
+            raise ValueError("block %d: it calls itself number %d" % (index, number))
         if how_many > PAYLOAD:
             raise ValueError("blocco %d: carico utile %d" % (index, how_many))
-        indirizzi.append(address)
+        addresses.append(address)
         families.add(family)
-    return blocks, min(indirizzi), max(indirizzi) + PAYLOAD - 1, families
+    return blocks, min(addresses), max(addresses) + PAYLOAD - 1, families
 
 
 def make_eraser(path, size=FLASH_PICO):
@@ -270,7 +270,7 @@ def make_eraser(path, size=FLASH_PICO):
     second stage, the board comes back up in BOOTSEL.
     """
     if size % PAYLOAD:
-        raise ValueError("la dimensione dev'essere multipla di %d" % PAYLOAD)
+        raise ValueError("the size must be a multiple of %d" % PAYLOAD)
     total = size // PAYLOAD
     empty = b"\xff" * PAYLOAD
     with open(path, "wb") as f:
@@ -280,7 +280,7 @@ def make_eraser(path, size=FLASH_PICO):
     return path
 
 
-# ------------------------------------------------- rientro nel bootloader
+# ------------------------------------------------ back into the bootloader
 
 def back_to_bootsel(port):
     """Asks the firmware to restart into the ROM bootloader.
@@ -306,7 +306,7 @@ def back_to_bootsel(port):
         except Exception:                            # noqa: BLE001
             pass
     except Exception:                                # noqa: BLE001
-        pass          # atteso: la scheda se n'e' andata
+        pass          # expected: the board has gone
     return True, None
 
 
@@ -330,13 +330,13 @@ def install(uf2_path, card, on_line=None):
     except ValueError as e:
         return False, "%s" % e
     if FAMILY_RP2040 not in families:
-        return False, "questo .uf2 non e' per RP2040"
+        return False, "this .uf2 is not for an RP2040"
     dillo("%s: %d blocchi, 0x%08X-0x%08X" % (
         os.path.basename(uf2_path), blocks, first, last))
 
     needed = blocks * BLOCK
     if card.byte_liberi and needed > card.byte_liberi:
-        return False, "non ci sta: servono %d byte, liberi %d" % (
+        return False, "it does not fit: %d bytes needed, %d free" % (
             needed, card.byte_liberi)
 
     destination = os.path.join(card.drive, os.path.basename(uf2_path))
@@ -362,18 +362,18 @@ def install(uf2_path, card, on_line=None):
                         output.flush()
                         os.fsync(output.fileno())
                     except OSError:
-                        pass      # la scheda si e' gia' staccata: va bene cosi'
+                        pass      # the board has already gone: that is fine
         except OSError as e:
             if written_bytes:
                 # the disk vanishes under our feet as soon as the
                 # bootloader has it all: this is the normal course
-                dillo("la scheda si e' staccata durante la copia "
+                dillo("the board came off during the copy "
                       "(e' normale): %s" % e)
                 return True, None
             if attempt + 1 < COPY_ATTEMPTS:
-                dillo("il disco non accetta ancora la copia, riprovo: %s" % e)
+                dillo("the disk will not take the copy yet, trying again: %s" % e)
                 time.sleep(0.7)
                 continue
-            return False, "la copia non e' mai partita: %s" % e
+            return False, "the copy never started: %s" % e
         return True, None
-    return False, "la copia non e' mai partita"
+    return False, "the copy never started"

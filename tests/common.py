@@ -20,13 +20,13 @@ ROOT = os.path.dirname(HERE)
 # all of them are accepted, so nobody has to rename a folder that
 # already works.
 STOCK = ("bc250-stock.rom", "BC250-stock-P3.00-scheda-Mattia.rom")
-EXPECTED = ("bc250-risultato-atteso.rom",)
+EXPECTED = ("bc250-expected-result.rom", "bc250-risultato-atteso.rom")
 LAYOUT = ("bc250-layout.txt",)
 REQUIRED = (STOCK, EXPECTED, LAYOUT)
 
 
-def _primo(folder, names_of):
-    for name in names_of:
+def _first_of(folder, names):
+    for name in names:
         path = os.path.join(folder, name)
         if os.path.isfile(path):
             return path
@@ -42,25 +42,25 @@ def find_backup():
         os.path.join(os.path.dirname(ROOT), "SkillFishOS", "bios-backup"),
     ]
     for folder in candidate:
-        if folder and all(_primo(folder, n) for n in REQUIRED):
+        if folder and all(_first_of(folder, n) for n in REQUIRED):
             return folder
     return None
 
 
 def test_files(folder):
-    """(stock, atteso, layout) dentro la cartella trovata."""
-    return tuple(_primo(folder, n) for n in REQUIRED)
+    """(stock, expected, layout) inside the folder that was found."""
+    return tuple(_first_of(folder, n) for n in REQUIRED)
 
 
 def backup_or_skip():
-    """Restituisce la cartella, oppure esce con un messaggio chiaro."""
+    """The folder, or a clean exit with a message that says why."""
     folder = find_backup()
     if folder:
         return folder
     print("SKIPPED: cannot find the BC-250 images.")
     print("These are needed, in one folder:")
-    for gruppo in REQUIRED:
-        print("   " + " oppure ".join(gruppo))
+    for group_ in REQUIRED:
+        print("   " + " or ".join(group_))
     print("Point SPIRANHA_BIOS_BACKUP at it,")
     print("or put them in a 'bios-backup' folder next to the project.")
     sys.exit(0)

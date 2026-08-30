@@ -8,9 +8,9 @@ __pycache__/
 
 # generated
 SPIranha.ico
-tests/lavoro/
-tests/lavoro-gui/
-tests/corto.rom
+tests/work/
+tests/work-gui/
+tests/short.rom
 
 # Built, not committed: flashrom is GPL and shipping the binary would mean
 # shipping its corresponding source, which is far too big for this repository.
@@ -28,5 +28,5 @@ flashrom/flashrom.exe
 # system clutter
 Thumbs.db
 desktop.ini
-config-di-prova/
-tests/config-di-prova/
+config-for-tests/
+tests/config-for-tests/

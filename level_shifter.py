@@ -46,13 +46,13 @@ import theme as T
 
 # The four signals that go through the adapter, and which way they face.
 CHANNELS = (
-    ("SCLK", "GP2", "6  CLK", "verso"),
-    ("MOSI", "GP3", "5  DI", "verso"),
-    ("MISO", "GP4", "2  DO", "da"),
-    ("CS", "GP5", "1  /CS", "verso"),
+    ("SCLK", "GP2", "6  CLK", "to"),
+    ("MOSI", "GP3", "5  DI", "to"),
+    ("MISO", "GP4", "2  DO", "from"),
+    ("CS", "GP5", "1  /CS", "to"),
 )
 
-# LA DISTINTA, con sigle vere.
+# THE BILL OF MATERIALS, with real part numbers.
 #
 # ⚠️ On the MOSFET the spec that matters is not the current, it is the gate
 # threshold: the gate sits at 1.8 V, so Vgs(th) must be under 1.5 V. The
@@ -61,9 +61,9 @@ CHANNELS = (
 # easiest mistake to make here.
 #
 # ⚠️ And the resistors are 1 kΩ, not the textbook 10 kΩ: those
-# vengono dall'I2C a 100 kHz. Qui la salita del segnale la fa la resistenza,
+# come from I2C at 100 kHz. Here the rise of the signal is the resistor,
 # and with 10 kΩ over some thirty picofarads it goes to 700 ns -- more than
-# periodo a 1 MHz. Con 1 kΩ si scende a ~70 ns e si tengono i 4 MHz.
+# a whole period at 1 MHz. With 1 kΩ it drops to ~70 ns and holds 4 MHz.
 # ⚠️ The "what" column is bilingual down to the comma: 1,5 V in Italian and
 # 1.5 V in English. The part numbers, on the other hand, are not translated.
 PARTS = (
@@ -81,30 +81,30 @@ PARTS = (
 )
 
 
-def value_for(chunk, language="it"):
+def value_of(chunk, language="it"):
     """The part's "what" column, in the right language."""
     text = chunk[1]
     if isinstance(text, dict):
         return text.get(language) or text.get("it") or ""
     return text
 
-NOTES = ("ad_nota1", "ad_nota3", "ad_nota5", "ad_nota6")
+NOTES = ("ls_note1", "ls_note3", "ls_note5", "ls_note6")
 
 # --------------------------------------------------------------- geometria
 # One channel only, drawn large: the other three are identical and drawing
 # all four adds no information, only lines.
-RAIL_HIGH_Y = 132              # barra dei 3,3 V
-RAIL_LOW_Y = 300             # barra degli 1,8 V
-CHANNEL_Y = 216                 # il segnale, in mezzo alle due barre
-X_RAIL0, X_RAIL1 = 56, 620     # da dove a dove arrivano le due barre
-X_PICO, X_CHIP = 112, 560      # dove comincia e finisce il filo del segnale
-X_MOSFET = 336                    # il transistor, al centro
-X_R_ALTA, X_R_BASSA = 232, 440  # le due resistenze di tiraggio
+RAIL_HIGH_Y = 132              # the 3.3 V rail
+RAIL_LOW_Y = 300             # the 1.8 V rail
+CHANNEL_Y = 216                 # the signal, between the two rails
+X_RAIL0, X_RAIL1 = 56, 620     # where the two rails start and stop
+X_PICO, X_CHIP = 112, 560      # where the signal wire starts and ends
+X_MOSFET = 336                    # the transistor, in the middle
+X_R_HIGH, X_R_LOW = 232, 440  # the two pull-up resistors
 # ⚠️ The regulator's tap sits BEFORE the signal starts (x=112): put in the
 # middle, its wire crossed the signal line and looked like it touched it.
 X_IN, X_OUT = 76, 500
-LDO_X, LDO_Y = 216, 400        # il regolatore, sotto
-# ⚠️ La colonna di destra ha tre riquadri e arriva a 720: misurato, non
+LDO_X, LDO_Y = 216, 400        # the regulator, below
+# ⚠️ The right column has three boxes and reaches 720: that height is
 # measured, not guessed. If SHIFTER_HEIGHT is shorter than the real height,
 # the scale is computed for a drawing that does not exist and the last note
 # ends up outside the window.
@@ -117,19 +117,19 @@ LDO_L, LDO_A = 140, 44
 
 
 class LevelShifter(wiring.Diagram):
-    """La finestra dello schema elettrico: riusa i pennelli di Schema."""
+    """The schematic window: it reuses the Diagram brushes."""
 
     def __init__(self, parent, tm, L):
         wiring.Diagram.__init__(self, parent, tm, L, clip=True)
-        self.title(L("ad_titolo"))
+        self.title(L("ls_title"))
         # ⚠️ 800 tall, not 700: the natural content reaches 720 and
-        # con la scala guidata dalla larghezza diventano ~755 pixel.
-        # Misurato: a occhio l'ultima nota restava fuori.
+        # with the scale led by the width they become ~755 pixels.
+        # Measured: by eye the last note used to fall outside.
         self.geometry("1080x800")
 
     # ------------------------------------------------------------ disegno
     def draw(self):
-        self._attesa = None
+        self._redraw_after = None
         width = max(self.canvas.winfo_width(), 300)
         height = max(self.canvas.winfo_height(), 240)
         self.k = max(0.52, min(width / float(wiring.WIDTH),
@@ -146,15 +146,15 @@ class LevelShifter(wiring.Diagram):
         top = self._s(52)
         T.gradient(self.canvas, real_width, top)
         self.canvas.create_line(0, top, real_width, top, fill=T.LINE)
-        self._text(20, 18, self.L("ad_titolo"), T.FG, self._font(12, True))
-        self._text(21, 37, self.L("ad_sotto"), T.MUT, self._font(8))
+        self._text(20, 18, self.L("ls_title"), T.FG, self._font(12, True))
+        self._text(21, 37, self.L("ls_sub"), T.MUT, self._font(8))
 
         # the print button: a drawn pill, like everything else
-        larghezza_pillola = 96
-        x0 = (real_width / self.k) - larghezza_pillola - 16
-        self._rect(x0, 14, x0 + larghezza_pillola, 38, "#1D2937", "#2A3846",
+        pill_width = 96
+        x0 = (real_width / self.k) - pill_width - 16
+        self._rect(x0, 14, x0 + pill_width, 38, "#1D2937", "#2A3846",
                    tag="pdf")
-        self._text(x0 + larghezza_pillola / 2.0, 26, self.L("ad_pdf"),
+        self._text(x0 + pill_width / 2.0, 26, self.L("ls_pdf"),
                     "#8FC2E3", self._font(7.5, True), anchor="center",
                     tag="pdf")
         self.canvas.tag_bind("pdf", "<Button-1>", lambda _e: self.export_pdf())
@@ -165,15 +165,15 @@ class LevelShifter(wiring.Diagram):
 
     # -- stampa ------------------------------------------------------------
     def export_pdf(self, path=None):
-        """Il disegno e la distinta in un PDF stampabile."""
+        """The drawing and the BOM in a printable PDF."""
         if path is None:
             if printing.find_chrome() is None:
-                messagebox.showwarning(self.L("ad_titolo"),
-                                       self.L("ad_pdf_niente_chrome"),
+                messagebox.showwarning(self.L("ls_title"),
+                                       self.L("ls_pdf_no_chrome"),
                                        parent=self)
                 return None
             path = filedialog.asksaveasfilename(
-                parent=self, title=self.L("ad_pdf_dove"), defaultextension=".pdf",
+                parent=self, title=self.L("ls_pdf_where"), defaultextension=".pdf",
                 initialfile="adattatore-1v8.pdf",
                 filetypes=[("PDF", "*.pdf")])
             if not path:
@@ -184,34 +184,34 @@ class LevelShifter(wiring.Diagram):
         drawing = printing.svg_from_canvas(self.canvas, area)
         page = printing.level_shifter_html(
             drawing, self.L,
-            [(p[0], value_for(p, self.L.code), p[2]) for p in PARTS],
-            CHANNELS, NOTES, self.L("ad_gia_pronti"),
-            self.L("ad_titolo"), self.L("ad_sotto"))
+            [(p[0], value_of(p, self.L.code), p[2]) for p in PARTS],
+            CHANNELS, NOTES, self.L("ls_ready_made"),
+            self.L("ls_title"), self.L("ls_sub"))
         done, reason = printing.to_pdf(page, path)
         self.draw()
         if not done:
-            messagebox.showerror(self.L("ad_titolo"),
-                                 self.L("ad_pdf_errore", reason=reason),
+            messagebox.showerror(self.L("ls_title"),
+                                 self.L("ls_pdf_error", reason=reason),
                                  parent=self)
             return None
-        messagebox.showinfo(self.L("ad_titolo"),
-                            self.L("ad_pdf_fatto",
+        messagebox.showinfo(self.L("ls_title"),
+                            self.L("ls_pdf_done",
                                    file=os.path.basename(path)),
                             parent=self)
         return path
 
-    # -- le due alimentazioni ---------------------------------------------
+    # -- the two supplies -------------------------------------------------
     def _draw_rails(self):
         # ⚠️ The labels go ABOVE the rail, not to its left: on the left they
         # took the space the regulator's tap comes down through.
-        for y, label_for, colour, x_da in (
-                (RAIL_HIGH_Y, self.L("ad_rail_alto"), T.WIRE["VCC"], X_RAIL0),
-                (RAIL_LOW_Y, self.L("ad_rail_basso"), "#F0A93B",
+        for y, label, colour, x_from in (
+                (RAIL_HIGH_Y, self.L("ls_rail_high"), T.WIRE["VCC"], X_RAIL0),
+                (RAIL_LOW_Y, self.L("ls_rail_low"), "#F0A93B",
                  X_IN + 24)):
-            a, b, c = self._s(x_da, y, X_RAIL1)
+            a, b, c = self._s(x_from, y, X_RAIL1)
             self.canvas.create_line(a, b, c, b, fill=colour,
                                   width=max(1.6, 2.4 * self.k))
-            self._text(x_da + 4, y - 13, label_for, colour,
+            self._text(x_from + 4, y - 13, label, colour,
                         self._font(8, True))
 
     # -- un canale: MOSFET e due resistenze -------------------------------
@@ -223,34 +223,34 @@ class LevelShifter(wiring.Diagram):
         self._wire([(X_PICO, CHANNEL_Y), (X_MOSFET - 40, CHANNEL_Y)], colour)
         self._wire([(X_MOSFET + 40, CHANNEL_Y), (X_CHIP, CHANNEL_Y)], colour)
 
-        self._text(X_PICO, CHANNEL_Y - 14, self.L("ad_lato_pico"), "#B9C7D3",
+        self._text(X_PICO, CHANNEL_Y - 14, self.L("ls_side_pico"), "#B9C7D3",
                     self._font(7, True))
-        self._text(X_CHIP, CHANNEL_Y - 14, self.L("ad_lato_chip"), "#B9C7D3",
+        self._text(X_CHIP, CHANNEL_Y - 14, self.L("ls_side_chip"), "#B9C7D3",
                     self._font(7, True), anchor="e")
 
         # the two pull-ups, one per side
-        self._draw_resistor(X_R_ALTA, RAIL_HIGH_Y, CHANNEL_Y, "R5", "1k")
-        self._draw_resistor(X_R_BASSA, RAIL_LOW_Y, CHANNEL_Y, "R1", "1k")
+        self._draw_resistor(X_R_HIGH, RAIL_HIGH_Y, CHANNEL_Y, "R5", "1k")
+        self._draw_resistor(X_R_LOW, RAIL_LOW_Y, CHANNEL_Y, "R1", "1k")
 
         self._draw_mosfet(X_MOSFET, CHANNEL_Y)
 
         # ⚠️ The transistor is not symmetric: the source faces the
-        # lato a 1,8 V. Montato al contrario il MOSFET conduce sempre e i due
-        # sides stay connected, which means the chip gets 3.3 V anyway.
-        self._text(X_IN + 28, RAIL_LOW_Y + 24, self.L("ad_verso"),
+        # 1.8 V side. Fitted the other way round the MOSFET always conducts,
+        # the two sides stay connected, and the chip gets 3.3 V anyway.
+        self._text(X_IN + 28, RAIL_LOW_Y + 24, self.L("ls_orientation"),
                     "#93A5B4", self._font(7), anchor="nw", width=340)
 
-    def _draw_resistor(self, x, y_rail, y_segnale, ref, value_for):
+    def _draw_resistor(self, x, y_rail, y_signal, ref, value):
         """A vertical resistor between the rail and the signal wire."""
-        middle = (y_rail + y_segnale) / 2.0
+        middle = (y_rail + y_signal) / 2.0
         top, bottom = middle - 22, middle + 22
         self._wire([(x, y_rail), (x, top)], "#5E7488")
-        self._wire([(x, bottom), (x, y_segnale)], "#5E7488")
+        self._wire([(x, bottom), (x, y_signal)], "#5E7488")
         self._rect(x - 11, top, x + 11, bottom, "#141A21", "#7C8B99")
         self._text(x + 18, middle - 7, ref, "#93A5B4", self._font(7, True))
-        self._text(x + 18, middle + 6, value_for, "#6E8296", self._font(7))
+        self._text(x + 18, middle + 6, value, "#6E8296", self._font(7))
         # the junction dot: without it a crossing just looks like a crossing
-        self._draw_junction(x, y_segnale)
+        self._draw_junction(x, y_signal)
 
     def _draw_junction(self, x, y):
         a, b = self._s(x, y)
@@ -272,11 +272,11 @@ class LevelShifter(wiring.Diagram):
         # sits IN BETWEEN. Stood upright, the connections made a loop that
         # looked like a rectangle, not a transistor.
         wide = 32
-        y_canale = y + 13           # le tre barrette del canale
-        y_gate = y + 22             # la placca di gate, staccata sotto
+        y_channel = y + 13           # the three bars of the channel
+        y_gate = y + 22             # the gate plate, set apart below
 
         for x0, x1 in ((x - wide, x - 10), (x - 7, x + 7), (x + 10, x + wide)):
-            a, b = self._s(x0, y_canale)
+            a, b = self._s(x0, y_channel)
             self.canvas.create_line(a, b, self._s(x1), b, fill="#B9C7D3",
                                   width=max(1.5, 2.2 * self.k))
         a, b = self._s(x - wide, y_gate)
@@ -285,8 +285,8 @@ class LevelShifter(wiring.Diagram):
 
         # drain a sinistra (lato 3,3 V), source a destra (lato 1,8 V)
         self._wire([(X_MOSFET - 40, y), (x - wide + 6, y),
-                    (x - wide + 6, y_canale)], "#8FA2B2")
-        self._wire([(x + wide - 6, y_canale), (x + wide - 6, y),
+                    (x - wide + 6, y_channel)], "#8FA2B2")
+        self._wire([(x + wide - 6, y_channel), (x + wide - 6, y),
                     (X_MOSFET + 40, y)], "#8FA2B2")
         # the gate is tied to 1.8 V: that is what makes the whole thing work
         self._wire([(x, y_gate), (x, RAIL_LOW_Y)], "#F0A93B")
@@ -302,14 +302,14 @@ class LevelShifter(wiring.Diagram):
         self._text(x, y - 30, "Q1 · BSS138", "#93A5B4",
                     self._font(7, True), anchor="center")
 
-    # -- il regolatore da 3,3 a 1,8 ---------------------------------------
+    # -- the 3.3 to 1.8 regulator -----------------------------------------
     def _draw_regulator(self):
         x0, y0 = LDO_X, LDO_Y
         x1, y1 = x0 + LDO_L, y0 + LDO_A
         self._rect(x0, y0, x1, y1, "#141A21", "#7C8B99")
         self._text((x0 + x1) / 2.0, y0 + 15, "U1", "#E4EDF4",
                     self._font(8, True), anchor="center")
-        self._text((x0 + x1) / 2.0, y0 + 31, self.L("ad_ldo"), "#93A5B4",
+        self._text((x0 + x1) / 2.0, y0 + 31, self.L("ls_ldo"), "#93A5B4",
                     self._font(6.5), anchor="center")
 
         middle = y0 + LDO_A / 2.0
@@ -326,11 +326,11 @@ class LevelShifter(wiring.Diagram):
         self._draw_capacitor(X_OUT - 44, middle, "C2")
         self._draw_junction(X_IN + 60, middle)
         self._draw_junction(X_OUT - 44, middle)
-        self._text(X_IN + 28, y1 + 86, self.L("ad_ldo_nota"), "#93A5B4",
+        self._text(X_IN + 28, y1 + 86, self.L("ls_ldo_note"), "#93A5B4",
                     self._font(7), anchor="nw", width=430)
 
     def _draw_capacitor(self, x, y, ref):
-        """Appeso al filo: dal nodo scende, due piatti, poi massa."""
+        """Hung off the wire: down from the node, two plates, then ground."""
         self._wire([(x, y), (x, y + 26)], "#5E7488")
         for dy, wide in ((26, 15), (36, 15)):
             a, b = self._s(x - wide, y + dy)
@@ -352,57 +352,57 @@ class LevelShifter(wiring.Diagram):
         y = wiring.TITLE_Y - 12
         line = y + 38
 
-        for label_for, dx in ((self.L("ad_col_segnale"), 26),
+        for label, dx in ((self.L("ls_col_signal"), 26),
                               (self.L("sch_col_pico"), 110),
                               (self.L("sch_col_chip"), 190)):
-            self._text(x + dx, line, T.micro(label_for), "#55697C",
-                        self._font(6, True), tag="tabella")
+            self._text(x + dx, line, T.micro(label), "#55697C",
+                        self._font(6, True), tag="table")
         line += 15
         for signal, pico, chip, direction in CHANNELS:
             colour = T.WIRE[signal]
             self._text(x + 26, line, signal, colour, self._font(8, True),
-                        tag="tabella")
+                        tag="table")
             self._text(x + 110, line, pico, T.FG, self._font(7, mono=True),
-                        tag="tabella")
-            freccia = "→" if direction == "verso" else "←"
-            self._text(x + 170, line, freccia, "#6E8296", self._font(7),
-                        tag="tabella")
+                        tag="table")
+            arrow = "→" if direction == "to" else "←"
+            self._text(x + 170, line, arrow, "#6E8296", self._font(7),
+                        tag="table")
             self._text(x + 190, line, chip, T.FG, self._font(7, mono=True),
-                        tag="tabella")
+                        tag="table")
             line += 20
 
-        background = self._frame_around("tabella", x, y, x + wiring.COL_WIDTH,
-                               self.L("ad_tabella"))
+        background = self._frame_around("table", x, y, x + wiring.COL_WIDTH,
+                               self.L("ls_table"))
 
         # --- the bill of materials: ref and value on one line, models below
         # ⚠️ The part numbers earn their place: "a MOSFET" and "a regulator"
-        # comprare i pezzi giusti, e sul MOSFET la scelta sbagliata (2N7002)
-        # sembra identica e non funziona.
+        # buy the right parts, and on the MOSFET the wrong choice (2N7002)
+        # looks identical and does not work.
         y1 = background + 14
         line = y1 + 38
         for chunk in PARTS:
-            ref, _v, modelli = chunk
+            ref, _v, models = chunk
             self._text(x + 15, line, ref, "#E4EDF4",
-                        self._font(7.5, True, mono=True), tag="distinta")
-            self._text(x + 74, line, value_for(chunk, self.L.code),
+                        self._font(7.5, True, mono=True), tag="bom")
+            self._text(x + 74, line, value_of(chunk, self.L.code),
                         "#B9C7D3", self._font(7),
                         anchor="nw", width=wiring.COL_WIDTH - 90,
-                        tag="distinta")
-            bounds = self.canvas.bbox("distinta")
+                        tag="bom")
+            bounds = self.canvas.bbox("bom")
             line = (bounds[3] / self.k) + 4 if bounds else line + 14
-            board_id = self._text(x + 74, line, modelli, "#7C8B99",
+            board_id = self._text(x + 74, line, models, "#7C8B99",
                                          self._font(6.5), anchor="nw",
                                          width=wiring.COL_WIDTH - 90,
-                                         tag="distinta")
+                                         tag="bom")
             bounds = self.canvas.bbox(board_id)
             line = (bounds[3] / self.k) + 11 if bounds else line + 24
 
-        board_id = self._text(x + 15, line + 2, self.L("ad_gia_pronti"),
+        board_id = self._text(x + 15, line + 2, self.L("ls_ready_made"),
                                      "#8FC2E3", self._font(6.5), anchor="nw",
                                      width=wiring.COL_WIDTH - 30,
-                                     tag="distinta")
-        background = self._frame_around("distinta", x, y1, x + wiring.COL_WIDTH,
-                               self.L("ad_distinta"))
+                                     tag="bom")
+        background = self._frame_around("bom", x, y1, x + wiring.COL_WIDTH,
+                               self.L("ls_bom"))
 
         y2 = background + 14
         line = y2 + 38
@@ -411,15 +411,15 @@ class LevelShifter(wiring.Diagram):
             a, b = self._s(x + 15, line + 4)
             r = self._s(3)
             self.canvas.create_oval(a - r, b - r, a + r, b + r, fill=colour,
-                                  outline="", tags="avvisi")
+                                  outline="", tags="warnings")
             board_id = self._text(x + 26, line, self.L(key), "#B9C7D3",
                                          self._font(7), anchor="nw",
                                          width=wiring.COL_WIDTH - 42,
-                                         tag="avvisi")
+                                         tag="warnings")
             bounds = self.canvas.bbox(board_id)
             line += ((bounds[3] - bounds[1]) / self.k if bounds else 34) + 15
-        self._frame_around("avvisi", x, y2, x + wiring.COL_WIDTH,
-                       self.L("ad_note_titolo"))
+        self._frame_around("warnings", x, y2, x + wiring.COL_WIDTH,
+                       self.L("ls_notes_title"))
 
 
 def open_window(parent, tm, L):
@@ -431,5 +431,5 @@ def open_window(parent, tm, L):
         existing.focus_set()
         return existing
     window = LevelShifter(parent, tm, L)
-    parent._finestra_adattatore = window
+    parent._shifter_window = window
     return window

@@ -20,15 +20,15 @@ import tkinter as tk
 
 import theme as T
 
-# stati di un blocco
-PENDING = 0        # non ancora toccato
-OUTSIDE = 1         # fuori dalla regione: non verra' toccato
+# the states a block can be in
+PENDING = 0        # not touched yet
+OUTSIDE = 1         # outside the region: it will not be touched
 READ = 2
 ERASED_BLOCK = 3
 WRITTEN = 4
 VERIFIED = 5
-MISMATCH = 6       # la verifica finale non torna
-ACTIVE = 7        # ci sta lavorando adesso
+MISMATCH = 6       # the final check does not add up
+ACTIVE = 7        # being worked on right now
 
 COLOURS = {
     PENDING: "#16202B",
@@ -42,9 +42,9 @@ COLOURS = {
 }
 
 # ordine e chiavi per la legenda
-LEGEND_KEYS = ((PENDING, "leg_ignoto"), (READ, "leg_letto"),
-           (ERASED_BLOCK, "leg_cancellato"), (WRITTEN, "leg_scritto"),
-           (VERIFIED, "leg_verificato"), (MISMATCH, "leg_diverso"))
+LEGEND_KEYS = ((PENDING, "leg_pending"), (READ, "leg_read"),
+           (ERASED_BLOCK, "leg_erased"), (WRITTEN, "leg_written"),
+           (VERIFIED, "leg_verified"), (MISMATCH, "leg_mismatch"))
 
 SIDE = 6          # lato del quadratino
 PITCH = 7         # quadratino + fessura
@@ -65,9 +65,9 @@ class ChipMap(tk.Canvas):
         self.states = []
         self._id = []
         self.regions = []
-        self._evidenziata = None
-        self.bind("<Configure>", lambda _e: self._ricostruisci())
-        self.bind("<Motion>", self._sotto_il_mouse)
+        self._highlighted = None
+        self.bind("<Configure>", lambda _e: self._rebuild())
+        self.bind("<Motion>", self._under_the_mouse)
         self.bind("<Leave>", lambda _e: self.on_position and self.on_position(None))
 
     # ------------------------------------------------------------- griglia
@@ -75,29 +75,29 @@ class ChipMap(tk.Canvas):
     def blocks(self):
         return len(self.states)
 
-    def _byte_per_blocco(self):
+    def _bytes_per_block(self):
         return max(1, self.total_size / float(max(self.blocks, 1)))
 
-    def _ricostruisci(self):
+    def _rebuild(self):
         width = max(self.winfo_width(), 40)
         columns = max(16, int((width - 6) // PITCH))
         if columns == self.columns and self._id:
             return
-        vecchi = list(self.states)
+        old_ones = list(self.states)
         self.columns = columns
         total = columns * self.lines
         self.delete("all")
         self._id = []
-        # gli stati vecchi si riproiettano sulla griglia nuova, cosi' un
+        # the old states are reprojected onto the new grid, so that
         # a resize mid-job does not wipe what is on screen
-        nuovi = []
+        fresh = []
         for index in range(total):
-            if vecchi:
-                nuovi.append(vecchi[min(len(vecchi) - 1,
-                                        index * len(vecchi) // total)])
+            if old_ones:
+                fresh.append(old_ones[min(len(old_ones) - 1,
+                                        index * len(old_ones) // total)])
             else:
-                nuovi.append(PENDING)
-        self.states = nuovi
+                fresh.append(PENDING)
+        self.states = fresh
         for index in range(total):
             column, line = index % columns, index // columns
             x = 3 + column * PITCH
@@ -105,20 +105,20 @@ class ChipMap(tk.Canvas):
             self._id.append(self.create_rectangle(
                 x, y, x + SIDE, y + SIDE, fill=COLOURS[self.states[index]],
                 outline=""))
-        self._disegna_regioni()
+        self._draw_regions()
 
-    def _disegna_regioni(self):
-        self.delete("regione")
-        if self._evidenziata is None:
+    def _draw_regions(self):
+        self.delete("region")
+        if self._highlighted is None:
             return
-        start, end = self._evidenziata
+        start, end = self._highlighted
         first, last = self._block_rect(start), self._block_rect(end)
         for index in (first, last):
             column, line = index % self.columns, index // self.columns
             x = 3 + column * PITCH
             y = 3 + line * PITCH
             self.create_rectangle(x - 1, y - 1, x + SIDE + 1, y + SIDE + 1,
-                                  outline=T.MUT, width=1, tags="regione")
+                                  outline=T.MUT, width=1, tags="region")
 
     # ------------------------------------------------------------- accesso
     def _block_rect(self, position):
@@ -127,7 +127,7 @@ class ChipMap(tk.Canvas):
         index = int(position * self.blocks // max(self.total_size, 1))
         return max(0, min(self.blocks - 1, index))
 
-    def _sotto_il_mouse(self, event):
+    def _under_the_mouse(self, event):
         if not self.on_position or not self.blocks:
             return
         column = int((event.x - 3) // PITCH)
@@ -136,7 +136,7 @@ class ChipMap(tk.Canvas):
             return self.on_position(None)
         index = line * self.columns + column
         if 0 <= index < self.blocks:
-            self.on_position(int(index * self._byte_per_blocco()))
+            self.on_position(int(index * self._bytes_per_block()))
 
     # ------------------------------------------------------------- comandi
     def set_size(self, total_size=None, regions=None):
@@ -144,24 +144,24 @@ class ChipMap(tk.Canvas):
             self.total_size = total_size
         if regions is not None:
             self.regions = regions
-        self._ricostruisci()
+        self._rebuild()
 
     def reset(self, state=PENDING):
         for index in range(self.blocks):
-            self._colora(index, state)
+            self._paint(index, state)
 
     def highlight(self, span):
         """Marks the bounds of the region about to be worked on."""
-        self._evidenziata = span
+        self._highlighted = span
         if span is None:
             self.reset(PENDING)
         else:
             start, end = span
             self.reset(OUTSIDE)
             self.mark(start, end, PENDING)
-        self._disegna_regioni()
+        self._draw_regions()
 
-    def _colora(self, index, state):
+    def _paint(self, index, state):
         if not (0 <= index < self.blocks) or self.states[index] == state:
             return
         self.states[index] = state
@@ -175,21 +175,21 @@ class ChipMap(tk.Canvas):
         if end < start:
             return
         for index in range(self._block_rect(start), self._block_rect(end) + 1):
-            self._colora(index, state)
+            self._paint(index, state)
 
-    def advance(self, start, end, percent, state, attivo=True):
-        """Riempie l'intervallo fino alla percentuale indicata."""
+    def advance(self, start, end, percent, state, active_=True):
+        """Fills the span up to the percentage given."""
         if end < start:
             return
         first, last = self._block_rect(start), self._block_rect(end)
         how_many = last - first + 1
-        fatti = int(how_many * max(0, min(100, percent)) / 100.0)
+        done_ = int(how_many * max(0, min(100, percent)) / 100.0)
         for spare in range(how_many):
             index = first + spare
-            if spare < fatti:
-                self._colora(index, state)
-            elif spare == fatti and attivo and percent < 100:
-                self._colora(index, ACTIVE)
+            if spare < done_:
+                self._paint(index, state)
+            elif spare == done_ and active_ and percent < 100:
+                self._paint(index, ACTIVE)
 
     def mark_spans(self, spans, state):
         for start, end in spans:
@@ -205,19 +205,19 @@ class Legend(tk.Frame):
         self.L = L
         self.entries = []
         for state, key in LEGEND_KEYS:
-            cella = tk.Frame(self, background=background)
-            cella.pack(side="left", padx=(0, 10))
-            quadretto = tk.Canvas(cella, width=SIDE, height=SIDE,
+            cell = tk.Frame(self, background=background)
+            cell.pack(side="left", padx=(0, 10))
+            square = tk.Canvas(cell, width=SIDE, height=SIDE,
                                   highlightthickness=0, background=background)
-            quadretto.create_rectangle(0, 0, SIDE, SIDE, fill=COLOURS[state],
+            square.create_rectangle(0, 0, SIDE, SIDE, fill=COLOURS[state],
                                        outline="")
-            quadretto.pack(side="left", padx=(0, 4))
-            label_for = tk.Label(cella, background=background, foreground=T.MUT,
-                                 font=theme.f_minuto)
-            label_for.pack(side="left")
-            self.entries.append((label_for, key))
+            square.pack(side="left", padx=(0, 4))
+            label = tk.Label(cell, background=background, foreground=T.MUT,
+                                 font=theme.f_tiny)
+            label.pack(side="left")
+            self.entries.append((label, key))
         self.translate()
 
     def translate(self):
-        for label_for, key in self.entries:
-            label_for.configure(text=self.L(key))
+        for label, key in self.entries:
+            label.configure(text=self.L(key))
