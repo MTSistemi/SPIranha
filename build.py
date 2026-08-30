@@ -17,6 +17,8 @@ import shutil
 import subprocess
 import sys
 
+from version import VERSION
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 VENV = os.path.join(HERE, ".venv")
 PYTHON_VENV = os.path.join(VENV, "Scripts", "python.exe")
@@ -42,9 +44,6 @@ def prepare_venv():
         sys.exit("pip will not upgrade")
     if run([PYTHON_VENV, "-m", "pip", "install"] + DEPENDENCIES) != 0:
         sys.exit("the dependencies will not install (the network is needed)")
-
-
-VERSION = "1.2.1"
 
 
 def prepare_resources():

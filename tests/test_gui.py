@@ -159,6 +159,30 @@ def checks(window):
         window.log("log test")
         check("log filled", len(window.log_lines) == 1)
 
+        # 11. what the worker thread puts on the queue is what the window
+        # takes off it.
+        # ⚠️ This is not ceremony. The two ends are coupled by a string, and
+        # a rename left them saying "event" on one side and "evento" on the
+        # other: the live chip map and the progress bar went quietly dead,
+        # and every existing check still passed.
+        import chipmap as _cm
+        window._prepare_map()
+        window._line_from_thread("from the thread")
+        window._event_from_thread("erase", 0, 0x0FFF)
+        window._pump()
+        check("a line from the thread reaches the log",
+                  window.log_lines[-1].endswith("from the thread"),
+                  window.log_lines[-1])
+        check("an erase event reaches the chip map",
+                  _cm.ERASED_BLOCK in window.chip_map.states,
+                  str(sorted(set(window.chip_map.states))))
+        # ⚠️ after this one the map is repainted for the phase, so the erase
+        # has to be looked at first
+        window._event_from_thread("phase", "READ", 50)
+        window._pump()
+        check("a phase event reaches the progress",
+                  window.phase == "READ", str(window.phase))
+
 
         # 12. the pico module: UF2 format, no hardware needed
         import pico

@@ -39,12 +39,14 @@ import regions as reg
 import chip_search
 import wiring
 import voltage as V
+import icon
 import serprog
 import theme as T
 from i18n import LANGUAGES, LANGUAGE_NAMES, Language
 
 APP_NAME = "SPIranha"
 BAUD = 115200
+HEADER_ICON = 32       # the mark in the header: 256 divided by 8, exactly
 BLOCK = 1024 * 1024
 
 
@@ -433,9 +435,14 @@ class App(tk.Tk):
         width = max(canvas.winfo_width(), 320)
         canvas.delete("scritte")
         T.gradient(canvas, width, 54)
-        canvas.create_text(18, 18, text=self.L("title"), fill=T.FG, anchor="w",
+        mark = self._header_icon()
+        left = 18
+        if mark is not None:
+            canvas.create_image(14, 27, image=mark, anchor="w", tags="scritte")
+            left = 14 + HEADER_ICON + 12
+        canvas.create_text(left, 18, text=self.L("title"), fill=T.FG, anchor="w",
                          font=self.theme.f_title, tags="scritte")
-        canvas.create_text(19, 38,
+        canvas.create_text(left + 1, 38,
                          text=self.L("subtitle",
                                      board=self.profile.text(
                                          "name", self.L.code)),
@@ -900,6 +907,17 @@ class App(tk.Tk):
                           else ["disabled"])
 
 
+    @staticmethod
+    def _icon_path():
+        """SPIranha.ico: inside the executable, or next to it."""
+        for root in (getattr(sys, "_MEIPASS", None), app_folder()):
+            if not root:
+                continue
+            path = os.path.join(root, "SPIranha.ico")
+            if os.path.isfile(path):
+                return path
+        return None
+
     def _set_window_icon(self):
         """The window's own icon.
 
@@ -909,16 +927,28 @@ class App(tk.Tk):
         Tk's blue feather until it is told otherwise, and that is what people
         actually look at while the program runs.
         """
-        for root in (getattr(sys, "_MEIPASS", None), app_folder()):
-            if not root:
-                continue
-            path = os.path.join(root, "SPIranha.ico")
-            if os.path.isfile(path):
-                try:
-                    self.iconbitmap(path)
-                except tk.TclError:
-                    pass          # a window without its icon still works
-                return
+        path = self._icon_path()
+        if not path:
+            return
+        try:
+            self.iconbitmap(path)
+        except tk.TclError:
+            pass                  # a window without its icon still works
+
+    def _header_icon(self):
+        """The mark for the header, or None. Kept on self: a PhotoImage that
+        nobody holds is collected and the canvas draws a hole."""
+        if hasattr(self, "_icon_image"):
+            return self._icon_image
+        self._icon_image = None
+        path = self._icon_path()
+        if path:
+            try:
+                self._icon_image = tk.PhotoImage(
+                    data=icon.png_from_ico(path, HEADER_ICON))
+            except (OSError, ValueError, tk.TclError):
+                self._icon_image = None
+        return self._icon_image
 
     # ------------------------------------------------- firmware del Pico
     def _firmware_path(self):
@@ -984,7 +1014,7 @@ class App(tk.Tk):
                 then_()
 
         threading.Thread(
-            target=lambda: self.tail_of.put(("chiamata", end, work())),
+            target=lambda: self.tail_of.put(("call", end, work())),
             daemon=True).start()
 
     def _fill_models(self):
@@ -2335,9 +2365,9 @@ class App(tk.Tk):
         def background_colour():
             try:
                 outcome = work()
-                self.tail_of.put(("fine", on_finish, outcome, name, None))
+                self.tail_of.put(("done", on_finish, outcome, name, None))
             except Exception:                              # noqa: BLE001
-                self.tail_of.put(("fine", None, None, name, traceback.format_exc()))
+                self.tail_of.put(("done", None, None, name, traceback.format_exc()))
 
         threading.Thread(target=background_colour, daemon=True).start()
 
@@ -2373,17 +2403,17 @@ class App(tk.Tk):
                 entry = self.tail_of.get_nowait()
                 if entry[0] == "line":
                     self.log("   " + entry[1])
-                elif entry[0] == "evento":
+                elif entry[0] == "event":
                     self._apply_event(entry[1], entry[2])
                 elif entry[0] == "message":
                     _, message, key, colour, fields = entry
                     message.show(key, colour, **fields)
-                elif entry[0] == "chiamata":
+                elif entry[0] == "call":
                     # background work that is not a chip operation: it does
                     # not touch the "busy" state, it only comes back into
                     # the window's thread
                     entry[1](entry[2])
-                elif entry[0] == "fine":
+                elif entry[0] == "done":
                     _, on_finish, outcome, name, error = entry
                     self.busy = False
                     self.writing = False

@@ -66,10 +66,14 @@ class Surface(object):
 
 # ------------------------------------------------------------------- reading
 
-def read_png(path):
-    """An 8-bit RGB/RGBA PNG, as a Surface. Enough for our own artwork."""
-    with open(path, "rb") as f:
-        data = f.read()
+def read_png(source):
+    """An 8-bit RGB/RGBA PNG, as a Surface. A path, or the bytes themselves."""
+    if isinstance(source, bytes):
+        data, path = source, "<bytes>"
+    else:
+        path = source
+        with open(path, "rb") as f:
+            data = f.read()
     if data[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValueError("%s is not a PNG" % path)
     position = 8
@@ -172,6 +176,30 @@ def png_entry(canvas):
             + chunk(b"IHDR", struct.pack(">IIBBBBB", side, side, 8, 6, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
             + chunk(b"IEND", b""))
+
+
+def png_from_ico(path, side):
+    """The icon at `side` pixels, as PNG bytes, taken out of an .ico.
+
+    ⚠️ For the interface, not for the build: Tk reads PNG and nothing else
+    useful, and its own subsample() decimates rather than averages, which on
+    a painted image looks exactly as bad as it sounds. So the 256 entry --
+    the one entry that is already a PNG -- is read and box-averaged here.
+    """
+    with open(path, "rb") as f:
+        data = f.read()
+    count = struct.unpack_from("<HHH", data, 0)[2]
+    for i in range(count):
+        entry = struct.unpack_from("<BBBBHHII", data, 6 + 16 * i)
+        size, offset = entry[6], entry[7]
+        body = data[offset:offset + size]
+        if body[:8] != b"\x89PNG\r\n\x1a\n":
+            continue
+        big = read_png(body)
+        if big.side % side:
+            raise ValueError("%d does not divide %d exactly" % (side, big.side))
+        return png_entry(big.scaled(big.side // side))
+    raise ValueError("%s carries no PNG entry" % path)
 
 
 def write(path=None, artwork=ARTWORK):
