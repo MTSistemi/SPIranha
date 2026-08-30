@@ -23,6 +23,12 @@ class Registry(object):
     def __init__(self, listing=None):
         # each entry: {"name": str, "run": str|None, "boot": str|None}
         self.boards = [dict(v) for v in (listing or [])]
+        # ⚠️ Up to 1.2.0 the name was stored under "nome". Reading it back is
+        # not cosmetic: the name is the only thing that tells two identical
+        # boards apart on the bench, and it was lost on upgrade.
+        for entry in self.boards:
+            if "nome" in entry:
+                entry.setdefault("name", entry.pop("nome"))
 
     # ------------------------------------------------------------ lookup
     def _find(self, run=None, boot=None):

@@ -247,6 +247,14 @@ def checks(window):
                   str(b.as_list()))
         check("it keeps the name already given", b.name(boot="BBBB") == "visto acceso")
 
+        # ⚠️ Found on the bench, upgrading a real installation: up to 1.2.0
+        # the name was stored under "nome", and the board came back nameless.
+        old = boards.Registry([{"nome": "banco A", "run": "DDDD", "boot": None}])
+        check("a name written by 1.2.0 is still read",
+                  old.name(run="DDDD") == "banco A", str(old.as_list()))
+        check("and it is saved back under the English key",
+                  "nome" not in old.as_list()[0], str(old.as_list()))
+
         empty_one = boards.Registry()
         empty_one.set_name("tolgo", run="CCCC")
         empty_one.set_name("", run="CCCC")
