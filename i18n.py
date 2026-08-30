@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Le scritte dell'interfaccia, in italiano e in inglese.
+"""The interface strings, in Italian and English.
 
-Una sola tabella: chiave -> {"it": ..., "en": ...}. Chi disegna l'interfaccia
-chiede la chiave, non la frase, cosi' cambiare lingua non ridisegna niente a
-mano. Le frasi con dei buchi si completano con .format() dal chiamante.
+One table: key -> {"it": ..., "en": ...}. Whoever builds the interface asks
+for the key, not the sentence, so switching language redraws nothing by hand.
+Sentences with holes are filled in by the caller with .format().
 
-REGOLA DEL TESTO: asciutto. Una riga dice una cosa. Niente modi di dire, niente
-frasi di colore: chi legge ha una scheda morta sul tavolo.
+RULE FOR THE TEXT: dry. One line says one thing. No idioms, no colour: the
+person reading has a dead board on the desk.
 
-The interface strings, in Italian and English.
+⚠️ The Italian strings stay Italian. This is the one file where that is the
+point: the program speaks both languages.
 """
 from __future__ import unicode_literals
 
@@ -18,8 +19,8 @@ NOMI_LINGUA = {"it": "Italiano", "en": "English"}
 T = {
     # --- finestra ------------------------------------------------------
     "titolo": {"it": "SPIranha", "en": "SPIranha"},
-    # ⚠️ Il sottotitolo dice su COSA si sta lavorando: il nome del profilo ci
-    # finisce dentro, o l'intestazione parlerebbe sempre di una BC-250.
+    # ⚠️ The subtitle says WHAT is being worked on: the profile name goes
+    # inside it, or the header would always talk about a BC-250.
     "sottotitolo": {
         "it": "Raspberry Pi Pico · pico-serprog · {scheda}",
         "en": "Raspberry Pi Pico · pico-serprog · {scheda}",

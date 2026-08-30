@@ -1,34 +1,33 @@
 # -*- coding: utf-8 -*-
-"""L'RP2040 come programmatore: riconoscerlo, programmarlo, riportarlo a nuovo.
+"""The RP2040 as the programmer: spotting it, programming it, resetting it.
 
-Una scheda RP2040 tenuta premuto BOOTSEL mentre la si attacca si presenta come
-un disco rimovibile chiamato RPI-RP2, con dentro INFO_UF2.TXT. Ci si copia
-sopra un file .uf2 e la scheda si programma da sola e riparte. Non serve nessun
-strumento esterno: e' il bootloader in ROM che fa tutto.
+An RP2040 board plugged in with BOOTSEL held down shows up as a removable
+disk called RPI-RP2, with INFO_UF2.TXT inside. Copy a .uf2 file onto it and
+the board programs itself and restarts. No external tool is needed: the ROM
+bootloader does all of it.
 
-Qui dentro:
-  - si trovano le schede in BOOTSEL guardando le unita' rimovibili;
-  - si installa il firmware copiandoci il .uf2;
-  - si genera un .uf2 che RIPORTA LA SCHEDA A NUOVO.
+In here:
+  - boards in BOOTSEL are found by looking at the removable drives;
+  - the firmware is installed by copying the .uf2 across;
+  - a .uf2 is generated that RESETS THE BOARD TO FACTORY.
 
-⚠️ SUL «TORNARE A NUOVO». Non serve scaricare il flash_nuke di nessuno: il
-bootloader, prima di scrivere un settore, lo CANCELLA. Un .uf2 che scrive 0xFF
-su tutta la flash quindi la lascia cancellata, che e' lo stato di fabbrica —
-senza seconda fase di avvio valida la scheda torna in BOOTSEL da sola. Il file
-lo generiamo noi, byte per byte, e cosi' non c'e' nessun binario di ignoti in
-mezzo.
+⚠️ ABOUT "RESET TO FACTORY". Nobody's flash_nuke needs downloading:
+before writing a sector, the bootloader ERASES it. So a .uf2 that writes 0xFF
+across the whole flash leaves it erased, which is the factory state -- with no
+valid second stage the board returns to BOOTSEL by itself. We generate that
+file ourselves, byte by byte, so no stranger's binary is involved.
 
-Formato UF2 (blocchi da 512 byte, 256 di carico utile):
-    0  magia 0x0A324655 "UF2\\n"
-    4  magia 0x9E5D5157
-    8  bandiere            0x2000 = c'e' l'identificativo di famiglia
-   12  indirizzo di destinazione
-   16  byte di carico utile (256)
-   20  numero del blocco
-   24  quanti blocchi in tutto
-   28  identificativo di famiglia (RP2040 = 0xE48BFF56)
-   32  dati (476 byte, i primi 256 usati)
-  508  magia finale 0x0AB16F30
+UF2 format (512-byte blocks, 256 of payload):
+    0  magic 0x0A324655 "UF2\\n"
+    4  magic 0x9E5D5157
+    8  flags               0x2000 = a family id is present
+   12  target address
+   16  payload bytes (256)
+   20  block number
+   24  total blocks
+   28  family id (RP2040 = 0xE48BFF56)
+   32  data (476 bytes, first 256 used)
+  508  final magic 0x0AB16F30
 """
 from __future__ import unicode_literals
 
@@ -51,11 +50,11 @@ BLOCCO = 512
 CARICO = 256
 BASE_FLASH = 0x10000000
 
-# quante volte riprovare una copia che non riesce nemmeno a cominciare
+# how many times to retry a copy that cannot even get started
 TENTATIVI_COPIA = 6
-FLASH_PICO = 2 * 1024 * 1024        # il Pico originale ne ha 2 MiB
+FLASH_PICO = 2 * 1024 * 1024        # the original Pico has 2 MiB
 
-BAUD_BOOTSEL = 1200                 # aprire a questa velocita' = torna in BOOTSEL
+BAUD_BOOTSEL = 1200                 # opening at this rate = back to BOOTSEL
 SENZA_FINESTRA = 0x08000000 if os.name == "nt" else 0   # CREATE_NO_WINDOW
 ETICHETTA = "RPI-RP2"
 NOME_FIRMWARE = "pico_serprog.uf2"
@@ -64,7 +63,7 @@ DRIVE_REMOVIBILE = 2
 
 
 class Scheda(object):
-    """Una scheda RP2040 in BOOTSEL, vista come disco."""
+    """An RP2040 board in BOOTSEL, seen as a disk."""
 
     def __init__(self, unita, modello=None, identificativo=None, byte_liberi=0,
                  seriale=None):
@@ -72,9 +71,9 @@ class Scheda(object):
         self.modello = modello or "RP2040"
         self.identificativo = identificativo or "?"
         self.byte_liberi = byte_liberi
-        # ⚠️ Questo NON e' il numero di serie che la stessa scheda mostra
-        # quando gira il firmware: il bootloader ne espone uno suo, piu' corto.
-        # Verificato sulla stessa scheda: 12 cifre qui, 16 di la'.
+        # ⚠️ This is NOT the serial number the same board shows while the
+        # firmware runs: the bootloader exposes one of its own, shorter.
+        # Verified on the same board: 12 digits here, 16 over there.
         self.seriale = seriale
 
     @property
@@ -85,7 +84,7 @@ class Scheda(object):
         return "<Scheda %s %s>" % (self.lettera, self.modello)
 
 
-# ------------------------------------------------------------ ricerca
+# ------------------------------------------------------------ finding
 
 def _unita_rimovibili():
     if os.name != "nt":
@@ -105,7 +104,7 @@ def _unita_rimovibili():
 
 
 def _leggi_informazioni(percorso):
-    """INFO_UF2.TXT -> (modello, identificativo). Il file e' due righe."""
+    """INFO_UF2.TXT -> (model, board id). The file is two lines."""
     modello = identificativo = None
     try:
         with open(percorso, "rb") as f:
@@ -121,25 +120,25 @@ def _leggi_informazioni(percorso):
 
 
 def e_rp2040(modello, identificativo):
-    """Questa scheda si dichiara un RP2040?
+    """Does this board declare itself an RP2040?
 
-    ⚠️ Il Board-ID vero e' "RPI-RP2", non "RP2...": si cerca RP2 DENTRO la
-    stringa. La prima versione pretendeva che cominciasse per RP2 e non
-    riconosceva nessuna scheda — se ne e' accorto solo l'hardware.
+    ⚠️ The real Board-ID is "RPI-RP2", not "RP2...": RP2 is looked for INSIDE
+    the string. The first version demanded that it start with RP2 and
+    recognised no board at all -- only the hardware caught that.
     """
     return "RP2" in ("%s %s" % (identificativo or "", modello or "")).upper()
 
 
 def schede_in_bootsel():
-    """Le schede RP2040 in attesa di firmware, adesso."""
+    """The RP2040 boards waiting for firmware, right now."""
     trovate = []
     for unita in _unita_rimovibili():
         informazioni = os.path.join(unita, INFORMAZIONI)
         if not os.path.isfile(informazioni):
             continue
         modello, identificativo = _leggi_informazioni(informazioni)
-        # su un disco qualunque una copia sbagliata non farebbe danni, ma
-        # nemmeno bene
+        # copying onto some random disk would do no harm, but no good
+        # either
         if not e_rp2040(modello, identificativo):
             continue
         liberi = 0
@@ -152,19 +151,19 @@ def schede_in_bootsel():
     return trovate
 
 
-# il seriale che il bootloader espone e' dentro il percorso del dispositivo:
+# the serial the bootloader exposes is inside the device path:
 #   USBSTOR\DISK&VEN_RPI&PROD_RP2&REV_3\9&25F25AF4&0&E0C9125B0D9B&0
 _RE_SERIALE = re.compile(r"&([0-9A-F]{8,20})&\d+$", re.IGNORECASE)
 _CACHE_SERIALI = {}
 
 
 def seriale_di_unita(unita):
-    """Il numero di serie della scheda in BOOTSEL, dalla lettera di unita'.
+    """The serial number of the board in BOOTSEL, from its drive letter.
 
-    ⚠️ Costa una chiamata a PowerShell, quindi il risultato si tiene da parte:
-    la sorveglianza guarda le unita' ogni due secondi e non puo' pagarla ogni
-    volta. Una lettera di unita' non cambia scheda sotto i piedi senza che la
-    scheda sparisca prima, e in quel caso la voce viene ributtata via.
+    ⚠️ It costs a PowerShell call, so the result is kept: the watcher looks at
+    the drives every two seconds and cannot pay that each time. A drive letter
+    does not change board under your feet without the board disappearing
+    first, and in that case the entry is thrown away.
     """
     lettera = (unita or "")[:1].upper()
     if not lettera:
@@ -202,15 +201,15 @@ def seriale_di_unita(unita):
 
 
 def dimentica_seriali():
-    """Da chiamare quando una scheda se ne va: la lettera potrebbe tornare
-    addosso a un'altra."""
+    """To be called when a board goes away: the letter could come back on a
+    different one."""
     _CACHE_SERIALI.clear()
 
 
 # ------------------------------------------------------------ formato UF2
 
 def versione_disponibile(cartella):
-    """La versione dell'UF2 che spediamo, dal file VERSION accanto."""
+    """The version of the UF2 we ship, from the VERSION file next to it."""
     try:
         percorso = os.path.join(cartella, "VERSION")
         with io.open(percorso, encoding="utf-8") as f:
@@ -221,7 +220,7 @@ def versione_disponibile(cartella):
 
 
 def blocco_uf2(indirizzo, dati, numero, totale, famiglia=FAMIGLIA_RP2040):
-    """Un blocco da 512 byte, come lo vuole il bootloader."""
+    """One 512-byte block, the way the bootloader wants it."""
     if len(dati) > CARICO:
         raise ValueError("carico utile troppo grande: %d" % len(dati))
     testa = struct.pack("<IIIIIIII", MAGIA0, MAGIA1, BANDIERA_FAMIGLIA,
@@ -231,11 +230,11 @@ def blocco_uf2(indirizzo, dati, numero, totale, famiglia=FAMIGLIA_RP2040):
 
 
 def leggi_uf2(percorso):
-    """Controlla un .uf2 e ne racconta il contenuto.
+    """Checks a .uf2 and reports what is in it.
 
-    Restituisce (blocchi, primo_indirizzo, ultimo_indirizzo, famiglie).
-    Solleva ValueError se il file non e' un UF2 valido: e' il controllo che si
-    fa PRIMA di copiarlo su una scheda.
+    Returns (blocks, first_address, last_address, families). Raises ValueError
+    when the file is not a valid UF2: this is the check made BEFORE copying it
+    onto a board.
     """
     with open(percorso, "rb") as f:
         dati = f.read()
@@ -264,11 +263,11 @@ def leggi_uf2(percorso):
 
 
 def genera_cancellazione(percorso, byte=FLASH_PICO):
-    """Scrive un .uf2 che riporta la scheda allo stato di fabbrica.
+    """Writes a .uf2 that returns the board to its factory state.
 
-    Scrive 0xFF su tutta la flash: siccome il bootloader cancella il settore
-    prima di scriverlo, il risultato e' una flash cancellata. Senza seconda
-    fase di avvio valida, alla riaccensione la scheda torna in BOOTSEL.
+    It writes 0xFF across the whole flash: since the bootloader erases each
+    sector before writing it, the result is an erased flash. With no valid
+    second stage, the board comes back up in BOOTSEL.
     """
     if byte % CARICO:
         raise ValueError("la dimensione dev'essere multipla di %d" % CARICO)
@@ -284,17 +283,17 @@ def genera_cancellazione(percorso, byte=FLASH_PICO):
 # ------------------------------------------------- rientro nel bootloader
 
 def rientra_in_bootsel(porta):
-    """Chiede al firmware di riavviarsi nel bootloader ROM.
+    """Asks the firmware to restart into the ROM bootloader.
 
-    Si apre la porta a 1200 baud: e' la convenzione dell'Arduino Leonardo, e
-    il nostro pico-serprog la implementa (vedi firmware/). Funziona SOLO con il
-    firmware nostro dalla 1.2 in poi; con quello di prima non succede niente e
-    il pulsante BOOTSEL resta l'unica strada.
+    The port is opened at 1200 baud: that is the Arduino Leonardo convention,
+    and our pico-serprog implements it (see firmware/). It works ONLY with our
+    firmware from 1.2 onwards; with anything older nothing happens and the
+    BOOTSEL button stays the only way.
 
-    ⚠️ L'apertura della porta di solito FALLISCE, e va bene cosi': la scheda si
-    riavvia e sparisce mentre il sistema sta ancora configurando la porta. E'
-    il segno che ha funzionato, non un errore. Chi chiama deve verificare
-    guardando se la scheda ricompare in BOOTSEL, non l'esito di questa.
+    ⚠️ Opening the port usually FAILS, and that is fine: the board reboots and
+    vanishes while the system is still configuring the port. It is the sign it
+    worked, not an error. The caller has to check by watching for the board to
+    reappear in BOOTSEL, not by this function's result.
     """
     try:
         import serial
@@ -314,11 +313,11 @@ def rientra_in_bootsel(porta):
 # ------------------------------------------------------------ installazione
 
 def installa(percorso_uf2, scheda, su_riga=None):
-    """Copia il firmware sulla scheda. Restituisce (fatto, motivo).
+    """Copies the firmware onto the board. Returns (done, reason).
 
-    ⚠️ Non si verifica rileggendo: appena il bootloader ha finito, la scheda si
-    stacca e riparte, quindi la copia «fallisce» in coda ed e' NORMALE. La
-    verifica vera e' che dopo ricompaia come porta seriale.
+    ⚠️ There is no verification by reading back: as soon as the bootloader is
+    done the board detaches and restarts, so the copy "fails" at the end and
+    that is NORMAL. The real check is that it comes back as a serial port.
     """
     def dillo(testo):
         if su_riga:
@@ -341,12 +340,13 @@ def installa(percorso_uf2, scheda, su_riga=None):
             servono, scheda.byte_liberi)
 
     destinazione = os.path.join(scheda.unita, os.path.basename(percorso_uf2))
-    # ⚠️ Un errore a copia iniziata e un errore PRIMA di scrivere un byte
-    # sembrano uguali (sono entrambi OSError) e non lo sono affatto: il primo
-    # e' la scheda che riparte, il secondo e' una copia mai avvenuta. A
-    # confonderli si dice "fatto" a un firmware che non e' stato scritto.
-    # Succede sul serio: una scheda appena entrata in BOOTSEL risponde
-    # "Permission denied" finche' Windows non ha finito di montare il disco.
+    # ⚠️ An error once the copy has started and an error BEFORE a single
+    # byte is written look the same (both are OSError) and are nothing
+    # alike: the first is the board restarting, the second is a copy that
+    # never happened. Confusing them means saying "done" about firmware
+    # that was never written. It happens for real: a board fresh into
+    # BOOTSEL answers "Permission denied" until Windows has finished
+    # mounting the drive.
     for tentativo in range(TENTATIVI_COPIA):
         scritti = 0
         try:
@@ -365,8 +365,8 @@ def installa(percorso_uf2, scheda, su_riga=None):
                         pass      # la scheda si e' gia' staccata: va bene cosi'
         except OSError as e:
             if scritti:
-                # il disco sparisce sotto i piedi appena il bootloader ha
-                # ricevuto tutto: questo e' l'andamento normale
+                # the disk vanishes under our feet as soon as the
+                # bootloader has it all: this is the normal course
                 dillo("la scheda si e' staccata durante la copia "
                       "(e' normale): %s" % e)
                 return True, None

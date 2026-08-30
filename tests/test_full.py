@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-"""La prova che conta: tutta la catena, con un chip EMULATO da flashrom.
+"""The test that counts: the whole chain, against a chip EMULATED by flashrom.
 
-Non simula il programma: usa la finestra vera, i suoi pulsanti e i suoi
-controlli, con flashrom vero. L'unica differenza e' il programmatore, che invece
-di serprog e' `dummy`, cioe' un chip da 16 MiB in memoria salvato su file.
+It does not simulate the program: it drives the real window, its buttons and
+its checks, with the real flashrom. The only difference is the programmer,
+which instead of serprog is `dummy` -- a 16 MiB chip in memory, backed by a
+file.
 
-La prova centrale ricalca esattamente l'operazione vera sulla BC-250:
-si parte dal BIOS originale, si scrive la SOLA regione uefi prendendola dal
-BIOS modificato, e alla fine il chip deve risultare identico byte per byte a
+The central test follows the real BC-250 operation exactly: start from the
+stock BIOS, write ONLY the uefi region taken from the modified BIOS, and at
+the end the chip must be byte-for-byte identical to
 bc250-risultato-atteso.rom.
 """
 import hashlib
@@ -24,9 +25,9 @@ QUI = os.path.dirname(os.path.abspath(__file__))
 CARTELLA = os.path.dirname(QUI)
 sys.path.insert(0, QUI)
 sys.path.insert(0, CARTELLA)
-# ⚠️ Le impostazioni vanno in una cartella usa-e-getta: queste prove
-# costruiscono la finestra VERA e salvano, e senza questo riscrivevano la
-# configurazione di chi stava usando il programma.
+# ⚠️ Settings go to a throw-away folder: these tests build the REAL
+# window and save, and without this they rewrote the configuration of
+# whoever was using the program.
 os.environ["SPIRANHA_CONFIG"] = os.path.join(QUI, "config-di-prova")
 
 
@@ -56,7 +57,7 @@ def md5(percorso):
 
 
 def aspetta(finestra, secondi=300):
-    """Gira il ciclo degli eventi finche' l'operazione non finisce."""
+    """Spins the event loop until the operation is done."""
     scadenza = time.time() + secondi
     while finestra.occupato and time.time() < scadenza:
         finestra.update()
@@ -78,7 +79,7 @@ def _scrivi_temp(testo):
 
 def prova(finestra):
     try:
-        # il chip emulato parte con il BIOS ORIGINALE della scheda
+        # the emulated chip starts out with the board's STOCK BIOS
         shutil.copyfile(STOCK, CHIP_FINTO)
         controlla("chip emulato = BIOS originale", md5(CHIP_FINTO) == md5(STOCK))
 
@@ -118,7 +119,7 @@ def prova(finestra):
         controlla("impronta nota riconosciuta",
                   any("originale" in r for r in finestra.righe_registro))
 
-        # ---- 3. il blocco quando le due letture differiscono --------
+        # ---- 3. the block when the two reads disagree ---------------
         vero_md5 = modulo.md5_file
         chiamate = {"n": 0}
 
@@ -265,9 +266,9 @@ def prova(finestra):
                   len(fr.leggi_layout(_scrivi_temp(testo))) == 3)
 
         # ---- 10. regioni ricavate dal dump vero, e usate davvero -----
-        # ⚠️ Qui non si fabbrica niente: e' il dump di una BC-250, che non ha
-        # ne' descrittore Intel ne' FMAP. Se il riconoscimento AMD si rompe,
-        # su questa scheda la funzione smette di servire a qualcosa.
+        # ⚠️ Nothing is fabricated here: it is a BC-250 dump, which has
+        # neither an Intel descriptor nor an FMAP. If the AMD detection
+        # breaks, on this board the feature stops being any use.
         import regions as _rg
         dati_stock = A.leggi(STOCK)
         origine, trovate = _rg.trova(dati_stock)

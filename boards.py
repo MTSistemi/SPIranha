@@ -1,31 +1,30 @@
 # -*- coding: utf-8 -*-
-"""Dare un nome alle schede, e riconoscerle la volta dopo.
+"""Giving boards a name, and recognising them next time.
 
-⚠️ IL PUNTO DELICATO: una scheda RP2040 ha DUE identificativi diversi, e non si
-somigliano nemmeno.
-  - mentre gira il firmware si presenta come porta seriale, e il suo numero di
-    serie USB e' l'identificativo unico della flash: 16 cifre esadecimali,
-    p.es. 5303284738DE6E1C;
-  - tenuta in BOOTSEL si presenta come disco, e li' il bootloader ne espone uno
-    DIVERSO, di 12 cifre: p.es. E0C9125B0D9B.
-Verificato sulla stessa scheda: non c'e' modo di ricavare l'uno dall'altro.
+⚠️ THE AWKWARD PART: an RP2040 board has TWO different identifiers, and they
+do not even resemble each other.
+  - while the firmware runs it appears as a serial port, and its USB serial
+    number is the flash unique id: 16 hex digits, e.g. 5303284738DE6E1C;
+  - held in BOOTSEL it appears as a disk, and there the bootloader exposes a
+    DIFFERENT one, 12 digits: e.g. E0C9125B0D9B.
+Verified on the same board: neither can be derived from the other.
 
-Quindi una scheda qui e' una coppia (seriale in esecuzione, seriale in
-BOOTSEL), e i due lati si imparano da soli: quando si programma una scheda che
-era in BOOTSEL e subito dopo compare una porta nuova, quella porta E' quella
-scheda. Idem al contrario, quando la si rimanda in BOOTSEL.
+So a board here is a pair (running serial, BOOTSEL serial), and the two sides
+are learned by themselves: when a board that was in BOOTSEL gets programmed
+and a new port shows up right afterwards, that port IS that board. The same
+in reverse, when it is sent back to BOOTSEL.
 """
 from __future__ import unicode_literals
 
 
 class Anagrafica(object):
-    """Le schede conosciute. Si salva dentro la configurazione."""
+    """The known boards. Stored inside the configuration."""
 
     def __init__(self, elenco=None):
-        # ogni voce: {"nome": str, "run": str|None, "boot": str|None}
+        # each entry: {"nome": str, "run": str|None, "boot": str|None}
         self.schede = [dict(v) for v in (elenco or [])]
 
-    # ------------------------------------------------------------ ricerca
+    # ------------------------------------------------------------ lookup
     def _trova(self, run=None, boot=None):
         for voce in self.schede:
             if run and voce.get("run") == run:
@@ -41,9 +40,9 @@ class Anagrafica(object):
     def voce(self, run=None, boot=None):
         return self._trova(run, boot)
 
-    # ------------------------------------------------------------ modifica
+    # ------------------------------------------------------------ changes
     def imposta_nome(self, nome, run=None, boot=None):
-        """Battezza una scheda. Un nome vuoto la dimentica."""
+        """Name a board. An empty name forgets it."""
         if not (run or boot):
             return None
         voce = self._trova(run, boot)
@@ -63,18 +62,18 @@ class Anagrafica(object):
         return voce
 
     def collega(self, run, boot):
-        """Dice che questi due identificativi sono la stessa scheda.
+        """Records that these two identifiers are the same board.
 
-        Lo si sa con certezza solo dopo averla vista passare da uno stato
-        all'altro: e' l'unico momento in cui i due lati si toccano.
+        This is only known for certain after watching it move from one state
+        to the other: that is the single moment the two sides touch.
         """
         if not (run and boot):
             return None
         per_run = self._trova(run=run)
         per_boot = self._trova(boot=boot)
         if per_run and per_boot and per_run is not per_boot:
-            # due schede si rivelano la stessa: si fondono, tenendo il nome
-            # gia' dato (il primo che c'e')
+            # two boards turn out to be one: merge them, keeping the name
+            # that was already given (the first one there is)
             per_run["boot"] = boot
             if not per_run.get("nome"):
                 per_run["nome"] = per_boot.get("nome", "")
@@ -88,13 +87,13 @@ class Anagrafica(object):
         voce["boot"] = boot
         return voce
 
-    # ------------------------------------------------------------ salvataggio
+    # ------------------------------------------------------------ saving
     def come_elenco(self):
         return [dict(v) for v in self.schede if v.get("run") or v.get("boot")]
 
 
 def etichetta(nome, seriale, quante=6):
-    """«nome · 5303284738DE6E1C», oppure solo il seriale se non ha nome."""
+    """"name · 5303284738DE6E1C", or just the serial when it has no name."""
     if not seriale:
         return nome or ""
     if nome:
@@ -103,6 +102,6 @@ def etichetta(nome, seriale, quante=6):
 
 
 def coda(seriale, quante=4):
-    """Le ultime cifre del seriale: quelle che si fanno ribattere per
-    confermare CHE scheda si sta cancellando."""
+    """The last digits of the serial: the ones we make you retype to confirm
+    WHICH board is about to be erased."""
     return (seriale or "")[-quante:].upper()

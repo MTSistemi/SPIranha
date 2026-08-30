@@ -1,24 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Le regioni di una ROM, lette dall'immagine stessa.
+"""The regions of a ROM, read out of the image itself.
 
-Un dump di BIOS non e' un blocco unico: dentro c'e' una mappa che dice dove
-comincia e dove finisce ogni pezzo. Due formati coprono quasi tutto il parco
-macchine:
+A BIOS dump is not one solid block: inside it there is a map saying where each
+piece starts and ends. Two formats cover almost the whole field:
 
-  - il **descrittore Intel** (IFD), i primi 4 KiB di ogni flash di chipset
-    Intel: dice dove stanno descrittore, BIOS, ME, GbE, EC;
-  - **FMAP**, la mappa che coreboot (e chi ne deriva) si porta dentro: una
-    firma `__FMAP__` seguita dall'elenco delle aree con nome.
+  - the **Intel descriptor** (IFD), the first 4 KiB of every Intel-chipset
+    flash: it says where the descriptor, BIOS, ME, GbE and EC live;
+  - **FMAP**, the map coreboot (and everything derived from it) carries: a
+    `__FMAP__` signature followed by the list of named areas.
 
-⚠️ Si legge dall'IMMAGINE, non dal chip. Il motivo e' pratico: l'immagine ce
-l'abbiamo gia' -- e' quella appena letta, o quella che si sta per scrivere --
-mentre chiedere al chip vuol dire un altro giro di flashrom sui fili. E c'e' un
-motivo migliore: cosi' si possono confrontare le regioni del chip con quelle
-dell'immagine nuova PRIMA di scrivere, e accorgersi che non e' la stessa mappa.
+⚠️ This reads the IMAGE, not the chip. The reason is practical: we already
+have the image -- it is the one just read, or the one about to be written --
+whereas asking the chip means another round of flashrom over the wires. And
+there is a better reason: this way the chip's regions can be compared with the
+new image's BEFORE writing, and a different map gets noticed.
 
-Le regioni servono a scrivere solo il pezzo che interessa: su una scheda che si
-accende ancora, riscrivere ME o il descrittore quando basta il BIOS e' rischio
-gratuito.
+Regions are what let you write only the piece that matters: on a board that
+still boots, rewriting ME or the descriptor when the BIOS would do is risk for
+nothing.
 """
 from __future__ import unicode_literals
 
@@ -30,8 +29,8 @@ FIRMA_IFD = 0x0FF0A55A
 POSIZIONE_FIRMA = 0x10
 SETTORE_IFD = 0x1000
 
-# I nomi sono quelli di flashrom, non di fantasia: un layout scritto con questi
-# nomi resta leggibile accanto a un --ifd.
+# The names are flashrom's own, not invented: a layout written with these
+# names still reads properly next to an --ifd.
 NOMI_IFD = ("fd", "bios", "me", "gbe", "pd", "reg5", "bios2", "reg7",
             "ec", "reg9", "ie", "10gbe", "reg12", "reg13", "reg14", "reg15")
 
@@ -45,7 +44,7 @@ MAX_AREE = 400
 
 
 class Regione(object):
-    """Un pezzo di ROM con un nome, dal primo all'ultimo byte compresi."""
+    """A named piece of ROM, from the first to the last byte inclusive."""
 
     def __init__(self, nome, inizio, fine, origine=None):
         self.nome = nome
@@ -62,7 +61,7 @@ class Regione(object):
 
 
 def _pulisci(nome):
-    """I nomi arrivano come campi a lunghezza fissa, pieni di zeri in coda."""
+    """The names arrive as fixed-length fields, padded with trailing zeros."""
     if isinstance(nome, bytes):
         nome = nome.split(b"\x00")[0].decode("ascii", "replace")
     return "".join(c if (c.isalnum() or c in "-_") else "_"
@@ -70,7 +69,7 @@ def _pulisci(nome):
 
 
 def regioni_ifd(dati):
-    """Le regioni del descrittore Intel, o [] se non c'e' un descrittore."""
+    """The Intel descriptor's regions, or [] when there is no descriptor."""
     if len(dati) < SETTORE_IFD:
         return []
     if struct.unpack_from("<I", dati, POSIZIONE_FIRMA)[0] != FIRMA_IFD:
@@ -86,8 +85,8 @@ def regioni_ifd(dati):
         valore = struct.unpack_from("<I", dati, posizione)[0]
         inizio = (valore & 0x7FFF) << 12
         fine = (((valore >> 16) & 0x7FFF) << 12) | 0xFFF
-        # ⚠️ base > limite non e' un errore di lettura: e' come il descrittore
-        # dice "questa regione non esiste su questa scheda".
+        # ⚠️ base > limit is not a read error: it is how the descriptor
+        # says "this region does not exist on this board".
         if inizio > fine or fine >= len(dati):
             continue
         nome = NOMI_IFD[indice] if indice < len(NOMI_IFD) else "reg%d" % indice
@@ -96,14 +95,14 @@ def regioni_ifd(dati):
 
 
 def regioni_fmap(dati):
-    """Le aree dichiarate da una FMAP, o [] se non ce n'e' una valida."""
+    """The areas an FMAP declares, or [] when there is no valid one."""
     posizione = -1
     while True:
         posizione = dati.find(FIRMA_FMAP, posizione + 1)
         if posizione == -1:
             return []
-        # la specifica la vuole allineata: cosi' non si inseguono le copie
-        # della firma che capitano dentro i dati
+        # the spec wants it aligned: that way we do not chase copies of
+        # the signature that happen to sit inside the data
         if posizione % ALLINEAMENTO_FMAP:
             continue
         if posizione + TESTA_FMAP.size > len(dati):
@@ -140,8 +139,9 @@ FIRMA_EFS = 0x55AA55AA
 FIRME_PSP = (b"$PSP", b"$PL2")
 FIRME_BHD = (b"$BHD", b"$BL2")
 
-# ⚠️ Gli indirizzi nelle strutture AMD sono quelli visti dalla CPU
-# (0xFF8E0000), non offset nel file: vanno riportati dentro l'immagine.
+# ⚠️ The addresses in the AMD structures are the ones the CPU sees
+# (0xFF8E0000), not offsets in the file: they have to be brought back
+# inside the image.
 def _in_immagine(indirizzo, dimensione):
     if not indirizzo or indirizzo in (0xFFFFFFFF, 0xFFFFFFFFFFFFFFFF):
         return None
@@ -149,8 +149,8 @@ def _in_immagine(indirizzo, dimensione):
     return offset if offset < dimensione else None
 
 
-# Solo i tipi di cui il nome e' certo: gli altri restano il loro numero, che
-# e' meno comodo ma non e' una bugia.
+# Only the types whose name is certain: the others keep their number,
+# which is less convenient but is not a lie.
 NOMI_PSP = {0x00: "amd_pubkey", 0x01: "psp_bootloader", 0x02: "psp_os",
             0x08: "smu", 0x12: "smu2", 0x24: "sec_gasket", 0x28: "mp2"}
 NOMI_BHD = {0x60: "apcb", 0x61: "apob", 0x62: "bios", 0x63: "apcb_scorta",
@@ -158,11 +158,11 @@ NOMI_BHD = {0x60: "apcb", 0x61: "apob", 0x62: "bios", 0x63: "apcb_scorta",
 
 
 def _direttorio(dati, posizione, firme, passo, formato):
-    """Legge un direttorio AMD.
+    """Reads an AMD directory.
 
-    Restituisce (firma, voci, fine_tabella, fine_contenuti): la tabella e i
-    pezzi a cui punta sono due cose diverse e vanno tenute separate, o una
-    regione «direttorio» finirebbe per coprire mezzo chip.
+    Returns (signature, entries, table_end, contents_end): the table and the
+    pieces it points at are two different things and have to be kept apart, or
+    a "directory" region would end up covering half the chip.
     """
     if posizione is None or posizione + 16 > len(dati):
         return None, [], None, None
@@ -180,8 +180,9 @@ def _direttorio(dati, posizione, firme, passo, formato):
     for indice in range(quante):
         pezzi = formato.unpack_from(dati, posizione + 16 + indice * passo)
         # tipo, poi (a distanza fissa in tutti e due i formati) dimensione e
-        # indirizzo; il BHD ha in coda anche la destinazione in memoria, che
-        # qui non serve e non va scambiata per l'indirizzo nel file
+        # address; the BHD also carries the destination in memory at the
+        # end, which is no use here and must not be mistaken for the
+        # address in the file
         tipo, dimensione, indirizzo = pezzi[0], pezzi[3], pezzi[4]
         inizio = _in_immagine(indirizzo, len(dati))
         if inizio is None or not dimensione or inizio + dimensione > len(dati):
@@ -196,12 +197,12 @@ _VOCE_BHD = struct.Struct("<BBHIQQ")       # tipo, regione, flag, dim, dove, des
 
 
 def regioni_amd(dati):
-    """Le regioni di una ROM AMD, dalla struttura EFS.
+    """The regions of an AMD ROM, from the EFS structure.
 
-    Le schede AMD non hanno ne' descrittore Intel ne' FMAP: hanno questa. Sta
-    in un punto fisso, dichiara dove sono il direttorio PSP e quello del BIOS,
-    e da li' si arriva ai pezzi veri -- compreso quello che di solito si vuole
-    riscrivere, l'immagine BIOS.
+    AMD boards have neither an Intel descriptor nor an FMAP: they have this.
+    It sits at a fixed offset, declares where the PSP and BIOS directories
+    are, and from there you reach the real pieces -- including the one people
+    usually want to rewrite, the BIOS image.
     """
     dimensione = len(dati)
     posizione_efs = None
@@ -231,12 +232,12 @@ def regioni_amd(dati):
             continue
         visti.add(posizione)
         if passo == 16:
-            # del PSP interessa l'area intera: i pezzi sono tanti e nessuno
-            # li riscrive uno per uno
+            # for the PSP the whole area is what matters: the pieces are
+            # many and nobody rewrites them one at a time
             fuori.append(Regione(nome, posizione, ultimo, "amd"))
             continue
-        # le voci del direttorio BIOS invece sono poche e sono quelle che
-        # contano davvero: l'immagine UEFI, la configurazione della memoria
+        # the BIOS directory's entries, on the other hand, are few and are
+        # the ones that really matter: the UEFI image, the memory config
         fuori.append(Regione(nome, posizione, fine_tabella, "amd"))
         for tipo, inizio, quanti in voci:
             fuori.append(Regione(NOMI_BHD.get(tipo, "bios_0x%02X" % tipo),
@@ -246,16 +247,16 @@ def regioni_amd(dati):
 
 
 def trova(dati):
-    """Le regioni dell'immagine, da dove si riesce a leggerle.
+    """The image's regions, from wherever they can be read.
 
-    Prima l'IFD, che sta in un posto fisso e non si puo' confondere; poi la
-    FMAP. Restituisce (origine, [Regione]); ([], None) se l'immagine non dice
-    niente di se stessa, che e' il caso piu' comune sulle schede AMD.
+    The IFD first, which sits at a fixed place and cannot be mistaken; then
+    the FMAP. Returns (source, [Regione]); (None, []) when the image says
+    nothing about itself, which is the common case on AMD boards.
     """
     trovate = regioni_ifd(dati)
     if trovate:
-        # Su Intel le due mappe convivono: la FMAP descrive l'interno della
-        # regione BIOS. Le aree in piu' si aggiungono, senza doppioni.
+        # On Intel the two maps coexist: the FMAP describes the inside of
+        # the BIOS region. The extra areas are added, without duplicates.
         gia = set((r.inizio, r.fine) for r in trovate)
         for regione in regioni_fmap(dati):
             if (regione.inizio, regione.fine) not in gia:
@@ -272,12 +273,12 @@ def trova(dati):
 
 
 def come_layout(regioni, dimensione):
-    """Un file di layout per flashrom, con i nomi veri delle regioni.
+    """A flashrom layout file, with the regions' real names.
 
-    ⚠️ Le regioni possono annidarsi (una FMAP dentro il BIOS di un IFD) e
-    flashrom vuole un elenco piatto: qui si scrivono tutte, perche' e'
-    l'utente a sceglierne una con --image, e sovrapposte non danno fastidio
-    finche' se ne usa una sola.
+    ⚠️ Regions can nest (an FMAP inside an IFD's BIOS) and flashrom wants a
+    flat list: all of them are written here, because it is the user who picks
+    one with --image, and overlapping ones do no harm as long as only one is
+    used.
     """
     righe = []
     usati = {}

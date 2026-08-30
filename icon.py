@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Genera l'icona del programma, senza dipendere da librerie grafiche.
+"""Generates the program icon, without depending on any imaging library.
 
     python icon.py
 
-Scrive `SPIranha.ico`. Il disegno segue il tema: fondo ardesia, un chip
-blu accento con i piedini ambra ai lati. Si ridisegna a ogni misura invece di
-scalare una sola immagine, cosi' a 16 px resta leggibile.
+Writes `SPIranha.ico`. The drawing follows the theme: slate background, an
+accent-blue chip with amber pins along its sides. It is redrawn at every size
+rather than scaling one image, so it stays legible at 16 px.
 
-⚠️ Non serve Pillow: il formato ICO e' scritto a mano (voci BMP per le misure
-piccole, una voce PNG per i 256, compressa con zlib che sta nella libreria
-standard).
+⚠️ Pillow is not needed: the ICO format is written by hand (BMP entries for
+the small sizes, one PNG entry for the 256, compressed with zlib from the
+standard library).
 """
 from __future__ import unicode_literals
 
@@ -39,7 +39,7 @@ class Tela(object):
         for y in range(max(0, int(y0)), min(self.lato, int(y1) + 1)):
             for x in range(max(0, int(x0)), min(self.lato, int(x1) + 1)):
                 if raggio:
-                    # fuori dagli archi degli angoli non si disegna
+                    # nothing is drawn outside the corner arcs
                     for cx, cy in ((x0 + raggio, y0 + raggio), (x1 - raggio, y0 + raggio),
                                    (x0 + raggio, y1 - raggio), (x1 - raggio, y1 - raggio)):
                         dentro_x = (x < x0 + raggio) if cx < (x0 + x1) / 2 \
@@ -95,7 +95,7 @@ def disegna(lato):
         grande.rettangolo(int(7 * u), y, int(20 * u), y + alto, PIEDINO)
         grande.rettangolo(L - 1 - int(20 * u), y, L - 1 - int(7 * u), y + alto, PIEDINO)
 
-    # il corpo del chip
+    # the chip body
     grande.rettangolo(int(18 * u), int(16 * u), L - 1 - int(18 * u),
                       L - 1 - int(16 * u), ACCENTO2, raggio=int(3 * u))
     grande.rettangolo(int(20 * u), int(18 * u), L - 1 - int(20 * u),
@@ -109,7 +109,7 @@ def disegna(lato):
 # ------------------------------------------------------------------ formati
 
 def voce_bmp(tela):
-    """Una voce ICO in formato BMP a 32 bit, righe dal basso."""
+    """One ICO entry as a 32-bit BMP, rows from the bottom up."""
     lato = tela.lato
     intestazione = struct.pack("<IiiHHIIiiII", 40, lato, lato * 2, 1, 32, 0,
                                lato * lato * 4, 0, 0, 0, 0)
@@ -125,8 +125,8 @@ def voce_bmp(tela):
 
 
 def voce_png(tela):
-    """Una voce ICO in formato PNG: da Vista in poi si puo', e per i 256 e'
-    l'unico modo sensato."""
+    """One ICO entry as a PNG: allowed from Vista onwards, and for the 256 it
+    is the only sensible way."""
     lato = tela.lato
     grezzo = bytearray()
     for y in range(lato):

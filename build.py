@@ -9,8 +9,6 @@ pyinstaller.
     python build.py --setup            # executable + installer
     python build.py --setup --sign     # and sign them both (see sign.ps1)
     python build.py --clean            # throw away build/ dist/ .venv/
-
-NOTE: the module below is written in Italian, like the rest of the codebase.
 """
 from __future__ import unicode_literals
 
@@ -50,7 +48,7 @@ VERSIONE = "1.2.0"
 
 
 def prepara_risorse():
-    """Icona e proprieta' del file: per qualcosa che si distribuisce contano."""
+    """Icon and file properties: they matter for something you hand out."""
     icona = os.path.join(QUI, "SPIranha.ico")
     if not os.path.isfile(icona):
         print("Genero l'icona")
@@ -96,13 +94,13 @@ def costruisci_exe():
         "--exclude-module", "numpy",
         "--exclude-module", "PIL",
     ]
-    # ⚠️ flashrom viaggia DENTRO l'eseguibile: e' cio' che lo rende portatile.
-    # Senza, su un'altra macchina comparirebbe la fascia rossa.
+    # ⚠️ flashrom travels INSIDE the executable: that is what makes it
+    # portable. Without it, another machine would show the red banner.
     if os.path.isfile(flashrom):
         args += ["--add-binary", "%s%sflashrom" % (flashrom, os.pathsep)]
     else:
         print("⚠️ flashrom/flashrom.exe non c'e': l'eseguibile NON sara' portatile")
-    # anche il firmware del programmatore viaggia dentro, se c'e'
+    # the programmer firmware travels inside too, when it is there
     fw = os.path.join(QUI, "firmware", "pico_serprog.uf2")
     if os.path.isfile(fw):
         args += ["--add-data", "%s%sfirmware" % (fw, os.pathsep)]
@@ -118,9 +116,9 @@ def costruisci_exe():
 
 
 def firma(percorsi):
-    """Firma con sign.ps1. ⚠️ L'ORDINE CONTA: prima l'eseguibile, poi
-    l'installatore che se lo porta dentro. Firmando solo alla fine, l'exe
-    dentro il setup resterebbe non firmato."""
+    """Sign with sign.ps1. ⚠️ ORDER MATTERS: the executable first, then the
+    installer that carries it. Signing only at the end would leave the exe
+    inside the setup unsigned."""
     script = os.path.join(QUI, "sign.ps1")
     if not os.path.isfile(script):
         print("sign.ps1 non c'e': salto la firma")
@@ -131,7 +129,7 @@ def firma(percorsi):
 
 
 def scrivi_versione_iss():
-    """Il numero di versione per Inno Setup: uno solo, generato da qui."""
+    """The version number for Inno Setup: one only, generated from here."""
     cartella = os.path.join(QUI, "build")
     if not os.path.isdir(cartella):
         os.makedirs(cartella)

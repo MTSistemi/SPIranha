@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Cosa c'e' dentro un'immagine di BIOS, e cosa cambia fra due.
+"""What is inside a BIOS image, and what changes between two of them.
 
-Qui non si tocca nessun chip: si legge, si confronta, si conta. Serve a tre
-cose che prima si facevano a mano:
+No chip is touched here: this reads, compares and counts. It serves three
+things that used to be done by hand:
 
-  1. la PROVA A SECCO: calcolare come verra' la flash PRIMA di scriverla, e
-     controllare che i byte che cambiano stiano tutti dentro la regione scelta;
-  2. il CONFRONTO fra due immagini, con gli intervalli allineati ai settori;
-  3. la VERIFICA DI COERENZA dopo la scrittura: non solo «i byte tornano», ma
-     «li' dentro c'e' ancora una struttura sensata».
+  1. the DRY RUN: work out how the flash will end up BEFORE writing it, and
+     check that every changing byte falls inside the chosen region;
+  2. the COMPARISON of two images, with the ranges aligned to sectors;
+  3. the COHERENCE CHECK after writing: not only "the bytes match", but
+     "there is still a sensible structure in there".
 
-⚠️ Il confronto lavora a blocchi di 4 KB perche' e' la grana con cui il chip si
-cancella: un intervallo che non e' allineato al settore non si puo' scrivere
-senza portarsi dietro cio' che gli sta intorno.
+⚠️ The comparison works in 4 KB blocks because that is the granularity the
+chip erases at: a range that is not sector-aligned cannot be written without
+dragging along whatever sits around it.
 """
 from __future__ import unicode_literals
 
@@ -22,7 +22,7 @@ SETTORE = 4096
 VUOTO = b"\xff"
 ZERO = b"\x00"
 
-# Firme che sappiamo riconoscere in questa flash, verificate sul dump vero
+# Signatures we can recognise in this flash, verified on the real dump
 # di una BC-250 vera (BIOS P3.00): _FVH x7, NVAR x958, APCB a
 # 0xAB1000, $PSP a 0x8E0000.
 FIRME = (
@@ -41,10 +41,10 @@ def leggi(percorso):
 # --------------------------------------------------------------- confronto
 
 def blocchi_diversi(a, b, grana=SETTORE):
-    """Indici dei blocchi da `grana` byte in cui le due immagini differiscono.
+    """Indices of the `grana`-byte blocks where the two images differ.
 
-    Si confrontano fette intere invece che byte per byte: su 16 MiB e' la
-    differenza fra un istante e mezzo minuto.
+    Whole slices are compared rather than byte by byte: over 16 MiB that is
+    the difference between an instant and half a minute.
     """
     if len(a) != len(b):
         raise ValueError("immagini di dimensione diversa: %d e %d" % (len(a), len(b)))
@@ -71,7 +71,7 @@ def unisci(indici, grana=SETTORE, limite=None):
 
 
 def intervalli_esatti(a, b, intervalli):
-    """Dentro i blocchi che differiscono, i confini veri byte per byte."""
+    """Inside the differing blocks, the true bounds, byte by byte."""
     esatti = []
     for inizio, fine in intervalli:
         primo = ultimo = None
@@ -103,8 +103,9 @@ def confronta(a, b, grana=SETTORE):
 # ---------------------------------------------------------------- struttura
 
 def firme(dati, massimo=4000):
-    """Dove stanno le strutture note. Solo le prime `massimo` per firma:
-    NVAR da solo compare quasi mille volte e non serve elencarle tutte."""
+    """Where the known structures sit. Only the first `massimo` per signature:
+    NVAR alone shows up nearly a thousand times and listing them all helps
+    nobody."""
     trovate = {}
     for firma, chiave, _it, _en in FIRME:
         posizioni = []
@@ -118,7 +119,7 @@ def firme(dati, massimo=4000):
 
 
 def descrivi(inizio, fine, mappa_firme, lingua="it"):
-    """Che cosa sta in questo intervallo, a parole."""
+    """What sits in this range, in words."""
     dentro = []
     for firma, chiave, testo_it, testo_en in FIRME:
         posizioni = mappa_firme.get(chiave, ())
@@ -130,11 +131,11 @@ def descrivi(inizio, fine, mappa_firme, lingua="it"):
 
 
 def coerenza(dati, inizio, fine, mappa_firme=None):
-    """La regione scritta ha ancora una struttura sensata?
+    """Does the written region still have a sensible structure?
 
-    Non e' una validazione formale del firmware — quella non la sa fare
-    nessuno da fuori — ma intercetta i due modi in cui una scrittura fallita
-    lascia il chip: tutto 0xFF (cancellato e mai riscritto) o tutto 0x00.
+    This is not a formal validation of the firmware -- nobody can do that
+    from outside -- but it catches the two states a failed write leaves the
+    chip in: all 0xFF (erased and never rewritten) or all 0x00.
     """
     pezzo = dati[inizio:fine + 1]
     esiti = {
@@ -152,7 +153,7 @@ def coerenza(dati, inizio, fine, mappa_firme=None):
 # ------------------------------------------------------------- prova a secco
 
 class ProvaASecco(object):
-    """L'esito del calcolo di come verra' la flash dopo la scrittura."""
+    """The result of working out how the flash will look after the write."""
 
     def __init__(self):
         self.risultato = None        # bytes: l'immagine attesa
@@ -166,17 +167,18 @@ class ProvaASecco(object):
 
 
 def prova_a_secco(attuale, sorgente, regione=None, md5=None):
-    """Calcola l'immagine che risultera' dalla scrittura, senza scrivere.
+    """Works out the image the write will produce, without writing anything.
 
-    `attuale`  = quello che c'e' adesso sul chip (la lettura verificata)
-    `sorgente` = l'immagine da scrivere
-    `regione`  = (inizio, fine) se si scrive una regione sola, None se tutto
+    `attuale`  = what is on the chip right now (the verified read)
+    `sorgente` = the image to be written
+    `regione`  = (start, end) when writing a single region, None for all
 
-    Il controllo che conta e' `fuori`: se l'immagine sorgente differisce
-    dall'attuale ANCHE fuori dalla regione scelta, quelle differenze NON
-    verranno scritte. Non e' un errore di per se' — e' anzi il motivo per cui
-    si scrive per regioni — ma va detto, perche' se uno crede di star
-    trasferendo tutto il BIOS e invece ne passa un pezzo, deve saperlo.
+    The check that matters is `fuori`: if the source image differs from the
+    current one ALSO outside the chosen region, those differences will NOT be
+    written. That is not an error in itself -- it is the whole reason for
+    writing by region -- but it has to be said, because someone who believes
+    they are transferring the whole BIOS while only part of it goes across
+    needs to know.
     """
     esito = ProvaASecco()
     if len(attuale) != len(sorgente):
@@ -200,8 +202,8 @@ def prova_a_secco(attuale, sorgente, regione=None, md5=None):
     esito.byte_cambiati = sum(f - i + 1 for i, f in esito.cambia_esatti)
     esito.nulla_da_fare = not indici
 
-    # cosa resterebbe fuori: differenze fra attuale e sorgente al di fuori
-    # della regione, che la scrittura non porterebbe
+    # what would be left out: differences between current and source outside
+    # the region, which the write would not carry over
     if regione is not None:
         inizio, fine = regione
         tutti = unisci(blocchi_diversi(attuale, sorgente), SETTORE,
@@ -213,11 +215,11 @@ def prova_a_secco(attuale, sorgente, regione=None, md5=None):
 # --------------------------------------------------------- layout generato
 
 def genera_layout(intervalli, dimensione, nome="modificata"):
-    """Un file di layout per flashrom che isola gli intervalli dati.
+    """A flashrom layout file that isolates the given ranges.
 
-    Copre tutta la flash: flashrom accetta anche layout parziali, ma averli
-    completi rende evidente cosa NON si sta scrivendo.
-    ⚠️ Niente commenti nel file: il parser di flashrom li rifiuta.
+    It covers the whole flash: flashrom accepts partial layouts too, but a
+    complete one makes it obvious what is NOT being written.
+    ⚠️ No comments in the file: flashrom's parser rejects them.
     """
     righe = []
     posizione = 0

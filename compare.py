@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Confronto fra due immagini di BIOS, con il layout gia' pronto.
+"""Comparing two BIOS images, with the layout ready to go.
 
-E' il lavoro fatto a mano il 22/08/2026 per trovare le quattro zone in cui il
-BIOS modificato differiva da quello della scheda: quali intervalli cambiano,
-allineati ai settori da 4 KB, e cosa c'e' dentro. Qui esce in un secondo, e in
-fondo c'e' il pulsante che scrive il file di layout per flashrom.
+This is the job that was done by hand on 2026-08-22 to find the four areas
+where the modified BIOS differed from the board's own: which ranges change,
+aligned to 4 KB sectors, and what is inside them. Here it takes a second, and
+at the bottom there is the button that writes the flashrom layout file.
 """
 from __future__ import unicode_literals
 

@@ -1,19 +1,18 @@
 # -*- coding: utf-8 -*-
-"""La mappa del chip a quadratini, stile deframmentatore.
+"""The chip map in little squares, defragmenter style.
 
-Un rettangolo diviso in blocchi: ognuno rappresenta una fetta di flash e si
-colora secondo quello che le sta succedendo. Non e' un'animazione di comodo —
-i colori arrivano da quello che flashrom dice davvero mentre lavora:
+A rectangle split into blocks: each stands for a slice of flash and takes its
+colour from whatever is happening to it. It is not a decorative animation --
+the colours come from what flashrom actually says while it works:
 
-  · gli intervalli di CANCELLAZIONE sono esatti: flashrom con -V stampa un
-    marcatore E(inizio:fine) per ogni blocco che cancella;
-  · l'intervallo di SCRITTURA e' esatto (marcatore W(inizio:fine)) e si riempie
-    con la percentuale di --progress;
-  · la LETTURA si riempie con la percentuale, sull'intervallo che si sta
-    leggendo.
+  · the ERASE ranges are exact: flashrom with -V prints an E(start:end)
+    marker for every block it erases;
+  · the WRITE range is exact (W(start:end) marker) and fills up with the
+    percentage from --progress;
+  · the READ fills up with the percentage, over the range being read.
 
-Cosi' quando la scheda e' sul tavolo si vede a colpo d'occhio dove e' arrivato,
-e alla fine si vede se e' verde ovunque.
+So with the board on the desk you can see at a glance how far it has got,
+and at the end whether it is green everywhere.
 """
 from __future__ import unicode_literals
 
@@ -90,7 +89,7 @@ class Mappa(tk.Canvas):
         self.delete("all")
         self._id = []
         # gli stati vecchi si riproiettano sulla griglia nuova, cosi' un
-        # ridimensionamento a meta' lavoro non cancella quello che si vede
+        # a resize mid-job does not wipe what is on screen
         nuovi = []
         for indice in range(totale):
             if vecchi:
@@ -152,7 +151,7 @@ class Mappa(tk.Canvas):
             self._colora(indice, stato)
 
     def evidenzia(self, intervallo):
-        """Segna i confini della regione su cui si sta per lavorare."""
+        """Marks the bounds of the region about to be worked on."""
         self._evidenziata = intervallo
         if intervallo is None:
             self.azzera(IGNOTO)
@@ -198,7 +197,7 @@ class Mappa(tk.Canvas):
 
 
 class Legenda(tk.Frame):
-    """La spiegazione dei colori, una riga sola."""
+    """What the colours mean, in a single row."""
 
     def __init__(self, padre, tema, L, fondo=T.PANEL):
         tk.Frame.__init__(self, padre, background=fondo)

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Roba condivisa fra le prove.
+"""Shared test helpers.
 
-⚠️ Le immagini di BIOS della BC-250 NON stanno in questo repository: sono il
-dump di una scheda precisa e pesano 16 MiB l'una. Le prove che ne hanno bisogno
-le cercano, e se non ci sono si fermano dicendo perche' invece di fallire.
+⚠️ The BC-250 BIOS images are NOT in this repository: they are the dump of
+one specific board and weigh 16 MiB each. The tests that need them look for
+them, and when they are missing they stop and say why instead of failing.
 
-Shared test helpers. The BC-250 BIOS images are NOT in this repository: point
-SPIRANHA_BIOS_BACKUP at a folder containing them to run the full test.
+Point SPIRANHA_BIOS_BACKUP at a folder containing them to run the full
+test.
 """
 from __future__ import unicode_literals
 
@@ -16,9 +16,9 @@ import sys
 QUI = os.path.dirname(os.path.abspath(__file__))
 RADICE = os.path.dirname(QUI)
 
-# Quello che serve alla prova completa. Il dump originale puo' chiamarsi in
-# piu' modi: si accettano tutti, cosi' non si e' costretti a rinominare una
-# cartella che gia' funziona.
+# What the full test needs. The stock dump goes by more than one name:
+# all of them are accepted, so nobody has to rename a folder that
+# already works.
 STOCK = ("bc250-stock.rom", "BC250-stock-P3.00-scheda-Mattia.rom")
 ATTESO = ("bc250-risultato-atteso.rom",)
 LAYOUT = ("bc250-layout.txt",)
@@ -34,7 +34,7 @@ def _primo(cartella, nomi):
 
 
 def trova_backup():
-    """La cartella con le immagini della BC-250, o None."""
+    """The folder holding the BC-250 images, or None."""
     candidate = [os.environ.get("SPIRANHA_BIOS_BACKUP")]
     candidate += [
         os.path.join(RADICE, "bios-backup"),
@@ -67,8 +67,8 @@ def backup_o_salta():
 
 
 def flashrom_o_salta():
-    """flashrom.exe, oppure esce: nel repository non c'e' (vedi
-    flashrom/PROVENANCE.md per compilarlo)."""
+    """flashrom.exe, or bail out: it is not in the repository (see
+    flashrom/PROVENANCE.md for building it)."""
     percorso = os.path.join(RADICE, "flashrom", "flashrom.exe")
     if os.path.isfile(percorso):
         return percorso

@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Cercare un modello di chip fra quelli che flashrom conosce.
+"""Finding a chip model among the ones flashrom knows.
 
-Sono quasi cinquecento chip SPI e una tendina non e' il posto per sceglierli:
-qui c'e' una casella di ricerca che filtra mentre si scrive, e una tabella che
-dice anche quello che serve per decidere -- la dimensione, la tensione di
-lavoro, e se flashrom su quel modello ci ha davvero letto e scritto o si e'
-fermato al riconoscimento.
+There are nearly five hundred SPI chips and a dropdown is no place to pick
+from: here there is a search box that filters as you type, and a table that
+also shows what you need in order to decide -- the size, the working voltage,
+and whether flashrom has actually read and written that model or only got as
+far as recognising it.
 
-⚠️ Solo SPI. Attraverso serprog gli altri bus non sono raggiungibili, quindi
-un chip parallelo in questo elenco sarebbe solo un modo di perdere tempo.
+⚠️ SPI only. The other buses cannot be reached over serprog, so a parallel
+chip in this list would only be a way to waste time.
 
-⚠️ L'elenco viene da `flashrom -L`, cioe' dall'eseguibile che si sta usando:
-non c'e' nessuna tabella nostra da tenere aggiornata, e quando flashrom
-cambia versione l'elenco cambia da solo.
+⚠️ The list comes from `flashrom -L`, that is from the executable in use:
+there is no table of ours to keep up to date, and when flashrom changes
+version the list changes with it.
 """
 from __future__ import unicode_literals
 
@@ -24,7 +24,7 @@ import voltage as V
 
 
 class Ricerca(tk.Toplevel):
-    """La finestra di ricerca. Chi la apre passa cosa fare del modello scelto."""
+    """The search window. Whoever opens it passes what to do with the pick."""
 
     def __init__(self, padre, tm, L, chip, al_scegliere, iniziale=""):
         tk.Toplevel.__init__(self, padre, background=T.INK)
@@ -77,8 +77,8 @@ class Ricerca(tk.Toplevel):
                                           ("misura", 80, "e"),
                                           ("volt", 70, "e"),
                                           ("prove", 70, "center")):
-            # ⚠️ l'intestazione si allinea come la sua colonna: centrata su una
-            # colonna larga sembrava riferita a quella di fianco
+            # ⚠️ the heading lines up like its column: centred over a wide
+            # column it looked like it belonged to the one next to it
             self.lista.heading(chiave, text=T.micro(L("cerca_col_" + chiave)),
                                anchor=ancora)
             self.lista.column(chiave, width=larghezza, anchor=ancora,
@@ -128,7 +128,7 @@ class Ricerca(tk.Toplevel):
 
     # ------------------------------------------------------------- filtro
     def _filtra(self):
-        # tutte le parole devono comparire: "win 128" trova i Winbond da 128
+        # every word must appear: "win 128" finds the 128 Mbit Winbonds
         parole = [p for p in self.var_cerca.get().lower().split() if p]
         self.lista.delete(*self.lista.get_children())
         self.mostrati = []
@@ -191,7 +191,7 @@ def _misura(kb):
 
 
 def apri(padre, tm, L, chip, al_scegliere, iniziale=""):
-    """Apre la ricerca, o riporta davanti quella gia' aperta."""
+    """Opens the search, or brings the open one back to the front."""
     esistente = getattr(padre, "_finestra_ricerca", None)
     if esistente is not None and esistente.winfo_exists():
         esistente.deiconify()

@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Il tema «quadro strumenti» di Polo Informatico, portato su tkinter.
+"""The "instrument panel" dark theme, ported to tkinter.
 
-Non e' una decorazione: e' un linguaggio visivo deciso e riusato. Console di
-monitoraggio, non dashboard generica: filetti sottili, micro-etichette maiuscole
-spaziate, numeri e registri a spaziatura fissa, e il colore forte speso in UN
-punto solo.
-
-The "instrument panel" dark theme, ported to tkinter.
+It is not decoration: it is a visual language that was decided once and gets
+reused. A monitoring console, not a generic dashboard: thin rules, spaced-out
+uppercase micro-labels, fixed-pitch numbers and logs, and the strong colour
+spent in ONE place only.
 """
 from __future__ import unicode_literals
 
@@ -43,7 +41,7 @@ LOG_OK = "#63C08E"
 
 BORDO_FINESTRA = "#1E2A36"
 
-# colori dei fili nello schema: distinguibili anche sul fondo scuro
+# wire colours in the diagram: still distinguishable on the dark ground
 FILO = {
     "VCC": "#E5484D",
     "GND": "#7E93A4",
@@ -55,11 +53,11 @@ FILO = {
 
 
 def titolo_scuro(finestra):
-    """Barra del titolo scura, come il resto della finestra.
+    """A dark title bar, like the rest of the window.
 
-    Da Windows 10 1809 in poi si chiede al gestore delle finestre (DWM).
-    L'attributo e' 20 sulle versioni recenti e 19 su quelle prima; se non
-    funziona nulla, si resta con la barra chiara e pazienza.
+    From Windows 10 1809 onwards this is asked of the window manager (DWM).
+    The attribute is 20 on recent builds and 19 on older ones; if neither
+    works, we live with a light title bar.
     """
     if os.name != "nt":
         return
@@ -78,10 +76,10 @@ def titolo_scuro(finestra):
 
 
 def micro(testo):
-    """Micro-etichetta: MAIUSCOLA e spaziata.
+    """Micro-label: UPPERCASE and letter-spaced.
 
-    tkinter non conosce il letter-spacing, quindi lo si fa a mano con spazi
-    sottili fra le lettere. Brutto da scrivere, giusto da vedere.
+    tkinter knows nothing about letter-spacing, so it is done by hand with
+    thin spaces between the letters. Ugly to write, right to look at.
     """
     return " ".join(testo.upper())
 
@@ -103,7 +101,7 @@ class Tema(object):
         self.mono = _prima_disponibile(
             radice, ["Cascadia Code", "Cascadia Mono", "Consolas"], "Courier New")
 
-        # Misure strette apposta: la finestra deve stare larga, non alta.
+        # Deliberately tight sizes: the window has to stay wide, not tall.
         self.f_titolo = (self.ui, 12, "bold")
         self.f_sotto = (self.ui, 8)
         self.f_testo = (self.ui, 8)
@@ -273,10 +271,10 @@ class Chip(tk.Frame):
 
 
 class Spunta(tk.Frame):
-    """Casella disegnata a mano: 14px, angoli 3, spunta tracciata.
+    """A hand-drawn checkbox: 14px, 3px corners, the tick traced.
 
-    Le ttk.Checkbutton su clam mostrano un quadratino di sistema che stona con
-    il resto; questa e' la casella del design system, disegnata su Canvas.
+    ttk.Checkbutton under clam shows a system square that clashes with
+    everything else; this is the design system's box, drawn on a Canvas.
     """
 
     LATO = 15
@@ -299,7 +297,7 @@ class Spunta(tk.Frame):
         self.ridisegna()
 
     def configure(self, cnf=None, **kw):
-        """Accetta anche `testo=`, cosi' il traduttore la tratta come le altre."""
+        """Also accepts `testo=`, so the translator treats it like the others."""
         testo = kw.pop("testo", None)
         if testo is not None:
             self.etichetta.configure(text=testo)
@@ -332,10 +330,10 @@ class Spunta(tk.Frame):
 
 
 def gradiente(tela, larghezza, altezza, da=HEADER_DA, a=HEADER_A, gradi=103):
-    """Il gradiente della testata, disegnato a strisce.
+    """The header gradient, drawn as stripes.
 
-    tkinter non ha gradienti: si tracciano N linee interpolando il colore. A
-    103 gradi la direzione e' quasi orizzontale, con una leggera inclinazione.
+    tkinter has no gradients: N lines are drawn, interpolating the colour. At
+    103 degrees the direction is nearly horizontal, with a slight tilt.
     """
     import math
     tela.delete("gradiente")

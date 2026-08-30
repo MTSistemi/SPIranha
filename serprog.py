@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Parla col Pico nel protocollo serprog, prima di passarlo a flashrom.
+"""Talks to the Pico in the serprog protocol, before handing it to flashrom.
 
-A che serve, visto che poi tocca a flashrom: presentarsi come porta seriale non
-vuol dire niente, qualunque firmware sbagliato lo farebbe. Qui gli si chiede chi
-e' e cosa sa fare, cosi' se il Pico ha il firmware sbagliato lo si scopre subito
-e non in mezzo a una scrittura.
+Why bother, when flashrom does the work anyway: showing up as a serial port
+means nothing, any wrong firmware would do that too. Here it is asked who it
+is and what it can do, so a Pico with the wrong firmware is found out at once
+and not halfway through a write.
 
-⚠️ La porta seriale la puo' tenere aperta un processo solo: questo modulo apre,
-chiede e chiude. Mentre gira flashrom qui non si tocca niente.
+⚠️ Only one process can hold the serial port open: this module opens, asks
+and closes. Nothing here is touched while flashrom runs.
 
-Comandi usati (specifica serprog):
+Commands used (serprog specification):
   0x00 NOP        -> ACK
-  0x01 Q_IFACE    -> ACK + 2 byte, versione (deve essere 1)
-  0x03 Q_PGMNAME  -> ACK + 16 byte, nome del programmatore
-  0x05 Q_BUSTYPE  -> ACK + 1 byte, bus supportati (0x08 = SPI)
-  0x10 SYNCNOP    -> NAK (0x15) + ACK (0x06)   <- e' una risposta CORRETTA
+  0x01 Q_IFACE    -> ACK + 2 bytes, version (must be 1)
+  0x03 Q_PGMNAME  -> ACK + 16 bytes, programmer name
+  0x05 Q_BUSTYPE  -> ACK + 1 byte, supported buses (0x08 = SPI)
+  0x10 SYNCNOP    -> NAK (0x15) + ACK (0x06)   <- this is a CORRECT answer
 """
 from __future__ import unicode_literals
 
@@ -41,14 +41,14 @@ S_SPI_FREQ = 0x14
 S_PIN_STATE = 0x15
 SYNCNOP = 0x10
 
-# I comandi che si mandano al chip, non al programmatore.
-CMD_JEDEC = 0x9F           # tre byte: costruttore, tipo, capacita\u0027
-CMD_SFDP = 0x5A            # tabella dei parametri, se il chip ce l\u0027ha
+# The commands sent to the chip, not to the programmer.
+CMD_JEDEC = 0x9F           # three bytes: vendor, type, capacity
+CMD_SFDP = 0x5A            # parameter table, when the chip has one
 FIRMA_SFDP = b"SFDP"
 
-# I codici JEDEC dei costruttori che si incontrano davvero su una flash SPI.
-# ⚠️ Solo quelli sicuri: un nome sbagliato e\u0027 peggio di nessun nome, perche\u0027
-# porta a cercare la scheda tecnica di un altro chip.
+# The JEDEC vendor codes you actually meet on an SPI flash.
+# ⚠️ Only the certain ones: a wrong name is worse than no name, because
+# it sends you looking for another chip's datasheet.
 COSTRUTTORI = {
     0x01: "Spansion/Cypress", 0x04: "Fujitsu", 0x0B: "XTX", 0x1C: "EON",
     0x1F: "Atmel/Adesto", 0x20: "Micron/ST", 0x37: "AMIC", 0x4A: "ESMT",
@@ -60,15 +60,16 @@ COSTRUTTORI = {
 
 BUS = ((0x01, "parallelo/parallel"), (0x02, "LPC"), (0x04, "FWH"), (0x08, "SPI"))
 
-# Il Pico con pico-serprog si presenta con l'identita' di TinyUSB.
+# A Pico running pico-serprog presents TinyUSB's identity.
 VID_TINYUSB = 0xCAFE
 PID_TINYUSB = 0x4001
 VID_RASPBERRY = 0x2E8A
 
 
-# Il nome che il programmatore dichiara porta anche la versione, perche' e'
-# l'unico posto dove ci sta senza inventare comandi nuovi: "pico-serprog1.1".
-# Un nome nudo non e' "sconosciuto", e' una scheda anteriore alla 1.1.
+# The name the programmer reports carries the version too, because it is
+# the only place it fits without inventing new commands:
+# "pico-serprog1.1". A bare name is not "unknown", it is a board older
+# than 1.1.
 _RE_VERSIONE = re.compile(r"^(.*?)[\s_-]*v?(\d+(?:\.\d+)+)$")
 
 
@@ -93,10 +94,10 @@ def _numeri(versione):
 
 
 def piu_vecchia(quella, di_questa):
-    """La versione della scheda e' anteriore a quella che abbiamo qui?
+    """Is the board's version older than the one we carry here?
 
-    ⚠️ Nessuna versione = firmware anteriore alla 1.1, quindi si', e'
-    vecchio. E' proprio il caso che interessa.
+    ⚠️ No version at all = firmware older than 1.1, so yes, it is old. That is
+    precisely the case we care about.
     """
     if not di_questa:
         return False
@@ -120,7 +121,7 @@ class Diagnostica(object):
 
     @property
     def firmware(self):
-        """La versione che la scheda dichiara, o None se non ne dichiara."""
+        """The version the board reports, or None when it reports none."""
         return separa_versione(self.nome)[1]
 
     @property
@@ -140,10 +141,10 @@ class Diagnostica(object):
 
 
 def elenca_porte():
-    """[(dispositivo, descrizione, e_probabilmente_il_pico, seriale)] ordinate.
+    """[(device, description, probably_the_pico, serial)], sorted.
 
-    ⚠️ Il seriale e' quello che la scheda espone MENTRE GIRA il firmware (16
-    cifre): non e' lo stesso che mostra in BOOTSEL. Vedi boards.py.
+    ⚠️ The serial is the one the board exposes WHILE THE FIRMWARE RUNS (16
+    digits): it is not the one it shows in BOOTSEL. See boards.py.
     """
     if not SERIALE:
         return []
@@ -156,7 +157,7 @@ def elenca_porte():
             descrizione = "%s (%04X:%04X)" % (descrizione, vid, pid)
         trovate.append((p.device, descrizione, sospetto,
                         (p.serial_number or "").upper() or None))
-    # prima i candidati, poi in ordine di nome
+    # candidates first, then by name
     trovate.sort(key=lambda t: (not t[2], _chiave_com(t[0])))
     return trovate
 
@@ -179,7 +180,7 @@ def _chiedi(s, comando, quanti):
 
 
 def _chiedi_con_dato(s, comando, dato):
-    """Un comando con un byte di argomento, che risponde solo ACK."""
+    """A command with one argument byte, answering ACK and nothing else."""
     s.reset_input_buffer()
     s.write(bytearray([comando, dato]))
     s.flush()
@@ -206,7 +207,7 @@ def sincronizza(s):
 
 
 def interroga(porta, baud=115200, timeout=2.0):
-    """Apre la porta, chiede chi e', chiude. Non tocca il chip."""
+    """Opens the port, asks who it is, closes. Does not touch the chip."""
     if not SERIALE:
         return Diagnostica(errore="pyserial")
     try:
@@ -218,7 +219,7 @@ def interroga(porta, baud=115200, timeout=2.0):
         s.dtr = True
         errore = sincronizza(s)
         if errore:
-            # Non e' detto sia grave: qualche firmware vuole prima un NOP.
+            # Not necessarily serious: some firmware wants a NOP first.
             _, errore_nop = _chiedi(s, NOP, 0)
             if errore_nop:
                 return Diagnostica(errore=errore)
@@ -240,15 +241,16 @@ def interroga(porta, baud=115200, timeout=2.0):
 # ------------------------------------------------- parlare al chip, non al Pico
 
 def _tre(numero):
-    """Un intero su tre byte, come li vuole serprog: il meno pesante prima."""
+    """An integer over three bytes, the way serprog wants them: least
+    significant first."""
     return bytearray([numero & 0xFF, (numero >> 8) & 0xFF, (numero >> 16) & 0xFF])
 
 
 def operazione_spi(s, da_inviare, quanti_leggere):
-    """Una transazione SPI grezza attraverso il programmatore.
+    """A raw SPI transaction through the programmer.
 
-    ⚠️ L'ACK arriva DOPO la parte scritta e PRIMA dei byte letti: e' come e'
-    fatto il protocollo, non un dettaglio implementativo.
+    ⚠️ The ACK arrives AFTER the written part and BEFORE the read bytes: that
+    is how the protocol is built, not an implementation detail.
     """
     testa = bytearray([O_SPIOP]) + _tre(len(da_inviare)) + _tre(quanti_leggere)
     s.reset_input_buffer()
@@ -269,7 +271,7 @@ def operazione_spi(s, da_inviare, quanti_leggere):
 
 
 class Identita(object):
-    """Quello che il chip dice di se' quando glielo si chiede in faccia."""
+    """What the chip says about itself when asked to its face."""
 
     def __init__(self, costruttore=None, tipo=None, capacita=None, byte=None,
                  sfdp=False, errore=None):
@@ -286,11 +288,11 @@ class Identita(object):
 
     @property
     def risponde(self):
-        """C'e' un chip attaccato che risponde?
+        """Is there a chip attached, and does it answer?
 
-        ⚠️ Tutto 0x00 o tutto 0xFF non e' un chip: e' un filo staccato o un
-        CS che non si muove. E' la distinzione che serve davvero -- chip
-        sconosciuto o cavo storto sono due problemi diversi.
+        ⚠️ All 0x00 or all 0xFF is not a chip: it is a loose wire or a CS that
+        never moves. That is the distinction that actually matters -- an
+        unknown chip and a bad wire are two different problems.
         """
         if not self.ok:
             return False
@@ -330,10 +332,10 @@ def _byte_da_capacita(capacita):
 
 
 def _byte_da_sfdp(s):
-    """La dimensione dalla tabella SFDP, che e' la fonte piu' attendibile.
+    """The size from the SFDP table, which is the most reliable source.
 
-    Restituisce (byte, c_e_la_tabella). ⚠️ Un chip senza SFDP non e' rotto:
-    i piu' vecchi non ce l'hanno proprio.
+    Returns (bytes, table_present). ⚠️ A chip without SFDP is not broken: the
+    older ones simply do not have one.
     """
     testa, errore = operazione_spi(s, bytearray([CMD_SFDP, 0, 0, 0, 0xFF]), 8)
     if errore or not testa or testa[:4] != FIRMA_SFDP:
@@ -371,11 +373,11 @@ def _byte_da_sfdp(s):
 
 
 def identifica_chip(porta, baud=115200, timeout=2.0):
-    """Chiede al chip il suo codice JEDEC e, se c'e', la tabella SFDP.
+    """Asks the chip for its JEDEC id and, when present, its SFDP table.
 
-    Serve quando flashrom non riconosce il chip: da qui si capisce se il chip
-    risponde (e allora e' solo sconosciuto) oppure se non risponde affatto (e
-    allora e' un problema di collegamenti, non di modello).
+    This is for when flashrom does not recognise the chip: from here you can
+    tell whether the chip answers (then it is merely unknown) or does not
+    answer at all (then it is a wiring problem, not a model one).
     """
     if not SERIALE:
         return Identita(errore="pyserial")
@@ -390,10 +392,10 @@ def identifica_chip(porta, baud=115200, timeout=2.0):
             _, errore_nop = _chiedi(s, NOP, 0)
             if errore_nop:
                 return Identita(errore=errore)
-        # ⚠️ I piedini vanno accesi PRIMA, sempre. flashrom, quando finisce,
-        # manda S_PIN_STATE(0) e il programmatore resta con l'SPI spento: una
-        # operazione SPI in quello stato non torna piu' indietro e blocca la
-        # scheda, USB compreso. Costata una scheda da staccare e riattaccare.
+        # ⚠️ The pins have to be turned on FIRST, always. When flashrom
+        # exits it sends S_PIN_STATE(0) and the programmer is left with SPI
+        # off: an SPI operation in that state never returns and hangs the
+        # board, USB included. It cost us a board that had to be unplugged.
         _, errore = _chiedi_con_dato(s, S_PIN_STATE, 1)
         if errore:
             return Identita(errore=errore)
@@ -410,6 +412,6 @@ def identifica_chip(porta, baud=115200, timeout=2.0):
             identita.byte = byte or _byte_da_capacita(identita.capacita)
         finally:
             # si rimette come si e' trovato: flashrom si aspetta di trovarlo
-            # spento, ed e' lui a riaccenderlo quando gli serve
+            # off, and it is flashrom that turns it back on when needed
             _chiedi_con_dato(s, S_PIN_STATE, 0)
     return identita

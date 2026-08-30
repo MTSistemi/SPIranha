@@ -1,25 +1,25 @@
 # -*- coding: utf-8 -*-
-"""Il PDF stampabile dello schema, con la distinta.
+"""The printable PDF of the diagram, with its bill of materials.
 
-COME. Il disegno non viene rifatto: si LEGGE dalla tela di Tk, che sa dire
-che oggetti contiene, dove stanno, di che colore e con che carattere. Da li'
-esce un SVG, che finisce in una pagina HTML con il CSS di stampa, e la pagina
-la converte Chrome in modalita' senza finestra. E' il metodo di casa per i
-PDF: l'impaginazione la fa un motore che sa gia' impaginare, e il risultato
-resta vettoriale -- si ingrandisce senza sgranare e il testo si seleziona.
+HOW. The drawing is not redone: it is READ off the Tk canvas, which can say
+what objects it holds, where they sit, in what colour and in what font. That
+becomes an SVG, which goes into an HTML page with print CSS, and Chrome in
+headless mode turns the page into a PDF. It is the house method for PDFs: the
+layout is done by an engine that already knows how to lay out, and the result
+stays vector -- it scales without going fuzzy and the text can be selected.
 
-Cosi' non esistono due versioni dello stesso schema da tenere allineate: il
-PDF e' quello che si vede a schermo, con altri colori.
+That way there are never two versions of the same diagram to keep in step:
+the PDF is what is on screen, in different colours.
 
-⚠️ I COLORI SI ROVESCIANO. Lo schermo e' scuro; una pagina a fondo nero
-consuma una cartuccia e non si legge. Qui la luminosita' viene rovesciata
-tenendo tinta e saturazione (per_stampa): il fondo diventa bianco, il testo
-chiaro diventa scuro, e i fili restano dei loro colori, un po' piu' carichi
-come vuole la carta. Non e' un negativo -- un negativo trasformerebbe il
-rosso in verde.
+⚠️ THE COLOURS ARE INVERTED. The screen is dark; a page with a black
+background eats a cartridge and cannot be read. Here the lightness is flipped
+while hue and saturation are kept (per_stampa): the ground turns white, light
+text turns dark, and the wires keep their own colours, a little deeper as
+paper wants. It is not a negative -- a negative would turn red into green.
 
-⚠️ CHROME VUOLE UN PROFILO SUO (--user-data-dir isolato): senza, si attacca
-a una finestra gia' aperta e il PDF non lo scrive nemmeno, senza dire niente.
+⚠️ CHROME WANTS A PROFILE OF ITS OWN (an isolated --user-data-dir): without
+one it attaches to an already-open window and does not even write the PDF,
+saying nothing.
 """
 from __future__ import unicode_literals
 
@@ -67,12 +67,13 @@ def per_stampa(colore):
         return None
     h, l, s = colorsys.rgb_to_hls(*rgb)
     nuova = 1.0 - l
-    # ⚠️ La soglia sta alta apposta. I fondi del tema NON sono grigi: sono blu
-    # scurissimi, e con una soglia bassa passavano per «colore» e finivano
-    # stampati azzurri invece che bianchi. Un colore vero (un filo, un
+    # ⚠️ The threshold is deliberately high. The theme's grounds are NOT
+    # grey: they are very dark blues, and with a low threshold they passed
+    # for "colour" and came out
+    # printed pale blue instead of white. A real colour (a wire, a
     # avviso) sta ben sopra 0,45 di saturazione; un fondo no.
     if s > 0.45:
-        # i colori pieni sulla carta vogliono essere piu' carichi, o
+        # solid colours on paper want to be deeper, or
         # diventano pastelli slavati
         s = min(1.0, s * 1.15)
         nuova = min(nuova, 0.44)
@@ -119,7 +120,7 @@ def _spezza(testo, carattere, larghezza):
 
 
 def svg_da_tela(tela, area, fondo="#FFFFFF"):
-    """Il pezzo di tela dentro `area` (x0, y0, x1, y1) diventa un SVG."""
+    """The piece of canvas inside `area` (x0, y0, x1, y1) becomes an SVG."""
     x0, y0, x1, y1 = area
     pezzi = []
     for oggetto in tela.find_all():
@@ -216,9 +217,9 @@ def svg_da_tela(tela, area, fondo="#FFFFFF"):
                        _fuggi(famiglia), corpo,
                        ' font-weight="bold"' if grassetto else "",
                        allinea, _fuggi(riga)))
-    # ⚠️ width e height ci vanno ENTRAMBI come attributi: con la sola
+    # ⚠️ width and height BOTH have to be attributes: with only the
     # larghezza al 100% Chrome, in stampa, calcola altezza zero e la pagina
-    # esce vuota. Con le due misure vere il CSS puo' scalare in proporzione.
+    # it comes out empty. With both real sizes the CSS can scale it.
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="%.0f %.0f %.0f %.0f" '
         'width="%.0f" height="%.0f" preserveAspectRatio="xMidYMid meet">\n'
@@ -350,10 +351,10 @@ def in_pdf(html, percorso_pdf, chrome=None):
     eseguibile = chrome or trova_chrome()
     if not eseguibile:
         return False, "chrome"
-    # ⚠️ Il file di destinazione si toglie PRIMA. Se resta li' e Chrome non
-    # scrive -- perche' e' aperto in un lettore, perche' il profilo e'
-    # occupato -- trovare un PDF di ieri e dire «fatto» e' peggio che
-    # fallire: si stampa lo schema sbagliato senza saperlo.
+    # ⚠️ The destination file is removed FIRST. If it stays there and
+    # Chrome does not write -- because it is open in a reader, because the
+    # profile is busy -- finding yesterday's PDF and calling it done is
+    # worse than failing: you print the wrong diagram without knowing.
     if os.path.exists(percorso_pdf):
         try:
             os.remove(percorso_pdf)

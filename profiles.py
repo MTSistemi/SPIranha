@@ -1,45 +1,46 @@
 # -*- coding: utf-8 -*-
-"""Profili di scheda: cosa cambia da una macchina all'altra, in un posto solo.
+"""Board profiles: what changes from one machine to the next, in one place.
 
-Il programma nasce su una BC-250, ma il programmatore non ha niente di
-specifico: gli stessi quattro fili leggono qualunque flash SPI. Quello che
-cambia da una scheda all'altra e' contorno, ed e' proprio il contorno che fa
-sbagliare -- dove attaccarsi, che chip aspettarsi, quali impronte sono gia'
-note, e le avvertenze che valgono su quella macchina e non su un'altra.
+The program was born on a BC-250, but there is nothing board-specific about
+the programmer itself: the same four wires read any SPI flash. What changes
+from board to board is the surroundings, and the surroundings are exactly
+what trips people up -- where to attach, which chip to expect, which
+fingerprints are already known, and the warnings that apply to that machine
+and not to another.
 
-⚠️ Un profilo NON e' un filtro: se il chip trovato non e' quello atteso, il
-programma lo dice e va avanti lo stesso. Il profilo e' quello che ci
-aspettiamo, non quello che imponiamo. Chi ha davanti la scheda vede meglio di
-una tabella scritta mesi prima.
+⚠️ A profile is NOT a filter: if the chip found is not the expected one, the
+program says so and carries on. A profile is what we expect, not what we
+impose. Whoever has the board in front of them can see better than a table
+written months ago.
 
-Aggiungerne uno e' solo dati: nome, chip, tensione, connettore, impronte note,
-avvertenze. Il disegno dei cavi ha due forme -- il connettore della BC-250 e la
-pinza sul chip -- e un profilo dice quale delle due usare.
+Adding one is data only: name, chip, voltage, header, known fingerprints,
+warnings. The wiring drawing comes in two shapes -- the BC-250 header and the
+clip on the chip -- and a profile says which of the two to use.
 """
 from __future__ import unicode_literals
 
-# le due forme di collegamento che il disegno sa fare
-CONNETTORE = "connettore"       # un pettine sulla scheda (BC-250: J4004)
-PINZA = "pinza"                 # la pinza direttamente sul chip SOIC-8
+# the two kinds of connection the drawing knows how to show
+CONNETTORE = "connettore"       # a header on the board (BC-250: J4004)
+PINZA = "pinza"                 # the clip straight onto the SOIC-8 chip
 
 
 class Profilo(object):
-    """Cosa sappiamo in anticipo di una scheda."""
+    """What we know about a board in advance."""
 
     def __init__(self, chiave, nome, chip=(), byte=None, tensione=3.3,
                  collegamento=PINZA, connettore=None, md5=None, avvisi=(),
                  descrizione=None, regioni=()):
         self.chiave = chiave
-        self.nome = nome                    # {"it":…, "en":…} o stringa
-        self.chip = list(chip)              # modelli attesi, il primo e' quello
-        self.byte = byte                    # dimensione attesa della flash
-        self.tensione = tensione            # volt del chip: 3.3 o 1.8
+        self.nome = nome                    # {"it":…, "en":…} or a string
+        self.chip = list(chip)              # expected models, first is the one
+        self.byte = byte                    # expected flash size
+        self.tensione = tensione            # chip volts: 3.3 or 1.8
         self.collegamento = collegamento
-        self.connettore = connettore        # come si chiama, se c'e'
-        self.md5 = dict(md5 or {})          # impronta -> {"it":…, "en":…}
-        self.avvisi = tuple(avvisi)         # avvertenze proprie della scheda
+        self.connettore = connettore        # what it is called, if any
+        self.md5 = dict(md5 or {})          # fingerprint -> {"it":…, "en":…}
+        self.avvisi = tuple(avvisi)         # the board's own warnings
         self.descrizione = descrizione
-        self.regioni = tuple(regioni)       # regioni che ci aspettiamo di trovare
+        self.regioni = tuple(regioni)       # regions we expect to find
 
     def testo(self, campo, lingua="it"):
         valore = getattr(self, campo, None)
@@ -105,7 +106,7 @@ PREDEFINITO = "bc250"
 
 
 def prendi(chiave):
-    """Il profilo con quella chiave, o quello predefinito."""
+    """The profile with that key, or the default one."""
     return PER_CHIAVE.get(chiave) or PER_CHIAVE[PREDEFINITO]
 
 
@@ -118,11 +119,11 @@ def nomi(lingua="it"):
 
 
 def scostamenti(profilo, chip_trovato=None, byte_trovati=None, regioni=()):
-    """Dove la scheda vera non coincide con quello che il profilo si aspetta.
+    """Where the real board does not match what the profile expects.
 
-    Restituisce una lista di (chiave_messaggio, campi). Vuota = tutto come
-    previsto. ⚠️ Sono avvisi, non divieti: un chip diverso da quello atteso
-    puo' benissimo essere una revisione successiva della stessa scheda.
+    Returns a list of (message_key, fields). Empty = everything as expected.
+    ⚠️ These are warnings, not prohibitions: a chip other than the expected
+    one may perfectly well be a later revision of the same board.
     """
     fuori = []
     if profilo.byte and byte_trovati and byte_trovati != profilo.byte:
