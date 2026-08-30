@@ -32,7 +32,7 @@ class CompareWindow(tk.Toplevel):
 
         self.var_a = tk.StringVar()
         self.var_b = tk.StringVar()
-        self.var_name = tk.StringVar(value="modificata")
+        self.var_name = tk.StringVar(value="changed")
         self._build_ui()
         self.bind("<Escape>", lambda _e: self.destroy())
         T.dark_title_bar(self)
@@ -135,7 +135,7 @@ class CompareWindow(tk.Toplevel):
             self.result = A.compare_images(data_a, data_b)
             self.chip_map.set_size(total_size=self.total_size)
             self.chip_map.reset(M.VERIFIED)
-            self.chip_map.mark_spans(self.result["allineati"], M.MISMATCH)
+            self.chip_map.mark_spans(self.result["aligned"], M.MISMATCH)
             self._fill(A.signatures(data_b))
         finally:
             self.configure(cursor="")
@@ -144,15 +144,15 @@ class CompareWindow(tk.Toplevel):
         self.outcome_text.configure(text=text, foreground=colour)
 
     def _fill(self, signature_map):
-        aligned = self.result["allineati"]
-        exact = self.result["esatti"]
+        aligned = self.result["aligned"]
+        exact = self.result["exact"]
         if not aligned:
             self._say(self.L("cmp_identical"), T.OK)
             self.b_layout.state(["disabled"])
         else:
             key = "cmp_result_one" if len(aligned) == 1                 else "cmp_result"
             self._say(self.L(key, spans=len(aligned),
-                               size=A.human_size(self.result["byte_diversi"])),
+                               size=A.human_size(self.result["bytes_changed"])),
                         T.WARN)
             self.b_layout.state(["!disabled"])
 
@@ -172,15 +172,15 @@ class CompareWindow(tk.Toplevel):
 
     # ---------------------------------------------------------------- layout
     def save_layout(self):
-        if not self.result or not self.result["allineati"]:
+        if not self.result or not self.result["aligned"]:
             return
         path = filedialog.asksaveasfilename(
             parent=self, initialdir=self.folder or None,
             initialfile="layout-generato.txt", defaultextension=".txt")
         if not path:
             return
-        text = A.make_layout(self.result["allineati"], self.total_size,
-                                self.var_name.get().strip() or "modificata")
+        text = A.make_layout(self.result["aligned"], self.total_size,
+                                self.var_name.get().strip() or "changed")
         with open(path, "wb") as f:
             f.write(text.encode("ascii"))
         self._say(self.L("cmp_saved", path=path), T.OK)

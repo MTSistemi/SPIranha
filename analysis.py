@@ -91,12 +91,12 @@ def compare_images(a, b, grain=SECTOR):
     aligned = merge_runs(indices, grain, limit=len(a))
     exact = exact_spans(a, b, aligned)
     return {
-        "blocchi": indices,
-        "grana": grain,
-        "allineati": aligned,
-        "esatti": exact,
-        "byte_diversi": sum(f - i + 1 for i, f in exact),
-        "uguali": not indices,
+        "blocks": indices,
+        "grain": grain,
+        "aligned": aligned,
+        "exact": exact,
+        "bytes_changed": sum(f - i + 1 for i, f in exact),
+        "identical": not indices,
     }
 
 
@@ -156,7 +156,7 @@ class DryRun(object):
     """The result of working out how the flash will look after the write."""
 
     def __init__(self):
-        self.outcome = None        # bytes: l'immagine attesa
+        self.outcome = None        # bytes: the image that is expected
         self.md5 = None
         self.changes = []             # the (aligned) spans that change
         self.changes_exact = []
@@ -214,7 +214,7 @@ def dry_run(current, source_image, region=None, md5=None):
 
 # --------------------------------------------------------- layout generato
 
-def make_layout(spans, total_size, name="modificata"):
+def make_layout(spans, total_size, name="changed"):
     """A flashrom layout file that isolates the given ranges.
 
     It covers the whole flash: flashrom accepts partial layouts too, but a

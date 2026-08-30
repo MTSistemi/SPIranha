@@ -251,12 +251,12 @@ def checks(window):
         import analysis as A
         settings = A.compare_images(A.read(STOCK), A.read(EXPECTED))
         check("comparison: one aligned span",
-                  len(settings["allineati"]) == 1,
-                  str([(hex(a), hex(b)) for a, b in settings["allineati"]]))
+                  len(settings["aligned"]) == 1,
+                  str([(hex(a), hex(b)) for a, b in settings["aligned"]]))
         check("comparison: the true bounds are known",
-                  settings["esatti"] == [(0xAE0088, 0xC228C9)],
-                  str([(hex(a), hex(b)) for a, b in settings["esatti"]]))
-        text = A.make_layout(settings["allineati"], 16 * 1024 * 1024, "uefi")
+                  settings["exact"] == [(0xAE0088, 0xC228C9)],
+                  str([(hex(a), hex(b)) for a, b in settings["exact"]]))
+        text = A.make_layout(settings["aligned"], 16 * 1024 * 1024, "uefi")
         expected_layout = ("00000000:00adffff skip0\n"
                          "00ae0000:00c22fff uefi\n"
                          "00c23000:00ffffff skip2\n")

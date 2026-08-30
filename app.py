@@ -1750,13 +1750,13 @@ class App(tk.Tk):
                           "warn")
             return
         result = A.compare_images(older, newer)
-        spans = result["allineati"]
-        if result["uguali"] or not spans:
+        spans = result["aligned"]
+        if result["identical"] or not spans:
             self.log("   %s" % self.L("cmp_same", file=name), "good")
             return
         start = min(a for a, _b in spans)
         end = max(b for _a, b in spans)
-        how_many = len(result["blocchi"])
+        how_many = len(result["blocks"])
         self.log("   %s" % self.L("cmp_differs", file=name, how_many=how_many,
                                        start=start, end=end), "warn")
         for a, b in spans[:8]:

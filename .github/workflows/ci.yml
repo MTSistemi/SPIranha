@@ -43,50 +43,50 @@ jobs:
       - name: Analysis engine
         shell: python
         run: |
-          import analisi as A
+          import analysis as A
           a = bytes(16 * 1024) * 64
           b = bytearray(a)
           b[0x5000:0x5010] = b"x" * 16          # inside a single sector
-          result = A.confronta(a, bytes(b))
-          assert result["allineati"] == [(0x5000, 0x5FFF)], result["allineati"]
-          assert result["esatti"] == [(0x5000, 0x500F)], result["esatti"]
-          assert result["byte_diversi"] == 16
+          result = A.compare_images(a, bytes(b))
+          assert result["aligned"] == [(0x5000, 0x5FFF)], result["aligned"]
+          assert result["exact"] == [(0x5000, 0x500F)], result["exact"]
+          assert result["bytes_changed"] == 16
           # the dry run must notice what falls outside the chosen region
-          dry = A.prova_a_secco(a, bytes(b), regione=(0x8000, 0x8FFF))
-          assert dry.fuori == [(0x5000, 0x5FFF)], dry.fuori
-          assert dry.nulla_da_fare, "nothing outside the region gets written"
+          dry = A.dry_run(a, bytes(b), region=(0x8000, 0x8FFF))
+          assert dry.outside == [(0x5000, 0x5FFF)], dry.outside
+          assert dry.nothing_to_do, "nothing outside the region gets written"
           # the generated layout must cover the whole chip
-          text = A.genera_layout([(0x5000, 0x5FFF)], len(a), "test")
+          text = A.make_layout([(0x5000, 0x5FFF)], len(a), "test")
           assert text.count("\n") == 3, text
-          assert A.allineato(0x5000, 0x5FFF)
-          assert not A.allineato(0x5001, 0x5FFF)
-          print("analysis engine: fine")
+          assert A.is_aligned(0x5000, 0x5FFF)
+          assert not A.is_aligned(0x5001, 0x5FFF)
+          print("analysis engine: ok")
 
       - name: UF2 handling
         shell: python
         run: |
           import os, tempfile, pico
           path = os.path.join(tempfile.gettempdir(), "reset.uf2")
-          pico.genera_cancellazione(path, byte=64 * 1024)
-          blocks, first, last, families = pico.leggi_uf2(path)
+          pico.make_eraser(path, size=64 * 1024)
+          blocks, first, last, families = pico.read_uf2(path)
           assert blocks == 256, blocks
           assert first == pico.BASE_FLASH, hex(first)
           assert last == pico.BASE_FLASH + 64 * 1024 - 1, hex(last)
-          assert families == {pico.FAMIGLIA_RP2040}, families
+          assert families == {pico.FAMILY_RP2040}, families
           with open(path, "rb") as f:
-              head = f.read(pico.BLOCCO)
-          assert head[32:32 + pico.CARICO] == b"\xff" * pico.CARICO
+              head = f.read(pico.BLOCK)
+          assert head[32:32 + pico.PAYLOAD] == b"\xff" * pico.PAYLOAD
           # a corrupted file must be refused before it could reach a board
           data = bytearray(open(path, "rb").read())
           data[4] = (data[4] + 1) % 256
           broken = path + ".broken"
           open(broken, "wb").write(bytes(data))
           try:
-              pico.leggi_uf2(broken)
+              pico.read_uf2(broken)
               raise AssertionError("a corrupted UF2 was accepted")
           except ValueError:
               pass
-          print("UF2 handling: fine")
+          print("UF2 handling: ok")
 
       - name: Window and safety rails
         run: python tests\test_gui.py
