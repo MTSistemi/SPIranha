@@ -13,8 +13,8 @@ point: the program speaks both languages.
 """
 from __future__ import unicode_literals
 
-LINGUE = ("it", "en")
-NOMI_LINGUA = {"it": "Italiano", "en": "English"}
+LANGUAGES = ("it", "en")
+LANGUAGE_NAMES = {"it": "Italiano", "en": "English"}
 
 T = {
     # --- finestra ------------------------------------------------------
@@ -22,8 +22,8 @@ T = {
     # ⚠️ The subtitle says WHAT is being worked on: the profile name goes
     # inside it, or the header would always talk about a BC-250.
     "sottotitolo": {
-        "it": "Raspberry Pi Pico · pico-serprog · {scheda}",
-        "en": "Raspberry Pi Pico · pico-serprog · {scheda}",
+        "it": "Raspberry Pi Pico · pico-serprog · {board}",
+        "en": "Raspberry Pi Pico · pico-serprog · {board}",
     },
     "lingua": {"it": "Lingua", "en": "Language"},
 
@@ -33,8 +33,8 @@ T = {
         "en": "flashrom.exe not found. Without it the chip cannot be reached.",
     },
     "flashrom_individua": {"it": "Individua…", "en": "Locate…"},
-    "flashrom_trovato": {"it": "flashrom {versione} · {percorso}",
-                         "en": "flashrom {versione} · {percorso}"},
+    "flashrom_trovato": {"it": "flashrom {version} · {path}",
+                         "en": "flashrom {version} · {path}"},
     "flashrom_non_valido": {
         "it": "Il file scelto non risponde come flashrom.",
         "en": "The chosen file does not answer like flashrom.",
@@ -53,11 +53,11 @@ T = {
     },
     "nessuna_porta": {"it": "Nessuna porta seriale.", "en": "No serial port."},
     "pico_riconosciuto": {
-        "it": "{nome} · interfaccia v{versione} · bus {bus}",
-        "en": "{nome} · interface v{versione} · bus {bus}",
+        "it": "{name} · interfaccia v{version} · bus {bus}",
+        "en": "{name} · interface v{version} · bus {bus}",
     },
-    "pico_non_apre": {"it": "{porta} non si apre: {motivo}",
-                      "en": "{porta} will not open: {motivo}"},
+    "pico_non_apre": {"it": "{port} non si apre: {reason}",
+                      "en": "{port} will not open: {reason}"},
     "pico_no_spi": {
         "it": "Il programmatore non dichiara SPI.",
         "en": "The programmer does not declare SPI.",
@@ -69,18 +69,18 @@ T = {
 
     # --- versione del firmware ----------------------------------------------
     "fw_versione_ok": {
-        "it": "Firmware {versione}, \u00e8 l\u0027ultimo che abbiamo.",
-        "en": "Firmware {versione}, the latest one we carry.",
+        "it": "Firmware {version}, \u00e8 l\u0027ultimo che abbiamo.",
+        "en": "Firmware {version}, the latest one we carry.",
     },
     "fw_versione_vecchia": {
-        "it": "Firmware {versione} sulla scheda, qui c\u0027\u00e8 la {nuova}.",
-        "en": "Firmware {versione} on the board, we carry {nuova}.",
+        "it": "Firmware {version} sulla scheda, qui c\u0027\u00e8 la {newer}.",
+        "en": "Firmware {version} on the board, we carry {newer}.",
     },
     "fw_versione_muta": {
         "it": "Firmware anteriore alla 1.1: non dice quale sia. Qui c\u0027"
-              "\u00e8 la {nuova}.",
+              "\u00e8 la {newer}.",
         "en": "Firmware older than 1.1: it does not say which. We carry "
-              "{nuova}.",
+              "{newer}.",
     },
     "fw_aggiorna": {"it": "Aggiorna", "en": "Update"},
     "fw_aggiorno": {
@@ -97,12 +97,12 @@ T = {
               "button is needed once; after that it updates over the wire.",
     },
     "fw_aggiornato": {
-        "it": "Aggiornata alla {versione} su {porta}.",
-        "en": "Updated to {versione} on {porta}.",
+        "it": "Aggiornata alla {version} su {port}.",
+        "en": "Updated to {version} on {port}.",
     },
     "fw_aggiorna_dubbio": {
-        "it": "Copia riuscita, ma la scheda dichiara ancora {versione}.",
-        "en": "Copy went through, but the board still reports {versione}.",
+        "it": "Copia riuscita, ma la scheda dichiara ancora {version}.",
+        "en": "Copy went through, but the board still reports {version}.",
     },
 
     # --- profili di scheda --------------------------------------------------
@@ -122,18 +122,18 @@ T = {
               "holds the bus.",
     },
     "prof_dim_diversa": {
-        "it": "Il profilo prevede {atteso} byte, il chip ne ha {trovato}.",
-        "en": "The profile expects {atteso} bytes, the chip has {trovato}.",
+        "it": "Il profilo prevede {expected} byte, il chip ne ha {hit}.",
+        "en": "The profile expects {expected} bytes, the chip has {hit}.",
     },
     "prof_chip_diverso": {
-        "it": "Il profilo prevede {atteso}, qui c\u0027\u00e8 {trovato}. "
+        "it": "Il profilo prevede {expected}, qui c\u0027\u00e8 {hit}. "
               "Pu\u00f2 essere una revisione diversa della stessa scheda.",
-        "en": "The profile expects {atteso}, this is {trovato}. It may be a "
+        "en": "The profile expects {expected}, this is {hit}. It may be a "
               "different revision of the same board.",
     },
     "prof_regioni_mancanti": {
-        "it": "Regioni attese e non trovate: {quali}.",
-        "en": "Regions expected and not found: {quali}.",
+        "it": "Regioni attese e non trovate: {which}.",
+        "en": "Regions expected and not found: {which}.",
     },
     "prof_come_previsto": {
         "it": "Chip come previsto dal profilo.",
@@ -214,14 +214,14 @@ T = {
         "en": "Chip is not write protected.",
     },
     "prot_attiva": {
-        "it": "Protetto: 0x{inizio:06X}-0x{fine:06X} ({descrizione}), modo {modo}.",
-        "en": "Protected: 0x{inizio:06X}-0x{fine:06X} ({descrizione}), mode {modo}.",
+        "it": "Protetto: 0x{start:06X}-0x{end:06X} ({description}), modo {mode}.",
+        "en": "Protected: 0x{start:06X}-0x{end:06X} ({description}), mode {mode}.",
     },
     "prot_scontro": {
         "it": "La protezione copre la regione da scrivere "
-              "(0x{inizio:06X}-0x{fine:06X}): la scrittura non passerebbe.",
+              "(0x{start:06X}-0x{end:06X}): la scrittura non passerebbe.",
         "en": "The protection covers the region to write "
-              "(0x{inizio:06X}-0x{fine:06X}): the write would not go through.",
+              "(0x{start:06X}-0x{end:06X}): the write would not go through.",
     },
     "prot_ignota": {
         "it": "Il chip non risponde sullo stato della protezione.",
@@ -245,19 +245,19 @@ T = {
         "en": "Protection removed.",
     },
     "prot_non_tolta": {
-        "it": "Non sono riuscito a togliere la protezione (codice {codice}). "
+        "it": "Non sono riuscito a togliere la protezione (codice {code}). "
               "Spesso il blocco \u00e8 tenuto dal piedino WP o da /HOLD: va "
               "portato alto, o il chip resta protetto comunque.",
-        "en": "Could not remove the protection (code {codice}). The lock is "
+        "en": "Could not remove the protection (code {code}). The lock is "
               "often held by the WP or /HOLD pin: it has to be pulled high, or "
               "the chip stays protected anyway.",
     },
     "req_protezione": {"it": "chip protetto in scrittura", "en": "chip is write protected"},
     # --- il chip interrogato da noi (JEDEC/SFDP) ----------------------------
     "jedec_risponde": {
-        "it": "Il chip risponde: {descrizione}. flashrom non lo conosce: "
+        "it": "Il chip risponde: {description}. flashrom non lo conosce: "
               "scegliere in «Modello» un chip della stessa misura e famiglia.",
-        "en": "The chip answers: {descrizione}. flashrom does not know it: "
+        "en": "The chip answers: {description}. flashrom does not know it: "
               "pick a chip of the same size and family under \u201cModel\u201d.",
     },
     "jedec_muto": {
@@ -268,19 +268,19 @@ T = {
               "wiring or the power, not the model.",
     },
     "jedec_errore": {
-        "it": "Non sono riuscito a interrogare il chip: {motivo}",
-        "en": "Could not query the chip: {motivo}",
+        "it": "Non sono riuscito a interrogare il chip: {reason}",
+        "en": "Could not query the chip: {reason}",
     },
     # --- tensione del chip e adattatore di livello --------------------------
     "tens_bassa": {
-        "it": "Chip a 1,8 V ({famiglia}). L\u0027RP2040 parla a 3,3 V: "
+        "it": "Chip a 1,8 V ({family}). L\u0027RP2040 parla a 3,3 V: "
               "collegato diretto lo rovina, e il MISO non si legge comunque.",
-        "en": "1.8 V chip ({famiglia}). The RP2040 speaks at 3.3 V: wired "
+        "en": "1.8 V chip ({family}). The RP2040 speaks at 3.3 V: wired "
               "directly it destroys the chip, and MISO cannot be read anyway.",
     },
     "tens_alta": {
-        "it": "Chip a 3,3 V ({famiglia}): si collega diretto.",
-        "en": "3.3 V chip ({famiglia}): wire it directly.",
+        "it": "Chip a 3,3 V ({family}): si collega diretto.",
+        "en": "3.3 V chip ({family}): wire it directly.",
     },
     "tens_ignota": {
         "it": "Tensione del chip non deducibile dal modello: guardare la "
@@ -312,8 +312,8 @@ T = {
     "ad_pdf_dove": {"it": "Salva lo schema in PDF", "en": "Save the schematic as PDF"},
     "ad_pdf_fatto": {"it": "PDF salvato: {file}", "en": "PDF saved: {file}"},
     "ad_pdf_errore": {
-        "it": "Non sono riuscito a fare il PDF: {motivo}",
-        "en": "Could not make the PDF: {motivo}",
+        "it": "Non sono riuscito a fare il PDF: {reason}",
+        "en": "Could not make the PDF: {reason}",
     },
     "ad_pdf_niente_chrome": {
         "it": "Serve Chrome o Edge per la stampa in PDF: non li trovo.",
@@ -403,7 +403,7 @@ T = {
         "en": "Chip models flashrom knows",
     },
     "cerca_campo": {"it": "Filtro", "en": "Filter"},
-    "cerca_conteggio": {"it": "{quanti} di {totale}", "en": "{quanti} of {totale}"},
+    "cerca_conteggio": {"it": "{how_many} di {total}", "en": "{how_many} of {total}"},
     "cerca_col_produttore": {"it": "Produttore", "en": "Vendor"},
     "cerca_col_modello": {"it": "Modello", "en": "Model"},
     "cerca_col_misura": {"it": "Dimensione", "en": "Size"},
@@ -424,8 +424,8 @@ T = {
         "en": "flashrom returned no chip list.",
     },
     "cerca_scelto": {
-        "it": "Modello scelto: {produttore} {chip}, {misura}.",
-        "en": "Model picked: {produttore} {chip}, {misura}.",
+        "it": "Modello scelto: {vendor} {chip}, {size_text}.",
+        "en": "Model picked: {vendor} {chip}, {size_text}.",
     },
     # --- 3. lettura ------------------------------------------------------
     "sez_lettura": {"it": "3 · Lettura e backup", "en": "3 · Read and backup"},
@@ -448,12 +448,12 @@ T = {
         "en": "Reads differ ({a} ≠ {b}). Unreliable connection: check the wires "
               "and lower the speed. Do not write.",
     },
-    "lettura_salvata": {"it": "Salvato in {percorso}", "en": "Saved to {percorso}"},
+    "lettura_salvata": {"it": "Salvato in {path}", "en": "Saved to {path}"},
     "lettura_fallita": {
-        "it": "Lettura fallita (codice {codice}). Dettaglio nel registro.",
-        "en": "Read failed (code {codice}). Details in the log.",
+        "it": "Lettura fallita (codice {code}). Dettaglio nel registro.",
+        "en": "Read failed (code {code}). Details in the log.",
     },
-    "riconosciuto_come": {"it": "Riconosciuto: {cosa}", "en": "Recognised: {cosa}"},
+    "riconosciuto_come": {"it": "Riconosciuto: {what}", "en": "Recognised: {what}"},
     "md5_stock": {
         "it": "BIOS originale P3.00 di questa scheda",
         "en": "original P3.00 BIOS of this board",
@@ -470,8 +470,8 @@ T = {
     # --- regioni ricavate dall'immagine -------------------------------------
     "reg_ricava": {"it": "Ricava", "en": "Derive"},
     "reg_trovate": {
-        "it": "{quante} regioni ({origine}). Layout scritto: {file}",
-        "en": "{quante} regions ({origine}). Layout written: {file}",
+        "it": "{count} regioni ({source}). Layout scritto: {file}",
+        "en": "{count} regions ({source}). Layout written: {file}",
     },
     "reg_niente": {
         "it": "L\u0027immagine non dichiara regioni: niente descrittore Intel, "
@@ -489,8 +489,8 @@ T = {
     "reg_origine_fmap": {"it": "FMAP", "en": "FMAP"},
     "reg_origine_amd": {"it": "struttura AMD", "en": "AMD structure"},
     "reg_non_scrivo": {
-        "it": "Non riesco a scrivere il layout: {motivo}",
-        "en": "Cannot write the layout: {motivo}",
+        "it": "Non riesco a scrivere il layout: {reason}",
+        "en": "Cannot write the layout: {reason}",
     },
     # --- confronto automatico col backup precedente -------------------------
     "conf_primo": {
@@ -506,9 +506,9 @@ T = {
     },
     "conf_diverso": {
         "it": "Diversa dal backup precedente ({file}): "
-              "0x{inizio:06X}-0x{fine:06X}, settori cambiati: {quanti}.",
+              "0x{start:06X}-0x{end:06X}, settori cambiati: {how_many}.",
         "en": "Different from the previous backup ({file}): "
-              "0x{inizio:06X}-0x{fine:06X}, sectors changed: {quanti}.",
+              "0x{start:06X}-0x{end:06X}, sectors changed: {how_many}.",
     },
     "conf_altra_misura": {
         "it": "Il backup precedente ({file}) \u00e8 di un\u0027altra misura: "
@@ -535,8 +535,8 @@ T = {
     },
     "scrivi": {"it": "Scrivi…", "en": "Write…"},
     "scrivi_bloccato": {
-        "it": "Manca: {cosa}",
-        "en": "Missing: {cosa}",
+        "it": "Manca: {what}",
+        "en": "Missing: {what}",
     },
     "req_flashrom": {"it": "flashrom", "en": "flashrom"},
     "req_chip": {"it": "identificazione del chip", "en": "chip identification"},
@@ -548,33 +548,33 @@ T = {
     "req_layout": {"it": "layout e regione", "en": "layout and region"},
     "req_alimentazione": {"it": "conferma alimentazione", "en": "mains confirmation"},
     "req_dimensione": {
-        "it": "immagine di {attesa} byte, questa è di {trovata}",
-        "en": "image must be {attesa} bytes, this one is {trovata}",
+        "it": "immagine di {pending} byte, questa è di {found_one}",
+        "en": "image must be {pending} bytes, this one is {found_one}",
     },
 
     # --- conferma --------------------------------------------------------
     "conferma_titolo": {"it": "Confermare la scrittura", "en": "Confirm the write"},
     "conferma_testo_regione": {
-        "it": "Regione «{regione}» — {byte} byte, da 0x{inizio:06X} a 0x{fine:06X}.\n"
-              "Chip {chip}.\nSorgente: {immagine}\n\n"
+        "it": "Regione «{region}» — {size} byte, da 0x{start:06X} a 0x{end:06X}.\n"
+              "Chip {chip}.\nSorgente: {image}\n\n"
               "Il chip viene cancellato a settori e riscritto. In caso di errore "
               "la scheda non si avvia: si riparte da qui con l'immagine di recupero.",
-        "en": "Region “{regione}” — {byte} bytes, 0x{inizio:06X} to 0x{fine:06X}.\n"
-              "Chip {chip}.\nSource: {immagine}\n\n"
+        "en": "Region “{region}” — {size} bytes, 0x{start:06X} to 0x{end:06X}.\n"
+              "Chip {chip}.\nSource: {image}\n\n"
               "The chip is erased by sectors and rewritten. On error the board will "
               "not boot: you start again from here with the recovery image.",
     },
     "conferma_testo_intero": {
-        "it": "Chip intero — {byte} byte.\nChip {chip}.\nSorgente: {immagine}\n\n"
+        "it": "Chip intero — {size} byte.\nChip {chip}.\nSorgente: {image}\n\n"
               "Vengono sovrascritte anche le impostazioni del BIOS e la "
               "configurazione della memoria di questo esemplare.",
-        "en": "Whole chip — {byte} bytes.\nChip {chip}.\nSource: {immagine}\n\n"
+        "en": "Whole chip — {size} bytes.\nChip {chip}.\nSource: {image}\n\n"
               "The BIOS settings and this board's memory configuration are "
               "overwritten too.",
     },
     "conferma_digita": {
-        "it": "Digitare {parola} per procedere",
-        "en": "Type {parola} to proceed",
+        "it": "Digitare {word} per procedere",
+        "en": "Type {word} to proceed",
     },
     "parola_conferma": {"it": "SCRIVI", "en": "WRITE"},
     "annulla": {"it": "Annulla", "en": "Cancel"},
@@ -587,9 +587,9 @@ T = {
         "en": "Written and verified by flashrom.",
     },
     "scrittura_fallita": {
-        "it": "Scrittura fallita (codice {codice}). Non scollegare e non "
+        "it": "Scrittura fallita (codice {code}). Non scollegare e non "
               "ricollegare l'alimentazione: leggere il registro.",
-        "en": "Write failed (code {codice}). Do not disconnect and do not "
+        "en": "Write failed (code {code}). Do not disconnect and do not "
               "reconnect mains: read the log.",
     },
     "rilettura": {"it": "Rilettura di controllo…", "en": "Verification re-read…"},
@@ -635,26 +635,26 @@ T = {
               "plug it back in.",
     },
     "fw_trovata": {
-        "it": "{modello} su {unita} — pronta per il firmware",
-        "en": "{modello} on {unita} — ready for firmware",
+        "it": "{model} su {drive} — pronta per il firmware",
+        "en": "{model} on {drive} — ready for firmware",
     },
     "nome_scheda": {"it": "Nome", "en": "Name"},
     "nome_scheda_nota": {
         "it": "un nome per riconoscerla fra le altre",
         "en": "a name to tell it from the others",
     },
-    "fw_seriale": {"it": "seriale {seriale}", "en": "serial {seriale}"},
+    "fw_seriale": {"it": "seriale {serial}", "en": "serial {serial}"},
     "fw_trovata_nome": {
-        "it": "{nome} \u00b7 {modello} su {unita} \u00b7 {seriale}",
-        "en": "{nome} \u00b7 {modello} on {unita} \u00b7 {seriale}",
+        "it": "{name} \u00b7 {model} su {drive} \u00b7 {serial}",
+        "en": "{name} \u00b7 {model} on {drive} \u00b7 {serial}",
     },
     "fw_trovata_anonima": {
-        "it": "{modello} su {unita} \u00b7 {seriale} \u00b7 senza nome",
-        "en": "{modello} on {unita} \u00b7 {seriale} \u00b7 unnamed",
+        "it": "{model} su {drive} \u00b7 {serial} \u00b7 senza nome",
+        "en": "{model} on {drive} \u00b7 {serial} \u00b7 unnamed",
     },
     "fw_battezzata": {
-        "it": "Scheda registrata come \u00ab{nome}\u00bb.",
-        "en": "Board registered as \u201c{nome}\u201d.",
+        "it": "Scheda registrata come \u00ab{name}\u00bb.",
+        "en": "Board registered as \u201c{name}\u201d.",
     },
     "fw_dimenticata": {
         "it": "Nome tolto: la scheda torna anonima.",
@@ -663,38 +663,38 @@ T = {
     "parola_cancella": {"it": "CANCELLA", "en": "ERASE"},
     "fw_azzera_uno": {
         "it": "Primo consenso su due.\n\nSto per cancellare tutta la flash di "
-              "{chi}: {byte}.\n\nLa scheda smette di essere un programmatore e "
+              "{who}: {size}.\n\nLa scheda smette di essere un programmatore e "
               "torna come appena comprata. Il firmware si potr\u00e0 rimettere da "
               "qui, ma finch\u00e9 non lo fai quella scheda non serve a niente.",
         "en": "First of two confirmations.\n\nAbout to erase the whole flash of "
-              "{chi}: {byte}.\n\nThe board stops being a programmer and goes "
+              "{who}: {size}.\n\nThe board stops being a programmer and goes "
               "back to as-bought. The firmware can be put back from here, but "
               "until you do, that board is of no use.",
     },
     "fw_azzera_due": {
         "it": "Secondo consenso.\n\nControlla di avere in mano la scheda "
-              "giusta: quella collegata su {unita} ha il seriale\n\n"
-              "    {seriale}\n\nPer procedere ribatti le ultime quattro cifre.",
+              "giusta: quella collegata su {drive} ha il seriale\n\n"
+              "    {serial}\n\nPer procedere ribatti le ultime quattro cifre.",
         "en": "Second confirmation.\n\nMake sure you are holding the right "
-              "board: the one on {unita} has serial\n\n    {seriale}\n\n"
+              "board: the one on {drive} has serial\n\n    {serial}\n\n"
               "To proceed, retype its last four characters.",
     },
     "fw_azzera_due_senza": {
         "it": "Secondo consenso.\n\nDi questa scheda non si legge il seriale. "
-              "Verifica di persona che quella collegata su {unita} sia quella "
+              "Verifica di persona che quella collegata su {drive} sia quella "
               "che vuoi cancellare.",
         "en": "Second confirmation.\n\nThis board\u2019s serial cannot be read. "
-              "Check by hand that the one on {unita} is the one you mean to "
+              "Check by hand that the one on {drive} is the one you mean to "
               "erase.",
     },
     "fw_bootsel": {"it": "Riporta in BOOTSEL", "en": "Send to BOOTSEL"},
     "fw_bootsel_provo": {
-        "it": "Chiedo alla scheda su {porta} di riavviarsi nel bootloader\u2026",
-        "en": "Asking the board on {porta} to reboot into the bootloader\u2026",
+        "it": "Chiedo alla scheda su {port} di riavviarsi nel bootloader\u2026",
+        "en": "Asking the board on {port} to reboot into the bootloader\u2026",
     },
     "fw_bootsel_ok": {
-        "it": "Rientrata in BOOTSEL su {unita}, senza toccare il pulsante.",
-        "en": "Back in BOOTSEL on {unita}, without touching the button.",
+        "it": "Rientrata in BOOTSEL su {drive}, senza toccare il pulsante.",
+        "en": "Back in BOOTSEL on {drive}, without touching the button.",
     },
     "fw_bootsel_no": {
         "it": "La scheda non \u00e8 rientrata in BOOTSEL. Con il firmware "
@@ -716,8 +716,8 @@ T = {
         "en": "Firmware copied. The board reboots: waiting for the serial port\u2026",
     },
     "fw_pronto": {
-        "it": "Programmatore pronto su {porta}.",
-        "en": "Programmer ready on {porta}.",
+        "it": "Programmatore pronto su {port}.",
+        "en": "Programmer ready on {port}.",
     },
     "fw_non_riappare": {
         "it": "Firmware copiato, ma la porta seriale non \u00e8 comparsa. Staccare e "
@@ -725,16 +725,16 @@ T = {
         "en": "Firmware copied, but no serial port appeared. Unplug the board and "
               "plug it back in.",
     },
-    "fw_errore": {"it": "{motivo}", "en": "{motivo}"},
+    "fw_errore": {"it": "{reason}", "en": "{reason}"},
     "fw_azzera_titolo": {
         "it": "Riportare la scheda a nuovo",
         "en": "Reset the board to factory",
     },
     "fw_azzera_testo": {
-        "it": "Sto per cancellare tutta la flash di {modello} su {unita}: "
-              "{byte}.\n\nLa scheda torner\u00e0 come appena comprata e ricomparir\u00e0 "
+        "it": "Sto per cancellare tutta la flash di {model} su {drive}: "
+              "{size}.\n\nLa scheda torner\u00e0 come appena comprata e ricomparir\u00e0 "
               "come disco RPI-RP2. Il firmware si potr\u00e0 rimettere da qui.",
-        "en": "About to erase the whole flash of {modello} on {unita}: {byte}.\n\n"
+        "en": "About to erase the whole flash of {model} on {drive}: {size}.\n\n"
               "The board goes back to as-bought and will show up again as the "
               "RPI-RP2 drive. The firmware can be put back from here.",
     },
@@ -753,45 +753,45 @@ T = {
     "leg_verificato": {"it": "verificato", "en": "verified"},
     "leg_diverso": {"it": "diverso", "en": "mismatch"},
     "mappa_riposo": {
-        "it": "{dimensione} · {blocchi} blocchi da {grana}",
-        "en": "{dimensione} · {blocchi} blocks of {grana}",
+        "it": "{total_size} · {blocks} blocchi da {grain}",
+        "en": "{total_size} · {blocks} blocks of {grain}",
     },
-    "mappa_posizione": {"it": "0x{posizione:06X}", "en": "0x{posizione:06X}"},
+    "mappa_posizione": {"it": "0x{position:06X}", "en": "0x{position:06X}"},
 
     # --- prova a secco ------------------------------------------------------
     "prova_secco": {"it": "Prova a secco", "en": "Dry run"},
     "secco_ok": {
-        "it": "Cambieranno {byte} in {intervalli} intervalli, tutti dentro la "
+        "it": "Cambieranno {size} in {spans} intervalli, tutti dentro la "
               "regione. md5 atteso {md5}",
-        "en": "{byte} will change in {intervalli} ranges, all inside the "
+        "en": "{size} will change in {spans} ranges, all inside the "
               "region. Expected md5 {md5}",
     },
     "secco_ok_uno": {
-        "it": "Cambieranno {byte} in un solo intervallo, dentro la regione. "
+        "it": "Cambieranno {size} in un solo intervallo, dentro la regione. "
               "md5 atteso {md5}",
-        "en": "{byte} will change in a single range, inside the region. "
+        "en": "{size} will change in a single range, inside the region. "
               "Expected md5 {md5}",
     },
     "verifica_diversa_uno": {
-        "it": "Un intervallo non coincide ({byte}). Non ricollegare "
+        "it": "Un intervallo non coincide ({size}). Non ricollegare "
               "l'alimentazione.",
-        "en": "One range does not match ({byte}). Do not reconnect mains.",
+        "en": "One range does not match ({size}). Do not reconnect mains.",
     },
     "secco_nulla": {
         "it": "Nessuna differenza: il chip contiene già questa immagine.",
         "en": "No difference: the chip already holds this image.",
     },
     "secco_fuori": {
-        "it": "{intervalli} intervalli differiscono anche fuori dalla regione: "
-              "non verranno scritti. Cambieranno {byte} byte. md5 atteso {md5}",
-        "en": "{intervalli} ranges also differ outside the region: they will not "
-              "be written. {byte} bytes will change. Expected md5 {md5}",
+        "it": "{spans} intervalli differiscono anche fuori dalla regione: "
+              "non verranno scritti. Cambieranno {size} byte. md5 atteso {md5}",
+        "en": "{spans} ranges also differ outside the region: they will not "
+              "be written. {size} bytes will change. Expected md5 {md5}",
     },
     "secco_atteso_diverso": {
         "it": "Il risultato calcolato NON coincide con il file «Atteso» "
-              "({calcolato} ≠ {atteso}). Controllare immagine, layout e regione.",
+              "({computed} ≠ {expected}). Controllare immagine, layout e regione.",
         "en": "The computed result does NOT match the “Expected” file "
-              "({calcolato} ≠ {atteso}). Check image, layout and region.",
+              "({computed} ≠ {expected}). Check image, layout and region.",
     },
     "secco_atteso_uguale": {
         "it": "Il risultato calcolato coincide con il file «Atteso».",
@@ -805,10 +805,10 @@ T = {
         "it": "Cerca la velocità più alta con letture ripetibili.",
         "en": "Finds the highest speed with repeatable reads.",
     },
-    "qualifica_prova": {"it": "Provo a {velocita}…", "en": "Trying {velocita}…"},
+    "qualifica_prova": {"it": "Provo a {speed}…", "en": "Trying {speed}…"},
     "qualifica_ok": {
-        "it": "Velocità impostata: {velocita}. Due letture identiche su {byte}.",
-        "en": "Speed set to {velocita}. Two identical reads over {byte}.",
+        "it": "Velocità impostata: {speed}. Due letture identiche su {size}.",
+        "en": "Speed set to {speed}. Two identical reads over {size}.",
     },
     "qualifica_nessuna": {
         "it": "Nessuna velocità dà letture ripetibili. Verificare i cavi e "
@@ -823,27 +823,27 @@ T = {
     "fase_WRITE": {"it": "scrittura", "en": "write"},
     "fase_VERIFY": {"it": "verifica", "en": "verify"},
     "avanzamento": {
-        "it": "{fase} {percento}%",
-        "en": "{fase} {percento}%",
+        "it": "{phase} {percent}%",
+        "en": "{phase} {percent}%",
     },
     "avanzamento_resta": {
-        "it": "{fase} {percento}% · {resta} alla fine",
-        "en": "{fase} {percento}% · {resta} left",
+        "it": "{phase} {percent}% · {left} alla fine",
+        "en": "{phase} {percent}% · {left} left",
     },
 
     # --- verifica finale ----------------------------------------------------
     "verifica_finale": {"it": "Verifica finale…", "en": "Final verification…"},
     "verifica_ok": {
-        "it": "Il chip contiene esattamente la nuova ROM: {byte} confrontati, "
+        "it": "Il chip contiene esattamente la nuova ROM: {size} confrontati, "
               "nessuna differenza.",
-        "en": "The chip holds exactly the new ROM: {byte} compared, no difference.",
+        "en": "The chip holds exactly the new ROM: {size} compared, no difference.",
     },
     "verifica_diversa": {
-        "it": "{intervalli} intervalli non coincidono ({byte}). Non ricollegare "
+        "it": "{spans} intervalli non coincidono ({size}). Non ricollegare "
               "l'alimentazione.",
-        "en": "{intervalli} ranges do not match ({byte}). Do not reconnect mains.",
+        "en": "{spans} ranges do not match ({size}). Do not reconnect mains.",
     },
-    "coerenza_ok": {"it": "Regione coerente: {cosa}.", "en": "Region coherent: {cosa}."},
+    "coerenza_ok": {"it": "Regione coerente: {what}.", "en": "Region coherent: {what}."},
     "coerenza_nulla": {
         "it": "Regione scritta, ma senza strutture note al suo interno.",
         "en": "Region written, but with no known structures inside.",
@@ -876,12 +876,12 @@ T = {
         "en": "The two images are identical.",
     },
     "conf_risultato": {
-        "it": "{intervalli} intervalli diversi · {byte}",
-        "en": "{intervalli} differing ranges · {byte}",
+        "it": "{spans} intervalli diversi · {size}",
+        "en": "{spans} differing ranges · {size}",
     },
     "conf_risultato_uno": {
-        "it": "1 intervallo diverso · {byte}",
-        "en": "1 differing range · {byte}",
+        "it": "1 intervallo diverso · {size}",
+        "en": "1 differing range · {size}",
     },
     "conf_dimensioni": {
         "it": "Dimensioni diverse: {a} e {b}. Non confrontabili.",
@@ -893,8 +893,8 @@ T = {
     "conf_col_cosa": {"it": "Contenuto", "en": "Contents"},
     "conf_salva_layout": {"it": "Salva layout…", "en": "Save layout…"},
     "conf_nome": {"it": "Nome regione", "en": "Region name"},
-    "conf_salvato": {"it": "Layout salvato in {percorso}",
-                     "en": "Layout saved to {percorso}"},
+    "conf_salvato": {"it": "Layout salvato in {path}",
+                     "en": "Layout saved to {path}"},
     "conf_scegli": {"it": "Scegliere due immagini.", "en": "Pick two images."},
 
     # --- schema dei collegamenti -------------------------------------------
@@ -966,15 +966,15 @@ T = {
 }
 
 
-class Lingua(object):
+class Language(object):
     """Tiene la lingua corrente e restituisce le frasi."""
 
-    def __init__(self, codice="it"):
-        self.codice = codice if codice in LINGUE else "it"
+    def __init__(self, code="it"):
+        self.code = code if code in LANGUAGES else "it"
 
-    def __call__(self, chiave, **campi):
-        voce = T.get(chiave)
-        if voce is None:
-            return "?" + chiave + "?"
-        testo = voce.get(self.codice) or voce["it"]
-        return testo.format(**campi) if campi else testo
+    def __call__(self, key, **fields):
+        entry = T.get(key)
+        if entry is None:
+            return "?" + key + "?"
+        text = entry.get(self.code) or entry["it"]
+        return text.format(**fields) if fields else text

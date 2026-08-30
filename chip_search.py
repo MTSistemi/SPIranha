@@ -23,163 +23,163 @@ import theme as T
 import voltage as V
 
 
-class Ricerca(tk.Toplevel):
+class ChipSearch(tk.Toplevel):
     """The search window. Whoever opens it passes what to do with the pick."""
 
-    def __init__(self, padre, tm, L, chip, al_scegliere, iniziale=""):
-        tk.Toplevel.__init__(self, padre, background=T.INK)
-        self.tema = tm
+    def __init__(self, parent, tm, L, chip, on_pick, iniziale=""):
+        tk.Toplevel.__init__(self, parent, background=T.INK)
+        self.theme = tm
         self.L = L
-        self.al_scegliere = al_scegliere
+        self.on_pick = on_pick
         self.tutti = [c for c in chip if c.spi]
-        self.mostrati = []
+        self.shown = []
         self.title(L("cerca_titolo"))
         self.geometry("760x520")
         self.minsize(520, 360)
-        self.transient(padre)
-        T.titolo_scuro(self)
+        self.transient(parent)
+        T.dark_title_bar(self)
 
-        self._stile()
-        cornice = tk.Frame(self, background=T.INK)
-        cornice.pack(fill="both", expand=True, padx=12, pady=12)
-        cornice.columnconfigure(0, weight=1)
-        cornice.rowconfigure(2, weight=1)
+        self._style()
+        frame = tk.Frame(self, background=T.INK)
+        frame.pack(fill="both", expand=True, padx=12, pady=12)
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(2, weight=1)
 
-        testa = tk.Frame(cornice, background=T.INK)
-        testa.grid(row=0, column=0, sticky="ew")
-        tk.Label(testa, text=L("cerca_titolo"), background=T.INK,
+        header = tk.Frame(frame, background=T.INK)
+        header.grid(row=0, column=0, sticky="ew")
+        tk.Label(header, text=L("cerca_titolo"), background=T.INK,
                  foreground=T.FG, font=tm.f_titolo).pack(side="left")
-        self.var_conteggio = tk.StringVar()
-        tk.Label(testa, textvariable=self.var_conteggio, background=T.INK,
-                 foreground=T.MUT, font=tm.f_testo).pack(side="right")
+        self.var_count = tk.StringVar()
+        tk.Label(header, textvariable=self.var_count, background=T.INK,
+                 foreground=T.MUT, font=tm.f_text).pack(side="right")
 
-        riga = tk.Frame(cornice, background=T.INK)
-        riga.grid(row=1, column=0, sticky="ew", pady=(10, 8))
-        riga.columnconfigure(1, weight=1)
-        tk.Label(riga, text=T.micro(L("cerca_campo")), background=T.INK,
+        line = tk.Frame(frame, background=T.INK)
+        line.grid(row=1, column=0, sticky="ew", pady=(10, 8))
+        line.columnconfigure(1, weight=1)
+        tk.Label(line, text=T.micro(L("cerca_campo")), background=T.INK,
                  foreground=T.MUT, font=tm.f_micro).grid(row=0, column=0,
                                                          sticky="w")
-        self.var_cerca = tk.StringVar(value=iniziale)
-        self.campo = ttk.Entry(riga, textvariable=self.var_cerca,
-                               font=tm.f_testo)
-        self.campo.grid(row=0, column=1, sticky="ew", padx=(8, 0))
-        self.var_cerca.trace_add("write", lambda *_a: self._filtra())
+        self.var_filter = tk.StringVar(value=iniziale)
+        self.field = ttk.Entry(line, textvariable=self.var_filter,
+                               font=tm.f_text)
+        self.field.grid(row=0, column=1, sticky="ew", padx=(8, 0))
+        self.var_filter.trace_add("write", lambda *_a: self._filter())
 
-        tabella = tk.Frame(cornice, background=T.INK)
-        tabella.grid(row=2, column=0, sticky="nsew")
-        tabella.columnconfigure(0, weight=1)
-        tabella.rowconfigure(0, weight=1)
-        colonne = ("produttore", "modello", "misura", "volt", "prove")
-        self.lista = ttk.Treeview(tabella, columns=colonne, show="headings",
+        table = tk.Frame(frame, background=T.INK)
+        table.grid(row=2, column=0, sticky="nsew")
+        table.columnconfigure(0, weight=1)
+        table.rowconfigure(0, weight=1)
+        columns = ("produttore", "modello", "misura", "volt", "prove")
+        self.tree = ttk.Treeview(table, columns=columns, show="headings",
                                   style="Cerca.Treeview", selectmode="browse")
-        for chiave, larghezza, ancora in (("produttore", 120, "w"),
+        for key, width, anchor in (("produttore", 120, "w"),
                                           ("modello", 290, "w"),
                                           ("misura", 80, "e"),
                                           ("volt", 70, "e"),
                                           ("prove", 70, "center")):
             # ⚠️ the heading lines up like its column: centred over a wide
             # column it looked like it belonged to the one next to it
-            self.lista.heading(chiave, text=T.micro(L("cerca_col_" + chiave)),
-                               anchor=ancora)
-            self.lista.column(chiave, width=larghezza, anchor=ancora,
-                              stretch=(chiave == "modello"))
-        self.lista.grid(row=0, column=0, sticky="nsew")
-        barra = ttk.Scrollbar(tabella, orient="vertical",
-                              command=self.lista.yview)
-        barra.grid(row=0, column=1, sticky="ns")
-        self.lista.configure(yscrollcommand=barra.set)
+            self.tree.heading(key, text=T.micro(L("cerca_col_" + key)),
+                               anchor=anchor)
+            self.tree.column(key, width=width, anchor=anchor,
+                              stretch=(key == "modello"))
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        bar = ttk.Scrollbar(table, orient="vertical",
+                              command=self.tree.yview)
+        bar.grid(row=0, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=bar.set)
         # ⚠️ i chip a 1,8 V si vedono a colpo d'occhio: e' l'errore che costa
         # un chip, non un messaggio
-        self.lista.tag_configure("bassa", foreground="#F0A93B")
-        self.lista.tag_configure("ignota", foreground=T.MUT)
+        self.tree.tag_configure("bassa", foreground="#F0A93B")
+        self.tree.tag_configure("ignota", foreground=T.MUT)
 
-        self.lista.bind("<Double-Button-1>", lambda _e: self.scegli())
-        self.lista.bind("<Return>", lambda _e: self.scegli())
-        self.campo.bind("<Return>", lambda _e: self._primo_e_scegli())
-        self.campo.bind("<Down>", lambda _e: self._al_primo())
+        self.tree.bind("<Double-Button-1>", lambda _e: self.pick())
+        self.tree.bind("<Return>", lambda _e: self.pick())
+        self.field.bind("<Return>", lambda _e: self._pick_first())
+        self.field.bind("<Down>", lambda _e: self._focus_first())
         self.bind("<Escape>", lambda _e: self.destroy())
 
-        piede = tk.Frame(cornice, background=T.INK)
-        piede.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-        tk.Label(piede, text=L("cerca_nota"), background=T.INK,
+        footer = tk.Frame(frame, background=T.INK)
+        footer.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        tk.Label(footer, text=L("cerca_nota"), background=T.INK,
                  foreground="#6E8296", font=tm.f_micro,
                  wraplength=430, justify="left").pack(side="left")
-        ttk.Button(piede, text=L("cerca_annulla"), style="Ghost.TButton",
+        ttk.Button(footer, text=L("cerca_annulla"), style="Ghost.TButton",
                    command=self.destroy).pack(side="right")
-        self.b_scegli = ttk.Button(piede, text=L("cerca_scegli"),
-                                   style="Primario.TButton", command=self.scegli)
-        self.b_scegli.pack(side="right", padx=(0, 8))
+        self.b_pick = ttk.Button(footer, text=L("cerca_scegli"),
+                                   style="Primario.TButton", command=self.pick)
+        self.b_pick.pack(side="right", padx=(0, 8))
 
-        self._filtra()
-        self.campo.focus_set()
+        self._filter()
+        self.field.focus_set()
 
     # --------------------------------------------------------------- stile
-    def _stile(self):
+    def _style(self):
         s = ttk.Style(self)
         s.configure("Cerca.Treeview", background=T.PANEL, fieldbackground=T.PANEL,
                     foreground=T.FG, bordercolor=T.LINE, borderwidth=0,
-                    rowheight=max(20, self.tema.f_testo[1] * 2),
-                    font=self.tema.f_testo)
-        s.configure("Cerca.Treeview.Heading", background=T.BARRA,
-                    foreground=T.MUT, relief="flat", font=self.tema.f_micro)
+                    rowheight=max(20, self.theme.f_text[1] * 2),
+                    font=self.theme.f_text)
+        s.configure("Cerca.Treeview.Heading", background=T.SIDEBAR,
+                    foreground=T.MUT, relief="flat", font=self.theme.f_micro)
         s.map("Cerca.Treeview.Heading", background=[("active", T.PANEL2)])
         s.map("Cerca.Treeview", background=[("selected", T.ACCENT2)],
               foreground=[("selected", "#FFFFFF")])
 
     # ------------------------------------------------------------- filtro
-    def _filtra(self):
+    def _filter(self):
         # every word must appear: "win 128" finds the 128 Mbit Winbonds
-        parole = [p for p in self.var_cerca.get().lower().split() if p]
-        self.lista.delete(*self.lista.get_children())
-        self.mostrati = []
+        parole = [p for p in self.var_filter.get().lower().split() if p]
+        self.tree.delete(*self.tree.get_children())
+        self.shown = []
         for chip in self.tutti:
-            testo = ("%s %s" % (chip.produttore, chip.nome)).lower()
-            if all(p in testo for p in parole):
-                self.mostrati.append(chip)
-        for indice, chip in enumerate(self.mostrati[:600]):
-            volt, _famiglia = V.tensione(chip.nome)
-            etichetta = ("bassa" if volt == V.BASSA
-                         else ("" if volt else "ignota"))
-            self.lista.insert(
-                "", "end", iid=str(indice),
-                values=(chip.produttore, chip.nome, _misura(chip.kb),
-                        _volt(volt, self.L.codice), chip.prove or "—"),
-                tags=(etichetta,) if etichetta else ())
-        self.var_conteggio.set(self.L("cerca_conteggio",
-                                      quanti=len(self.mostrati),
-                                      totale=len(self.tutti)))
+            text = ("%s %s" % (chip.vendor, chip.name)).lower()
+            if all(p in text for p in parole):
+                self.shown.append(chip)
+        for index, chip in enumerate(self.shown[:600]):
+            volts, _famiglia = V.voltage_of(chip.name)
+            label_for = ("bassa" if volts == V.LOW
+                         else ("" if volts else "ignota"))
+            self.tree.insert(
+                "", "end", iid=str(index),
+                values=(chip.vendor, chip.name, _misura(chip.kb),
+                        _volt(volts, self.L.code), chip.tested or "—"),
+                tags=(label_for,) if label_for else ())
+        self.var_count.set(self.L("cerca_conteggio",
+                                      how_many=len(self.shown),
+                                      total=len(self.tutti)))
 
-    def _al_primo(self):
-        figli = self.lista.get_children()
+    def _focus_first(self):
+        figli = self.tree.get_children()
         if figli:
-            self.lista.selection_set(figli[0])
-            self.lista.focus(figli[0])
-            self.lista.focus_set()
+            self.tree.selection_set(figli[0])
+            self.tree.focus(figli[0])
+            self.tree.focus_set()
 
-    def _primo_e_scegli(self):
-        if not self.lista.selection():
-            self._al_primo()
-        self.scegli()
+    def _pick_first(self):
+        if not self.tree.selection():
+            self._focus_first()
+        self.pick()
 
     # ------------------------------------------------------------- scelta
-    def scegli(self):
-        selezione = self.lista.selection()
+    def pick(self):
+        selezione = self.tree.selection()
         if not selezione:
             return
-        indice = int(selezione[0])
-        if indice >= len(self.mostrati):
+        index = int(selezione[0])
+        if index >= len(self.shown):
             return
-        chip = self.mostrati[indice]
-        self.al_scegliere(chip)
+        chip = self.shown[index]
+        self.on_pick(chip)
         self.destroy()
 
 
-def _volt(volt, lingua="it"):
+def _volt(volts, language="it"):
     """1,8 V in italiano, 1.8 V in inglese: il separatore decimale cambia."""
-    if volt is None:
+    if volts is None:
         return "?"
-    testo = "%.1f V" % volt
-    return testo.replace(".", ",") if lingua == "it" else testo
+    text = "%.1f V" % volts
+    return text.replace(".", ",") if language == "it" else text
 
 
 def _misura(kb):
@@ -190,14 +190,14 @@ def _misura(kb):
     return "%d KiB" % kb
 
 
-def apri(padre, tm, L, chip, al_scegliere, iniziale=""):
+def open_window(parent, tm, L, chip, on_pick, iniziale=""):
     """Opens the search, or brings the open one back to the front."""
-    esistente = getattr(padre, "_finestra_ricerca", None)
-    if esistente is not None and esistente.winfo_exists():
-        esistente.deiconify()
-        esistente.lift()
-        esistente.focus_set()
-        return esistente
-    finestra = Ricerca(padre, tm, L, chip, al_scegliere, iniziale)
-    padre._finestra_ricerca = finestra
-    return finestra
+    existing = getattr(parent, "_search_window", None)
+    if existing is not None and existing.winfo_exists():
+        existing.deiconify()
+        existing.lift()
+        existing.focus_set()
+        return existing
+    window = ChipSearch(parent, tm, L, chip, on_pick, iniziale)
+    parent._finestra_ricerca = window
+    return window

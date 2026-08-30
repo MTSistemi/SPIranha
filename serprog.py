@@ -23,11 +23,11 @@ import re
 try:
     import serial
     from serial.tools import list_ports
-    SERIALE = True
+    HAS_SERIAL = True
 except ImportError:                                    # pyserial assente
     serial = None
     list_ports = None
-    SERIALE = False
+    HAS_SERIAL = False
 
 ACK = 0x06
 NAK = 0x15
@@ -44,12 +44,12 @@ SYNCNOP = 0x10
 # The commands sent to the chip, not to the programmer.
 CMD_JEDEC = 0x9F           # three bytes: vendor, type, capacity
 CMD_SFDP = 0x5A            # parameter table, when the chip has one
-FIRMA_SFDP = b"SFDP"
+SFDP_SIGNATURE = b"SFDP"
 
 # The JEDEC vendor codes you actually meet on an SPI flash.
 # ⚠️ Only the certain ones: a wrong name is worse than no name, because
 # it sends you looking for another chip's datasheet.
-COSTRUTTORI = {
+VENDORS = {
     0x01: "Spansion/Cypress", 0x04: "Fujitsu", 0x0B: "XTX", 0x1C: "EON",
     0x1F: "Atmel/Adesto", 0x20: "Micron/ST", 0x37: "AMIC", 0x4A: "ESMT",
     0x5E: "Zbit", 0x62: "SANYO", 0x68: "Boya", 0x85: "Puya",
@@ -73,27 +73,27 @@ VID_RASPBERRY = 0x2E8A
 _RE_VERSIONE = re.compile(r"^(.*?)[\s_-]*v?(\d+(?:\.\d+)+)$")
 
 
-def separa_versione(nome):
+def split_version(name):
     """'pico-serprog1.1' -> ('pico-serprog', '1.1'). Senza versione, None."""
-    if not nome:
-        return nome, None
-    trovato = _RE_VERSIONE.match(nome.strip())
-    if not trovato:
-        return nome.strip(), None
-    return trovato.group(1).strip(), trovato.group(2)
+    if not name:
+        return name, None
+    hit = _RE_VERSIONE.match(name.strip())
+    if not hit:
+        return name.strip(), None
+    return hit.group(1).strip(), hit.group(2)
 
 
-def _numeri(versione):
-    fuori = []
-    for pezzo in (versione or "").split("."):
+def _numeri(version):
+    out = []
+    for chunk in (version or "").split("."):
         try:
-            fuori.append(int(pezzo))
+            out.append(int(chunk))
         except ValueError:
-            fuori.append(0)
-    return fuori
+            out.append(0)
+    return out
 
 
-def piu_vecchia(quella, di_questa):
+def is_older(quella, di_questa):
     """Is the board's version older than the one we carry here?
 
     ⚠️ No version at all = firmware older than 1.1, so yes, it is old. That is
@@ -106,83 +106,83 @@ def piu_vecchia(quella, di_questa):
     return _numeri(quella) < _numeri(di_questa)
 
 
-class Diagnostica(object):
+class Diagnostics(object):
     """L'esito dell'interrogazione."""
 
-    def __init__(self, nome=None, versione=None, bus=None, errore=None):
-        self.nome = nome
-        self.versione = versione
+    def __init__(self, name=None, version=None, bus=None, error=None):
+        self.name = name
+        self.version = version
         self.bus = bus
-        self.errore = errore
+        self.error = error
 
     @property
     def ok(self):
-        return self.errore is None
+        return self.error is None
 
     @property
     def firmware(self):
         """The version the board reports, or None when it reports none."""
-        return separa_versione(self.nome)[1]
+        return split_version(self.name)[1]
 
     @property
-    def nome_nudo(self):
-        return separa_versione(self.nome)[0]
+    def bare_name(self):
+        return split_version(self.name)[0]
 
     @property
-    def parla_spi(self):
+    def speaks_spi(self):
         return self.bus is not None and bool(self.bus & 0x08)
 
     @property
-    def bus_leggibile(self):
+    def readable_bus(self):
         if self.bus is None:
             return "?"
-        nomi = [n for bit, n in BUS if self.bus & bit]
-        return "0x%02X = %s" % (self.bus, ", ".join(nomi) or "-")
+        names_of = [n for bits, n in BUS if self.bus & bits]
+        return "0x%02X = %s" % (self.bus, ", ".join(names_of) or "-")
 
 
-def elenca_porte():
+def list_serial_ports():
     """[(device, description, probably_the_pico, serial)], sorted.
 
     ⚠️ The serial is the one the board exposes WHILE THE FIRMWARE RUNS (16
     digits): it is not the one it shows in BOOTSEL. See boards.py.
     """
-    if not SERIALE:
+    if not HAS_SERIAL:
         return []
-    trovate = []
+    found = []
     for p in list_ports.comports():
         vid, pid = p.vid, p.pid
-        sospetto = (vid == VID_TINYUSB and pid == PID_TINYUSB) or vid == VID_RASPBERRY
-        descrizione = p.description or ""
+        likely = (vid == VID_TINYUSB and pid == PID_TINYUSB) or vid == VID_RASPBERRY
+        description = p.description or ""
         if vid is not None and pid is not None:
-            descrizione = "%s (%04X:%04X)" % (descrizione, vid, pid)
-        trovate.append((p.device, descrizione, sospetto,
+            description = "%s (%04X:%04X)" % (description, vid, pid)
+        found.append((p.device, description, likely,
                         (p.serial_number or "").upper() or None))
     # candidates first, then by name
-    trovate.sort(key=lambda t: (not t[2], _chiave_com(t[0])))
-    return trovate
+    found.sort(key=lambda t: (not t[2], _chiave_com(t[0])))
+    return found
 
 
-def _chiave_com(nome):
-    cifre = "".join(c for c in nome if c.isdigit())
-    return (int(cifre) if cifre else 0, nome)
+def _chiave_com(name):
+    cifre = "".join(c for c in name if c.isdigit())
+    return (int(cifre) if cifre else 0, name)
 
 
-def _chiedi(s, comando, quanti):
+def _chiedi(s, command, how_many):
     s.reset_input_buffer()
-    s.write(bytearray([comando]))
+    s.write(bytearray([command]))
     s.flush()
     r = s.read(1)
     if not r:
         return None, "nessuna risposta / no answer"
     if r[0] != ACK:
         return None, "0x%02X invece di ACK / instead of ACK" % r[0]
-    return (s.read(quanti) if quanti else b""), None
+    return (s.read(how_many) if how_many else b""), None
 
 
-def _chiedi_con_dato(s, comando, dato):
+def _chiedi_con_dato(s, command, datum):
     """A command with one argument byte, answering ACK and nothing else."""
     s.reset_input_buffer()
-    s.write(bytearray([comando, dato]))
+    s.write(bytearray([command, datum]))
     s.flush()
     r = s.read(1)
     if not r:
@@ -192,7 +192,7 @@ def _chiedi_con_dato(s, comando, dato):
     return b"", None
 
 
-def sincronizza(s):
+def sync(s):
     """SYNCNOP: la risposta giusta e' NAK seguito da ACK, non un errore."""
     s.reset_input_buffer()
     s.write(bytearray([SYNCNOP]))
@@ -202,92 +202,92 @@ def sincronizza(s):
         return None
     if not r:
         return "nessuna risposta a SYNCNOP / no answer to SYNCNOP"
-    byte = " ".join("0x%02X" % b for b in bytearray(r))
-    return "SYNCNOP ha risposto / answered %s" % byte
+    size = " ".join("0x%02X" % b for b in bytearray(r))
+    return "SYNCNOP ha risposto / answered %s" % size
 
 
-def interroga(porta, baud=115200, timeout=2.0):
+def query(port, baud=115200, timeout=2.0):
     """Opens the port, asks who it is, closes. Does not touch the chip."""
-    if not SERIALE:
-        return Diagnostica(errore="pyserial")
+    if not HAS_SERIAL:
+        return Diagnostics(error="pyserial")
     try:
-        s = serial.Serial(porta, baud, timeout=timeout)
+        s = serial.Serial(port, baud, timeout=timeout)
     except Exception as e:                             # noqa: BLE001 - va mostrato
-        return Diagnostica(errore="%s" % e)
+        return Diagnostics(error="%s" % e)
 
     with s:
         s.dtr = True
-        errore = sincronizza(s)
-        if errore:
+        error = sync(s)
+        if error:
             # Not necessarily serious: some firmware wants a NOP first.
             _, errore_nop = _chiedi(s, NOP, 0)
             if errore_nop:
-                return Diagnostica(errore=errore)
+                return Diagnostics(error=error)
 
-        dati, errore = _chiedi(s, Q_IFACE, 2)
-        if errore:
-            return Diagnostica(errore=errore)
-        versione = dati[0] | (dati[1] << 8)
+        data, error = _chiedi(s, Q_IFACE, 2)
+        if error:
+            return Diagnostics(error=error)
+        version = data[0] | (data[1] << 8)
 
-        dati, errore = _chiedi(s, Q_PGMNAME, 16)
-        nome = None if errore else dati.rstrip(b"\x00").decode("ascii", "replace")
+        data, error = _chiedi(s, Q_PGMNAME, 16)
+        name = None if error else data.rstrip(b"\x00").decode("ascii", "replace")
 
-        dati, errore = _chiedi(s, Q_BUSTYPE, 1)
-        bus = None if errore else dati[0]
+        data, error = _chiedi(s, Q_BUSTYPE, 1)
+        bus = None if error else data[0]
 
-    return Diagnostica(nome=nome or "?", versione=versione, bus=bus)
+    return Diagnostics(name=name or "?", version=version, bus=bus)
 
 
 # ------------------------------------------------- parlare al chip, non al Pico
 
-def _tre(numero):
+def _tre(number):
     """An integer over three bytes, the way serprog wants them: least
     significant first."""
-    return bytearray([numero & 0xFF, (numero >> 8) & 0xFF, (numero >> 16) & 0xFF])
+    return bytearray([number & 0xFF, (number >> 8) & 0xFF, (number >> 16) & 0xFF])
 
 
-def operazione_spi(s, da_inviare, quanti_leggere):
+def spi_transfer(s, da_inviare, to_read):
     """A raw SPI transaction through the programmer.
 
     ⚠️ The ACK arrives AFTER the written part and BEFORE the read bytes: that
     is how the protocol is built, not an implementation detail.
     """
-    testa = bytearray([O_SPIOP]) + _tre(len(da_inviare)) + _tre(quanti_leggere)
+    header = bytearray([O_SPIOP]) + _tre(len(da_inviare)) + _tre(to_read)
     s.reset_input_buffer()
-    s.write(bytes(testa) + bytes(da_inviare))
+    s.write(bytes(header) + bytes(da_inviare))
     s.flush()
     risposta = s.read(1)
     if not risposta:
         return None, "nessuna risposta / no answer"
     if risposta[0] != ACK:
         return None, "0x%02X invece di ACK / instead of ACK" % risposta[0]
-    if not quanti_leggere:
+    if not to_read:
         return b"", None
-    letti = s.read(quanti_leggere)
-    if len(letti) != quanti_leggere:
+    read_bytes = s.read(to_read)
+    if len(read_bytes) != to_read:
         return None, ("attesi %d byte, arrivati %d / expected %d bytes, got %d"
-                      % (quanti_leggere, len(letti), quanti_leggere, len(letti)))
-    return bytes(letti), None
+                      % (to_read, len(read_bytes), to_read, len(read_bytes)))
+    return bytes(read_bytes), None
 
 
-class Identita(object):
+class Identity(object):
     """What the chip says about itself when asked to its face."""
 
-    def __init__(self, costruttore=None, tipo=None, capacita=None, byte=None,
-                 sfdp=False, errore=None):
-        self.costruttore = costruttore      # codice JEDEC del costruttore
-        self.tipo = tipo
-        self.capacita = capacita
-        self.byte = byte                    # dimensione, se si riesce a dirla
+    def __init__(self, vendor_id=None, kind=None, capacity=None, size=None,
+                 sfdp=False, error=None):
+        self.vendor_id = vendor_id      # codice JEDEC del costruttore
+        self.kind = kind
+        self.capacity = capacity
+        self.size = size                    # dimensione, se si riesce a dirla
         self.sfdp = sfdp                    # il chip ha una tabella SFDP?
-        self.errore = errore
+        self.error = error
 
     @property
     def ok(self):
-        return self.errore is None
+        return self.error is None
 
     @property
-    def risponde(self):
+    def answers(self):
         """Is there a chip attached, and does it answer?
 
         ⚠️ All 0x00 or all 0xFF is not a chip: it is a loose wire or a CS that
@@ -296,39 +296,39 @@ class Identita(object):
         """
         if not self.ok:
             return False
-        tre = (self.costruttore, self.tipo, self.capacita)
+        tre = (self.vendor_id, self.kind, self.capacity)
         return tre not in ((0x00, 0x00, 0x00), (0xFF, 0xFF, 0xFF))
 
     @property
-    def nome_costruttore(self):
-        return COSTRUTTORI.get(self.costruttore)
+    def vendor_name(self):
+        return VENDORS.get(self.vendor_id)
 
     @property
     def jedec(self):
-        if self.costruttore is None:
+        if self.vendor_id is None:
             return None
-        return "%02X %02X %02X" % (self.costruttore, self.tipo, self.capacita)
+        return "%02X %02X %02X" % (self.vendor_id, self.kind, self.capacity)
 
-    def descrizione(self):
-        pezzi = []
-        if self.nome_costruttore:
-            pezzi.append(self.nome_costruttore)
+    def description(self):
+        chunks = []
+        if self.vendor_name:
+            chunks.append(self.vendor_name)
         if self.jedec:
-            pezzi.append("JEDEC %s" % self.jedec)
-        if self.byte:
-            pezzi.append("%d MiB" % (self.byte // (1024 * 1024))
-                         if self.byte >= 1024 * 1024
-                         else "%d KiB" % (self.byte // 1024))
+            chunks.append("JEDEC %s" % self.jedec)
+        if self.size:
+            chunks.append("%d MiB" % (self.size // (1024 * 1024))
+                         if self.size >= 1024 * 1024
+                         else "%d KiB" % (self.size // 1024))
         if self.sfdp:
-            pezzi.append("SFDP")
-        return " \u00b7 ".join(pezzi)
+            chunks.append("SFDP")
+        return " \u00b7 ".join(chunks)
 
 
-def _byte_da_capacita(capacita):
+def _byte_da_capacita(capacity):
     """La dimensione dal terzo byte JEDEC: quasi sempre 2^capacita byte."""
-    if capacita is None or not 0x10 <= capacita <= 0x1C:
+    if capacity is None or not 0x10 <= capacity <= 0x1C:
         return None
-    return 1 << capacita
+    return 1 << capacity
 
 
 def _byte_da_sfdp(s):
@@ -337,81 +337,81 @@ def _byte_da_sfdp(s):
     Returns (bytes, table_present). ⚠️ A chip without SFDP is not broken: the
     older ones simply do not have one.
     """
-    testa, errore = operazione_spi(s, bytearray([CMD_SFDP, 0, 0, 0, 0xFF]), 8)
-    if errore or not testa or testa[:4] != FIRMA_SFDP:
+    header, error = spi_transfer(s, bytearray([CMD_SFDP, 0, 0, 0, 0xFF]), 8)
+    if error or not header or header[:4] != SFDP_SIGNATURE:
         return None, False
-    quante = testa[6] + 1                   # numero di intestazioni parametro
-    for indice in range(min(quante, 8)):
-        posizione = 8 + indice * 8
-        voce, errore = operazione_spi(
-            s, bytearray([CMD_SFDP, (posizione >> 16) & 0xFF,
-                          (posizione >> 8) & 0xFF, posizione & 0xFF, 0xFF]), 8)
-        if errore or not voce or voce[0] != 0x00:
+    count = header[6] + 1                   # numero di intestazioni parametro
+    for index in range(min(count, 8)):
+        position = 8 + index * 8
+        entry, error = spi_transfer(
+            s, bytearray([CMD_SFDP, (position >> 16) & 0xFF,
+                          (position >> 8) & 0xFF, position & 0xFF, 0xFF]), 8)
+        if error or not entry or entry[0] != 0x00:
             continue                        # non e' la tabella base JEDEC
-        lunghezza = voce[3] * 4
-        puntatore = voce[4] | (voce[5] << 8) | (voce[6] << 16)
-        if lunghezza < 8:
+        length = entry[3] * 4
+        puntatore = entry[4] | (entry[5] << 8) | (entry[6] << 16)
+        if length < 8:
             continue
-        tabella, errore = operazione_spi(
+        table, error = spi_transfer(
             s, bytearray([CMD_SFDP, (puntatore >> 16) & 0xFF,
                           (puntatore >> 8) & 0xFF, puntatore & 0xFF, 0xFF]),
-            min(lunghezza, 64))
-        if errore or not tabella or len(tabella) < 8:
+            min(length, 64))
+        if error or not table or len(table) < 8:
             continue
-        densita = (tabella[4] | (tabella[5] << 8) | (tabella[6] << 16)
-                   | (tabella[7] << 24))
+        densita = (table[4] | (table[5] << 8) | (table[6] << 16)
+                   | (table[7] << 24))
         if densita & 0x80000000:
             # oltre i 2 Gbit la densita' e' un esponente, non un numero
             esponente = densita & 0x7FFFFFFF
             if esponente > 40:
                 return None, True
-            bit = 1 << esponente
+            bits = 1 << esponente
         else:
-            bit = densita + 1
-        return bit // 8, True
+            bits = densita + 1
+        return bits // 8, True
     return None, True
 
 
-def identifica_chip(porta, baud=115200, timeout=2.0):
+def identify_chip(port, baud=115200, timeout=2.0):
     """Asks the chip for its JEDEC id and, when present, its SFDP table.
 
     This is for when flashrom does not recognise the chip: from here you can
     tell whether the chip answers (then it is merely unknown) or does not
     answer at all (then it is a wiring problem, not a model one).
     """
-    if not SERIALE:
-        return Identita(errore="pyserial")
+    if not HAS_SERIAL:
+        return Identity(error="pyserial")
     try:
-        s = serial.Serial(porta, baud, timeout=timeout)
+        s = serial.Serial(port, baud, timeout=timeout)
     except Exception as e:                             # noqa: BLE001
-        return Identita(errore="%s" % e)
+        return Identity(error="%s" % e)
     with s:
         s.dtr = True
-        errore = sincronizza(s)
-        if errore:
+        error = sync(s)
+        if error:
             _, errore_nop = _chiedi(s, NOP, 0)
             if errore_nop:
-                return Identita(errore=errore)
+                return Identity(error=error)
         # ⚠️ The pins have to be turned on FIRST, always. When flashrom
         # exits it sends S_PIN_STATE(0) and the programmer is left with SPI
         # off: an SPI operation in that state never returns and hangs the
         # board, USB included. It cost us a board that had to be unplugged.
-        _, errore = _chiedi_con_dato(s, S_PIN_STATE, 1)
-        if errore:
-            return Identita(errore=errore)
+        _, error = _chiedi_con_dato(s, S_PIN_STATE, 1)
+        if error:
+            return Identity(error=error)
         try:
-            dati, errore = operazione_spi(s, bytearray([CMD_JEDEC]), 3)
-            if errore:
-                return Identita(errore=errore)
-            identita = Identita(costruttore=dati[0], tipo=dati[1],
-                                capacita=dati[2])
-            if not identita.risponde:
-                return identita
-            byte, ha_sfdp = _byte_da_sfdp(s)
-            identita.sfdp = ha_sfdp
-            identita.byte = byte or _byte_da_capacita(identita.capacita)
+            data, error = spi_transfer(s, bytearray([CMD_JEDEC]), 3)
+            if error:
+                return Identity(error=error)
+            identity = Identity(vendor_id=data[0], kind=data[1],
+                                capacity=data[2])
+            if not identity.answers:
+                return identity
+            size, ha_sfdp = _byte_da_sfdp(s)
+            identity.sfdp = ha_sfdp
+            identity.size = size or _byte_da_capacita(identity.capacity)
         finally:
             # si rimette come si e' trovato: flashrom si aspetta di trovarlo
             # off, and it is flashrom that turns it back on when needed
             _chiedi_con_dato(s, S_PIN_STATE, 0)
-    return identita
+    return identity

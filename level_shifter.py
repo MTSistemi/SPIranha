@@ -44,7 +44,7 @@ import theme as T
 # ------------------------------------------------------------------ dati
 
 # I quattro segnali che passano dall'adattatore, e come sono orientati.
-CANALI = (
+CHANNELS = (
     ("SCLK", "GP2", "6  CLK", "verso"),
     ("MOSI", "GP3", "5  DI", "verso"),
     ("MISO", "GP4", "2  DO", "da"),
@@ -64,7 +64,7 @@ CANALI = (
 # periodo a 1 MHz. Con 1 kΩ si scende a ~70 ns e si tengono i 4 MHz.
 # ⚠️ La colonna «cosa» e' bilingue anche per la virgola: 1,5 V in italiano e
 # 1.5 V in inglese. Le sigle dei modelli invece non si traducono.
-PEZZI = (
+PARTS = (
     ("Q1-Q4", {"it": "N-MOSFET · Vgs(th) < 1,5 V · SOT-23",
                "en": "N-MOSFET · Vgs(th) < 1.5 V · SOT-23"},
      "onsemi BSS138LT1G · Diodes BSS138-7-F · Nexperia BSS138BK"),
@@ -79,45 +79,45 @@ PEZZI = (
 )
 
 
-def valore(pezzo, lingua="it"):
+def value_for(chunk, language="it"):
     """La colonna «cosa» del pezzo, nella lingua giusta."""
-    testo = pezzo[1]
-    if isinstance(testo, dict):
-        return testo.get(lingua) or testo.get("it") or ""
-    return testo
+    text = chunk[1]
+    if isinstance(text, dict):
+        return text.get(language) or text.get("it") or ""
+    return text
 
-NOTE = ("ad_nota1", "ad_nota3", "ad_nota5", "ad_nota6")
+NOTES = ("ad_nota1", "ad_nota3", "ad_nota5", "ad_nota6")
 
 # --------------------------------------------------------------- geometria
 # Un canale solo, disegnato in grande: gli altri tre sono identici e
 # disegnarli tutti e quattro non aggiunge un'informazione, aggiunge righe.
-RAIL_ALTO_Y = 132              # barra dei 3,3 V
-RAIL_BASSO_Y = 300             # barra degli 1,8 V
-CANALE_Y = 216                 # il segnale, in mezzo alle due barre
+RAIL_HIGH_Y = 132              # barra dei 3,3 V
+RAIL_LOW_Y = 300             # barra degli 1,8 V
+CHANNEL_Y = 216                 # il segnale, in mezzo alle due barre
 X_RAIL0, X_RAIL1 = 56, 620     # da dove a dove arrivano le due barre
 X_PICO, X_CHIP = 112, 560      # dove comincia e finisce il filo del segnale
-X_MOS = 336                    # il transistor, al centro
+X_MOSFET = 336                    # il transistor, al centro
 X_R_ALTA, X_R_BASSA = 232, 440  # le due resistenze di tiraggio
 # ⚠️ La presa del regolatore sta PRIMA dell'inizio del segnale (x=112): messa
 # in mezzo, il suo filo attraversava la linea del segnale e sembrava toccarla.
-X_ENTRATA, X_USCITA = 76, 500
+X_IN, X_OUT = 76, 500
 LDO_X, LDO_Y = 216, 400        # il regolatore, sotto
 # ⚠️ La colonna di destra ha tre riquadri e arriva a 720: misurato, non
 # stimato. Se ALT_AD e' piu' corto dell'altezza vera, la scala si calcola su
 # un disegno che non c'e' e l'ultima nota finisce fuori dalla finestra.
-ALT_AD = 720
+SHIFTER_HEIGHT = 720
 # ⚠️ Nel PDF va SOLO il circuito: la colonna di destra diventa una
 # tabella vera nella seconda pagina, che in stampa si legge meglio di
 # un riquadro fotografato.
-AREA_DISEGNO = (10, 60, 700, 600)
+DRAWING_AREA = (10, 60, 700, 600)
 LDO_L, LDO_A = 140, 44
 
 
-class Adattatore(wiring.Schema):
+class LevelShifter(wiring.Diagram):
     """La finestra dello schema elettrico: riusa i pennelli di Schema."""
 
-    def __init__(self, padre, tm, L):
-        wiring.Schema.__init__(self, padre, tm, L, pinza=True)
+    def __init__(self, parent, tm, L):
+        wiring.Diagram.__init__(self, parent, tm, L, clip=True)
         self.title(L("ad_titolo"))
         # ⚠️ 800 di altezza, non 700: il contenuto naturale arriva a 720 e
         # con la scala guidata dalla larghezza diventano ~755 pixel.
@@ -125,137 +125,137 @@ class Adattatore(wiring.Schema):
         self.geometry("1080x800")
 
     # ------------------------------------------------------------ disegno
-    def disegna(self):
+    def draw(self):
         self._attesa = None
-        larghezza = max(self.tela.winfo_width(), 300)
-        altezza = max(self.tela.winfo_height(), 240)
-        self.k = max(0.52, min(larghezza / float(wiring.LARG),
-                               altezza / float(ALT_AD), 1.7))
-        self.tela.delete("all")
-        self._testata_ad(larghezza)
-        self._barre()
-        self._canale()
-        self._regolatore()
-        self._colonna_ad()
-        self._misura_disegno()
+        width = max(self.canvas.winfo_width(), 300)
+        height = max(self.canvas.winfo_height(), 240)
+        self.k = max(0.52, min(width / float(wiring.WIDTH),
+                               height / float(SHIFTER_HEIGHT), 1.7))
+        self.canvas.delete("all")
+        self._draw_shifter_title(width)
+        self._draw_rails()
+        self._draw_channel()
+        self._draw_regulator()
+        self._draw_shifter_column()
+        self._measure_drawing()
 
-    def _testata_ad(self, larghezza_vera):
-        alta = self._s(52)
-        T.gradiente(self.tela, larghezza_vera, alta)
-        self.tela.create_line(0, alta, larghezza_vera, alta, fill=T.LINE)
-        self._testo(20, 18, self.L("ad_titolo"), T.FG, self._car(12, True))
-        self._testo(21, 37, self.L("ad_sotto"), T.MUT, self._car(8))
+    def _draw_shifter_title(self, real_width):
+        top = self._s(52)
+        T.gradient(self.canvas, real_width, top)
+        self.canvas.create_line(0, top, real_width, top, fill=T.LINE)
+        self._text(20, 18, self.L("ad_titolo"), T.FG, self._font(12, True))
+        self._text(21, 37, self.L("ad_sotto"), T.MUT, self._font(8))
 
         # il tasto per la stampa: una pillola disegnata, come il resto
         larghezza_pillola = 96
-        x0 = (larghezza_vera / self.k) - larghezza_pillola - 16
-        self._rett(x0, 14, x0 + larghezza_pillola, 38, "#1D2937", "#2A3846",
+        x0 = (real_width / self.k) - larghezza_pillola - 16
+        self._rect(x0, 14, x0 + larghezza_pillola, 38, "#1D2937", "#2A3846",
                    tag="pdf")
-        self._testo(x0 + larghezza_pillola / 2.0, 26, self.L("ad_pdf"),
-                    "#8FC2E3", self._car(7.5, True), ancora="center",
+        self._text(x0 + larghezza_pillola / 2.0, 26, self.L("ad_pdf"),
+                    "#8FC2E3", self._font(7.5, True), anchor="center",
                     tag="pdf")
-        self.tela.tag_bind("pdf", "<Button-1>", lambda _e: self.esporta_pdf())
-        self.tela.tag_bind("pdf", "<Enter>",
-                           lambda _e: self.tela.configure(cursor="hand2"))
-        self.tela.tag_bind("pdf", "<Leave>",
-                           lambda _e: self.tela.configure(cursor=""))
+        self.canvas.tag_bind("pdf", "<Button-1>", lambda _e: self.export_pdf())
+        self.canvas.tag_bind("pdf", "<Enter>",
+                           lambda _e: self.canvas.configure(cursor="hand2"))
+        self.canvas.tag_bind("pdf", "<Leave>",
+                           lambda _e: self.canvas.configure(cursor=""))
 
     # -- stampa ------------------------------------------------------------
-    def esporta_pdf(self, percorso=None):
+    def export_pdf(self, path=None):
         """Il disegno e la distinta in un PDF stampabile."""
-        if percorso is None:
-            if printing.trova_chrome() is None:
+        if path is None:
+            if printing.find_chrome() is None:
                 messagebox.showwarning(self.L("ad_titolo"),
                                        self.L("ad_pdf_niente_chrome"),
                                        parent=self)
                 return None
-            percorso = filedialog.asksaveasfilename(
+            path = filedialog.asksaveasfilename(
                 parent=self, title=self.L("ad_pdf_dove"), defaultextension=".pdf",
                 initialfile="adattatore-1v8.pdf",
                 filetypes=[("PDF", "*.pdf")])
-            if not percorso:
+            if not path:
                 return None
         # ⚠️ Il tasto non deve finire nel PDF: e' un comando, non un disegno.
-        self.tela.delete("pdf")
-        area = [self._s(v) for v in AREA_DISEGNO]
-        disegno = printing.svg_da_tela(self.tela, area)
-        pagina = printing.html_adattatore(
-            disegno, self.L,
-            [(p[0], valore(p, self.L.codice), p[2]) for p in PEZZI],
-            CANALI, NOTE, self.L("ad_gia_pronti"),
+        self.canvas.delete("pdf")
+        area = [self._s(v) for v in DRAWING_AREA]
+        drawing = printing.svg_from_canvas(self.canvas, area)
+        page = printing.level_shifter_html(
+            drawing, self.L,
+            [(p[0], value_for(p, self.L.code), p[2]) for p in PARTS],
+            CHANNELS, NOTES, self.L("ad_gia_pronti"),
             self.L("ad_titolo"), self.L("ad_sotto"))
-        fatto, motivo = printing.in_pdf(pagina, percorso)
-        self.disegna()
-        if not fatto:
+        done, reason = printing.to_pdf(page, path)
+        self.draw()
+        if not done:
             messagebox.showerror(self.L("ad_titolo"),
-                                 self.L("ad_pdf_errore", motivo=motivo),
+                                 self.L("ad_pdf_errore", reason=reason),
                                  parent=self)
             return None
         messagebox.showinfo(self.L("ad_titolo"),
                             self.L("ad_pdf_fatto",
-                                   file=os.path.basename(percorso)),
+                                   file=os.path.basename(path)),
                             parent=self)
-        return percorso
+        return path
 
     # -- le due alimentazioni ---------------------------------------------
-    def _barre(self):
+    def _draw_rails(self):
         # ⚠️ Le scritte vanno SOPRA la barra, non a sinistra: a sinistra
         # occupavano lo spazio da cui scende la presa del regolatore.
-        for y, etichetta, colore, x_da in (
-                (RAIL_ALTO_Y, self.L("ad_rail_alto"), T.FILO["VCC"], X_RAIL0),
-                (RAIL_BASSO_Y, self.L("ad_rail_basso"), "#F0A93B",
-                 X_ENTRATA + 24)):
+        for y, label_for, colour, x_da in (
+                (RAIL_HIGH_Y, self.L("ad_rail_alto"), T.WIRE["VCC"], X_RAIL0),
+                (RAIL_LOW_Y, self.L("ad_rail_basso"), "#F0A93B",
+                 X_IN + 24)):
             a, b, c = self._s(x_da, y, X_RAIL1)
-            self.tela.create_line(a, b, c, b, fill=colore,
+            self.canvas.create_line(a, b, c, b, fill=colour,
                                   width=max(1.6, 2.4 * self.k))
-            self._testo(x_da + 4, y - 13, etichetta, colore,
-                        self._car(8, True))
+            self._text(x_da + 4, y - 13, label_for, colour,
+                        self._font(8, True))
 
     # -- un canale: MOSFET e due resistenze -------------------------------
-    def _canale(self):
-        colore = T.FILO["MOSI"]
+    def _draw_channel(self):
+        colour = T.WIRE["MOSI"]
 
         # ⚠️ Il filo NON passa dietro al transistor: il transistor lo
         # interrompe, ed e' tutto il punto del montaggio.
-        self._filo([(X_PICO, CANALE_Y), (X_MOS - 40, CANALE_Y)], colore)
-        self._filo([(X_MOS + 40, CANALE_Y), (X_CHIP, CANALE_Y)], colore)
+        self._wire([(X_PICO, CHANNEL_Y), (X_MOSFET - 40, CHANNEL_Y)], colour)
+        self._wire([(X_MOSFET + 40, CHANNEL_Y), (X_CHIP, CHANNEL_Y)], colour)
 
-        self._testo(X_PICO, CANALE_Y - 14, self.L("ad_lato_pico"), "#B9C7D3",
-                    self._car(7, True))
-        self._testo(X_CHIP, CANALE_Y - 14, self.L("ad_lato_chip"), "#B9C7D3",
-                    self._car(7, True), ancora="e")
+        self._text(X_PICO, CHANNEL_Y - 14, self.L("ad_lato_pico"), "#B9C7D3",
+                    self._font(7, True))
+        self._text(X_CHIP, CHANNEL_Y - 14, self.L("ad_lato_chip"), "#B9C7D3",
+                    self._font(7, True), anchor="e")
 
         # le due resistenze di tiraggio, una per lato
-        self._resistenza(X_R_ALTA, RAIL_ALTO_Y, CANALE_Y, "R5", "1k")
-        self._resistenza(X_R_BASSA, RAIL_BASSO_Y, CANALE_Y, "R1", "1k")
+        self._draw_resistor(X_R_ALTA, RAIL_HIGH_Y, CHANNEL_Y, "R5", "1k")
+        self._draw_resistor(X_R_BASSA, RAIL_LOW_Y, CHANNEL_Y, "R1", "1k")
 
-        self._mosfet(X_MOS, CANALE_Y)
+        self._draw_mosfet(X_MOSFET, CHANNEL_Y)
 
         # ⚠️ Il verso del transistor non e' simmetrico: il source guarda il
         # lato a 1,8 V. Montato al contrario il MOSFET conduce sempre e i due
         # lati restano attaccati, cioe' il chip prende 3,3 V lo stesso.
-        self._testo(X_ENTRATA + 28, RAIL_BASSO_Y + 24, self.L("ad_verso"),
-                    "#93A5B4", self._car(7), ancora="nw", larghezza=340)
+        self._text(X_IN + 28, RAIL_LOW_Y + 24, self.L("ad_verso"),
+                    "#93A5B4", self._font(7), anchor="nw", width=340)
 
-    def _resistenza(self, x, y_rail, y_segnale, sigla, valore):
+    def _draw_resistor(self, x, y_rail, y_segnale, ref, value_for):
         """Resistenza verticale fra la barra e il filo del segnale."""
-        meta = (y_rail + y_segnale) / 2.0
-        alta, bassa = meta - 22, meta + 22
-        self._filo([(x, y_rail), (x, alta)], "#5E7488")
-        self._filo([(x, bassa), (x, y_segnale)], "#5E7488")
-        self._rett(x - 11, alta, x + 11, bassa, "#141A21", "#7C8B99")
-        self._testo(x + 18, meta - 7, sigla, "#93A5B4", self._car(7, True))
-        self._testo(x + 18, meta + 6, valore, "#6E8296", self._car(7))
+        middle = (y_rail + y_segnale) / 2.0
+        top, bottom = middle - 22, middle + 22
+        self._wire([(x, y_rail), (x, top)], "#5E7488")
+        self._wire([(x, bottom), (x, y_segnale)], "#5E7488")
+        self._rect(x - 11, top, x + 11, bottom, "#141A21", "#7C8B99")
+        self._text(x + 18, middle - 7, ref, "#93A5B4", self._font(7, True))
+        self._text(x + 18, middle + 6, value_for, "#6E8296", self._font(7))
         # il pallino di giunzione: senza, un incrocio sembra un incrocio
-        self._nodo(x, y_segnale)
+        self._draw_junction(x, y_segnale)
 
-    def _nodo(self, x, y):
+    def _draw_junction(self, x, y):
         a, b = self._s(x, y)
         r = self._s(3.2)
-        self.tela.create_oval(a - r, b - r, a + r, b + r, fill="#B9C7D3",
+        self.canvas.create_oval(a - r, b - r, a + r, b + r, fill="#B9C7D3",
                               outline="")
 
-    def _mosfet(self, x, y):
+    def _draw_mosfet(self, x, y):
         """Un N-MOSFET fra i due lati: drain a 3,3 V, source a 1,8 V.
 
         ⚠️ Il drain sta dalla parte del Pico e il source da quella del chip,
@@ -268,165 +268,165 @@ class Adattatore(wiring.Schema):
         # segnale, cosi' il filo resta dritto e si vede che il transistor sta
         # IN MEZZO. Col simbolo in piedi i collegamenti facevano un giro che
         # sembrava un rettangolo, non un transistor.
-        largo = 32
+        wide = 32
         y_canale = y + 13           # le tre barrette del canale
         y_gate = y + 22             # la placca di gate, staccata sotto
 
-        for x0, x1 in ((x - largo, x - 10), (x - 7, x + 7), (x + 10, x + largo)):
+        for x0, x1 in ((x - wide, x - 10), (x - 7, x + 7), (x + 10, x + wide)):
             a, b = self._s(x0, y_canale)
-            self.tela.create_line(a, b, self._s(x1), b, fill="#B9C7D3",
+            self.canvas.create_line(a, b, self._s(x1), b, fill="#B9C7D3",
                                   width=max(1.5, 2.2 * self.k))
-        a, b = self._s(x - largo, y_gate)
-        self.tela.create_line(a, b, self._s(x + largo), b, fill="#B9C7D3",
+        a, b = self._s(x - wide, y_gate)
+        self.canvas.create_line(a, b, self._s(x + wide), b, fill="#B9C7D3",
                               width=max(1.5, 2.2 * self.k))
 
         # drain a sinistra (lato 3,3 V), source a destra (lato 1,8 V)
-        self._filo([(X_MOS - 40, y), (x - largo + 6, y),
-                    (x - largo + 6, y_canale)], "#8FA2B2")
-        self._filo([(x + largo - 6, y_canale), (x + largo - 6, y),
-                    (X_MOS + 40, y)], "#8FA2B2")
+        self._wire([(X_MOSFET - 40, y), (x - wide + 6, y),
+                    (x - wide + 6, y_canale)], "#8FA2B2")
+        self._wire([(x + wide - 6, y_canale), (x + wide - 6, y),
+                    (X_MOSFET + 40, y)], "#8FA2B2")
         # il gate sta fisso a 1,8 V: e' quello che fa funzionare tutto
-        self._filo([(x, y_gate), (x, RAIL_BASSO_Y)], "#F0A93B")
-        self._nodo(x, RAIL_BASSO_Y)
+        self._wire([(x, y_gate), (x, RAIL_LOW_Y)], "#F0A93B")
+        self._draw_junction(x, RAIL_LOW_Y)
 
         # ⚠️ le sigle sotto il filo, non sopra: sopra finivano sul cavetto
-        self._testo(x - largo - 3, y + 4, "D", "#93A5B4",
-                    self._car(6.5, True, mono=True), ancora="e")
-        self._testo(x + largo + 3, y + 4, "S", "#93A5B4",
-                    self._car(6.5, True, mono=True))
-        self._testo(x + largo + 6, y_gate - 2, "G", "#93A5B4",
-                    self._car(6.5, True, mono=True))
-        self._testo(x, y - 30, "Q1 · BSS138", "#93A5B4",
-                    self._car(7, True), ancora="center")
+        self._text(x - wide - 3, y + 4, "D", "#93A5B4",
+                    self._font(6.5, True, mono=True), anchor="e")
+        self._text(x + wide + 3, y + 4, "S", "#93A5B4",
+                    self._font(6.5, True, mono=True))
+        self._text(x + wide + 6, y_gate - 2, "G", "#93A5B4",
+                    self._font(6.5, True, mono=True))
+        self._text(x, y - 30, "Q1 · BSS138", "#93A5B4",
+                    self._font(7, True), anchor="center")
 
     # -- il regolatore da 3,3 a 1,8 ---------------------------------------
-    def _regolatore(self):
+    def _draw_regulator(self):
         x0, y0 = LDO_X, LDO_Y
         x1, y1 = x0 + LDO_L, y0 + LDO_A
-        self._rett(x0, y0, x1, y1, "#141A21", "#7C8B99")
-        self._testo((x0 + x1) / 2.0, y0 + 15, "U1", "#E4EDF4",
-                    self._car(8, True), ancora="center")
-        self._testo((x0 + x1) / 2.0, y0 + 31, self.L("ad_ldo"), "#93A5B4",
-                    self._car(6.5), ancora="center")
+        self._rect(x0, y0, x1, y1, "#141A21", "#7C8B99")
+        self._text((x0 + x1) / 2.0, y0 + 15, "U1", "#E4EDF4",
+                    self._font(8, True), anchor="center")
+        self._text((x0 + x1) / 2.0, y0 + 31, self.L("ad_ldo"), "#93A5B4",
+                    self._font(6.5), anchor="center")
 
-        meta = y0 + LDO_A / 2.0
+        middle = y0 + LDO_A / 2.0
         # ingresso dal 3,3 (preso a sinistra di tutto), uscita sugli 1,8
-        self._filo([(X_ENTRATA, RAIL_ALTO_Y), (X_ENTRATA, meta), (x0, meta)],
-                   T.FILO["VCC"])
-        self._nodo(X_ENTRATA, RAIL_ALTO_Y)
-        self._filo([(x1, meta), (X_USCITA, meta), (X_USCITA, RAIL_BASSO_Y)],
+        self._wire([(X_IN, RAIL_HIGH_Y), (X_IN, middle), (x0, middle)],
+                   T.WIRE["VCC"])
+        self._draw_junction(X_IN, RAIL_HIGH_Y)
+        self._wire([(x1, middle), (X_OUT, middle), (X_OUT, RAIL_LOW_Y)],
                    "#F0A93B")
-        self._nodo(X_USCITA, RAIL_BASSO_Y)
+        self._draw_junction(X_OUT, RAIL_LOW_Y)
 
         # i due condensatori, uno per lato: senza, il regolatore oscilla
-        self._condensatore(X_ENTRATA + 60, meta, "C1")
-        self._condensatore(X_USCITA - 44, meta, "C2")
-        self._nodo(X_ENTRATA + 60, meta)
-        self._nodo(X_USCITA - 44, meta)
-        self._testo(X_ENTRATA + 28, y1 + 86, self.L("ad_ldo_nota"), "#93A5B4",
-                    self._car(7), ancora="nw", larghezza=430)
+        self._draw_capacitor(X_IN + 60, middle, "C1")
+        self._draw_capacitor(X_OUT - 44, middle, "C2")
+        self._draw_junction(X_IN + 60, middle)
+        self._draw_junction(X_OUT - 44, middle)
+        self._text(X_IN + 28, y1 + 86, self.L("ad_ldo_nota"), "#93A5B4",
+                    self._font(7), anchor="nw", width=430)
 
-    def _condensatore(self, x, y, sigla):
+    def _draw_capacitor(self, x, y, ref):
         """Appeso al filo: dal nodo scende, due piatti, poi massa."""
-        self._filo([(x, y), (x, y + 26)], "#5E7488")
-        for dy, largo in ((26, 15), (36, 15)):
-            a, b = self._s(x - largo, y + dy)
-            self.tela.create_line(a, b, self._s(x + largo), b, fill="#B9C7D3",
+        self._wire([(x, y), (x, y + 26)], "#5E7488")
+        for dy, wide in ((26, 15), (36, 15)):
+            a, b = self._s(x - wide, y + dy)
+            self.canvas.create_line(a, b, self._s(x + wide), b, fill="#B9C7D3",
                                   width=max(1.4, 2.0 * self.k))
-        self._filo([(x, y + 36), (x, y + 58)], "#5E7488")
-        self._massa(x, y + 58)
-        self._testo(x + 22, y + 31, sigla, "#93A5B4", self._car(7, True))
+        self._wire([(x, y + 36), (x, y + 58)], "#5E7488")
+        self._draw_ground(x, y + 58)
+        self._text(x + 22, y + 31, ref, "#93A5B4", self._font(7, True))
 
-    def _massa(self, x, y):
-        for indice, largo in enumerate((14, 9, 4)):
-            a, b = self._s(x - largo, y + indice * 5)
-            self.tela.create_line(a, b, self._s(x + largo), b, fill="#8FA2B2",
+    def _draw_ground(self, x, y):
+        for index, wide in enumerate((14, 9, 4)):
+            a, b = self._s(x - wide, y + index * 5)
+            self.canvas.create_line(a, b, self._s(x + wide), b, fill="#8FA2B2",
                                   width=max(1.2, 1.8 * self.k))
 
     # -- colonna di destra: pezzi e note ----------------------------------
-    def _colonna_ad(self):
+    def _draw_shifter_column(self):
         x = wiring.COL_X
-        y = wiring.TITOLO_Y - 12
-        riga = y + 38
+        y = wiring.TITLE_Y - 12
+        line = y + 38
 
-        for etichetta, dx in ((self.L("ad_col_segnale"), 26),
+        for label_for, dx in ((self.L("ad_col_segnale"), 26),
                               (self.L("sch_col_pico"), 110),
                               (self.L("sch_col_chip"), 190)):
-            self._testo(x + dx, riga, T.micro(etichetta), "#55697C",
-                        self._car(6, True), tag="tabella")
-        riga += 15
-        for segnale, pico, chip, verso in CANALI:
-            colore = T.FILO[segnale]
-            self._testo(x + 26, riga, segnale, colore, self._car(8, True),
+            self._text(x + dx, line, T.micro(label_for), "#55697C",
+                        self._font(6, True), tag="tabella")
+        line += 15
+        for signal, pico, chip, direction in CHANNELS:
+            colour = T.WIRE[signal]
+            self._text(x + 26, line, signal, colour, self._font(8, True),
                         tag="tabella")
-            self._testo(x + 110, riga, pico, T.FG, self._car(7, mono=True),
+            self._text(x + 110, line, pico, T.FG, self._font(7, mono=True),
                         tag="tabella")
-            freccia = "→" if verso == "verso" else "←"
-            self._testo(x + 170, riga, freccia, "#6E8296", self._car(7),
+            freccia = "→" if direction == "verso" else "←"
+            self._text(x + 170, line, freccia, "#6E8296", self._font(7),
                         tag="tabella")
-            self._testo(x + 190, riga, chip, T.FG, self._car(7, mono=True),
+            self._text(x + 190, line, chip, T.FG, self._font(7, mono=True),
                         tag="tabella")
-            riga += 20
+            line += 20
 
-        fondo = self._riquadra("tabella", x, y, x + wiring.COL_LARG,
+        background = self._frame_around("tabella", x, y, x + wiring.COL_WIDTH,
                                self.L("ad_tabella"))
 
         # --- la distinta: sigla e valore su una riga, i modelli sotto
         # ⚠️ I modelli servono: "un MOSFET" e "un regolatore" non bastano a
         # comprare i pezzi giusti, e sul MOSFET la scelta sbagliata (2N7002)
         # sembra identica e non funziona.
-        y1 = fondo + 14
-        riga = y1 + 38
-        for pezzo in PEZZI:
-            sigla, _v, modelli = pezzo
-            self._testo(x + 15, riga, sigla, "#E4EDF4",
-                        self._car(7.5, True, mono=True), tag="distinta")
-            self._testo(x + 74, riga, valore(pezzo, self.L.codice),
-                        "#B9C7D3", self._car(7),
-                        ancora="nw", larghezza=wiring.COL_LARG - 90,
+        y1 = background + 14
+        line = y1 + 38
+        for chunk in PARTS:
+            ref, _v, modelli = chunk
+            self._text(x + 15, line, ref, "#E4EDF4",
+                        self._font(7.5, True, mono=True), tag="distinta")
+            self._text(x + 74, line, value_for(chunk, self.L.code),
+                        "#B9C7D3", self._font(7),
+                        anchor="nw", width=wiring.COL_WIDTH - 90,
                         tag="distinta")
-            limiti = self.tela.bbox("distinta")
-            riga = (limiti[3] / self.k) + 4 if limiti else riga + 14
-            identificativo = self._testo(x + 74, riga, modelli, "#7C8B99",
-                                         self._car(6.5), ancora="nw",
-                                         larghezza=wiring.COL_LARG - 90,
+            bounds = self.canvas.bbox("distinta")
+            line = (bounds[3] / self.k) + 4 if bounds else line + 14
+            board_id = self._text(x + 74, line, modelli, "#7C8B99",
+                                         self._font(6.5), anchor="nw",
+                                         width=wiring.COL_WIDTH - 90,
                                          tag="distinta")
-            limiti = self.tela.bbox(identificativo)
-            riga = (limiti[3] / self.k) + 11 if limiti else riga + 24
+            bounds = self.canvas.bbox(board_id)
+            line = (bounds[3] / self.k) + 11 if bounds else line + 24
 
-        identificativo = self._testo(x + 15, riga + 2, self.L("ad_gia_pronti"),
-                                     "#8FC2E3", self._car(6.5), ancora="nw",
-                                     larghezza=wiring.COL_LARG - 30,
+        board_id = self._text(x + 15, line + 2, self.L("ad_gia_pronti"),
+                                     "#8FC2E3", self._font(6.5), anchor="nw",
+                                     width=wiring.COL_WIDTH - 30,
                                      tag="distinta")
-        fondo = self._riquadra("distinta", x, y1, x + wiring.COL_LARG,
+        background = self._frame_around("distinta", x, y1, x + wiring.COL_WIDTH,
                                self.L("ad_distinta"))
 
-        y2 = fondo + 14
-        riga = y2 + 38
-        for indice, chiave in enumerate(NOTE):
-            colore = T.CRIT if indice == 0 else T.WARN
-            a, b = self._s(x + 15, riga + 4)
+        y2 = background + 14
+        line = y2 + 38
+        for index, key in enumerate(NOTES):
+            colour = T.CRIT if index == 0 else T.WARN
+            a, b = self._s(x + 15, line + 4)
             r = self._s(3)
-            self.tela.create_oval(a - r, b - r, a + r, b + r, fill=colore,
+            self.canvas.create_oval(a - r, b - r, a + r, b + r, fill=colour,
                                   outline="", tags="avvisi")
-            identificativo = self._testo(x + 26, riga, self.L(chiave), "#B9C7D3",
-                                         self._car(7), ancora="nw",
-                                         larghezza=wiring.COL_LARG - 42,
+            board_id = self._text(x + 26, line, self.L(key), "#B9C7D3",
+                                         self._font(7), anchor="nw",
+                                         width=wiring.COL_WIDTH - 42,
                                          tag="avvisi")
-            limiti = self.tela.bbox(identificativo)
-            riga += ((limiti[3] - limiti[1]) / self.k if limiti else 34) + 15
-        self._riquadra("avvisi", x, y2, x + wiring.COL_LARG,
+            bounds = self.canvas.bbox(board_id)
+            line += ((bounds[3] - bounds[1]) / self.k if bounds else 34) + 15
+        self._frame_around("avvisi", x, y2, x + wiring.COL_WIDTH,
                        self.L("ad_note_titolo"))
 
 
-def apri(padre, tm, L):
+def open_window(parent, tm, L):
     """Apre lo schema dell'adattatore, o riporta davanti quello aperto."""
-    esistente = getattr(padre, "_finestra_adattatore", None)
-    if esistente is not None and esistente.winfo_exists():
-        esistente.deiconify()
-        esistente.lift()
-        esistente.focus_set()
-        return esistente
-    finestra = Adattatore(padre, tm, L)
-    padre._finestra_adattatore = finestra
-    return finestra
+    existing = getattr(parent, "_shifter_window", None)
+    if existing is not None and existing.winfo_exists():
+        existing.deiconify()
+        existing.lift()
+        existing.focus_set()
+        return existing
+    window = LevelShifter(parent, tm, L)
+    parent._finestra_adattatore = window
+    return window

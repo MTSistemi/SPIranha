@@ -17,51 +17,51 @@ in reverse, when it is sent back to BOOTSEL.
 from __future__ import unicode_literals
 
 
-class Anagrafica(object):
+class Registry(object):
     """The known boards. Stored inside the configuration."""
 
-    def __init__(self, elenco=None):
-        # each entry: {"nome": str, "run": str|None, "boot": str|None}
-        self.schede = [dict(v) for v in (elenco or [])]
+    def __init__(self, listing=None):
+        # each entry: {"name": str, "run": str|None, "boot": str|None}
+        self.boards = [dict(v) for v in (listing or [])]
 
     # ------------------------------------------------------------ lookup
-    def _trova(self, run=None, boot=None):
-        for voce in self.schede:
-            if run and voce.get("run") == run:
-                return voce
-            if boot and voce.get("boot") == boot:
-                return voce
+    def _find(self, run=None, boot=None):
+        for entry in self.boards:
+            if run and entry.get("run") == run:
+                return entry
+            if boot and entry.get("boot") == boot:
+                return entry
         return None
 
-    def nome(self, run=None, boot=None):
-        voce = self._trova(run, boot)
-        return (voce or {}).get("nome") or None
+    def name(self, run=None, boot=None):
+        entry = self._find(run, boot)
+        return (entry or {}).get("name") or None
 
-    def voce(self, run=None, boot=None):
-        return self._trova(run, boot)
+    def entry(self, run=None, boot=None):
+        return self._find(run, boot)
 
     # ------------------------------------------------------------ changes
-    def imposta_nome(self, nome, run=None, boot=None):
+    def set_name(self, name, run=None, boot=None):
         """Name a board. An empty name forgets it."""
         if not (run or boot):
             return None
-        voce = self._trova(run, boot)
-        if voce is None:
-            if not nome:
+        entry = self._find(run, boot)
+        if entry is None:
+            if not name:
                 return None
-            voce = {"nome": "", "run": None, "boot": None}
-            self.schede.append(voce)
-        voce["nome"] = nome.strip()
+            entry = {"name": "", "run": None, "boot": None}
+            self.boards.append(entry)
+        entry["name"] = name.strip()
         if run:
-            voce["run"] = run
+            entry["run"] = run
         if boot:
-            voce["boot"] = boot
-        if not voce["nome"]:
-            self.schede.remove(voce)
+            entry["boot"] = boot
+        if not entry["name"]:
+            self.boards.remove(entry)
             return None
-        return voce
+        return entry
 
-    def collega(self, run, boot):
+    def link(self, run, boot):
         """Records that these two identifiers are the same board.
 
         This is only known for certain after watching it move from one state
@@ -69,39 +69,39 @@ class Anagrafica(object):
         """
         if not (run and boot):
             return None
-        per_run = self._trova(run=run)
-        per_boot = self._trova(boot=boot)
-        if per_run and per_boot and per_run is not per_boot:
+        by_run = self._find(run=run)
+        by_boot = self._find(boot=boot)
+        if by_run and by_boot and by_run is not by_boot:
             # two boards turn out to be one: merge them, keeping the name
             # that was already given (the first one there is)
-            per_run["boot"] = boot
-            if not per_run.get("nome"):
-                per_run["nome"] = per_boot.get("nome", "")
-            self.schede.remove(per_boot)
-            return per_run
-        voce = per_run or per_boot
-        if voce is None:
-            voce = {"nome": "", "run": None, "boot": None}
-            self.schede.append(voce)
-        voce["run"] = run
-        voce["boot"] = boot
-        return voce
+            by_run["boot"] = boot
+            if not by_run.get("name"):
+                by_run["name"] = by_boot.get("name", "")
+            self.boards.remove(by_boot)
+            return by_run
+        entry = by_run or by_boot
+        if entry is None:
+            entry = {"name": "", "run": None, "boot": None}
+            self.boards.append(entry)
+        entry["run"] = run
+        entry["boot"] = boot
+        return entry
 
     # ------------------------------------------------------------ saving
-    def come_elenco(self):
-        return [dict(v) for v in self.schede if v.get("run") or v.get("boot")]
+    def as_list(self):
+        return [dict(v) for v in self.boards if v.get("run") or v.get("boot")]
 
 
-def etichetta(nome, seriale, quante=6):
+def label_for(name, serial, count=6):
     """"name · 5303284738DE6E1C", or just the serial when it has no name."""
-    if not seriale:
-        return nome or ""
-    if nome:
-        return "%s · %s" % (nome, seriale)
-    return seriale
+    if not serial:
+        return name or ""
+    if name:
+        return "%s · %s" % (name, serial)
+    return serial
 
 
-def coda(seriale, quante=4):
+def tail_of(serial, count=4):
     """The last digits of the serial: the ones we make you retype to confirm
     WHICH board is about to be erased."""
-    return (seriale or "")[-quante:].upper()
+    return (serial or "")[-count:].upper()

@@ -31,18 +31,18 @@ OK_BG, OK_BORDO = "#12241C", "#1E4D38"
 WARN_BG, WARN_BORDO = "#241D10", "#4D3C1A"
 CRIT_BG, CRIT_BORDO = "#251215", "#4F2225"
 
-BARRA = "#0E161F"          # sidebar / trogolo
-ATTIVO = "#16273A"
+SIDEBAR = "#0E161F"          # sidebar / trogolo
+ACTIVE = "#16273A"
 HEADER_DA, HEADER_A = "#0F2C42", INK    # gradiente 103deg
 
 LOG_BG = "#080D13"
 LOG_ORA = "#546B7E"
 LOG_OK = "#63C08E"
 
-BORDO_FINESTRA = "#1E2A36"
+WINDOW_BORDER = "#1E2A36"
 
 # wire colours in the diagram: still distinguishable on the dark ground
-FILO = {
+WIRE = {
     "VCC": "#E5484D",
     "GND": "#7E93A4",
     "SCLK": "#E0A030",
@@ -52,7 +52,7 @@ FILO = {
 }
 
 
-def titolo_scuro(finestra):
+def dark_title_bar(window):
     """A dark title bar, like the rest of the window.
 
     From Windows 10 1809 onwards this is asked of the window manager (DWM).
@@ -63,71 +63,71 @@ def titolo_scuro(finestra):
         return
     try:
         import ctypes
-        finestra.update_idletasks()
-        handle = ctypes.windll.user32.GetParent(finestra.winfo_id())
-        acceso = ctypes.c_int(1)
-        for attributo in (20, 19):
-            esito = ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                handle, attributo, ctypes.byref(acceso), ctypes.sizeof(acceso))
-            if esito == 0:
+        window.update_idletasks()
+        handle = ctypes.windll.user32.GetParent(window.winfo_id())
+        enabled = ctypes.c_int(1)
+        for attribute in (20, 19):
+            result = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                handle, attribute, ctypes.byref(enabled), ctypes.sizeof(enabled))
+            if result == 0:
                 return
     except Exception:                                  # noqa: BLE001
         pass
 
 
-def micro(testo):
+def micro(text):
     """Micro-label: UPPERCASE and letter-spaced.
 
     tkinter knows nothing about letter-spacing, so it is done by hand with
     thin spaces between the letters. Ugly to write, right to look at.
     """
-    return " ".join(testo.upper())
+    return " ".join(text.upper())
 
 
-def _prima_disponibile(radice, candidati, ripiego):
-    presenti = set(tkfont.families(radice))
-    for nome in candidati:
-        if nome in presenti:
-            return nome
+def _prima_disponibile(root, candidates, ripiego):
+    presenti = set(tkfont.families(root))
+    for name in candidates:
+        if name in presenti:
+            return name
     return ripiego
 
 
-class Tema(object):
+class Theme(object):
     """Tiene i caratteri scelti e applica gli stili ttk."""
 
-    def __init__(self, radice):
+    def __init__(self, root):
         self.ui = _prima_disponibile(
-            radice, ["Segoe UI Variable Text", "Segoe UI"], "TkDefaultFont")
+            root, ["Segoe UI Variable Text", "Segoe UI"], "TkDefaultFont")
         self.mono = _prima_disponibile(
-            radice, ["Cascadia Code", "Cascadia Mono", "Consolas"], "Courier New")
+            root, ["Cascadia Code", "Cascadia Mono", "Consolas"], "Courier New")
 
         # Deliberately tight sizes: the window has to stay wide, not tall.
         self.f_titolo = (self.ui, 12, "bold")
         self.f_sotto = (self.ui, 8)
-        self.f_testo = (self.ui, 8)
+        self.f_text = (self.ui, 8)
         self.f_micro = (self.ui, 7, "bold")
         self.f_minuto = (self.ui, 7)
         self.f_dato = (self.mono, 8)
         self.f_log = (self.mono, 8)
         self.f_bottone = (self.ui, 8)
 
-        self._applica(radice)
+        self._applica(root)
 
     # -------------------------------------------------------------- ttk
-    def _applica(self, radice):
-        radice.configure(background=INK)
-        s = ttk.Style(radice)
+    def _applica(self, root):
+        root.configure(background=INK)
+        s = ttk.Style(root)
         # clam e' l'unico tema ttk che si lascia ricolorare davvero: vista e
         # xpnative disegnano con le immagini di Windows e ignorano background.
         s.theme_use("clam")
 
-        s.configure(".", background=INK, foreground=FG, font=self.f_testo,
+        s.configure(".", background=INK, foreground=FG, font=self.f_text,
                     borderwidth=0, focuscolor=ACCENT)
         s.configure("TFrame", background=INK)
         s.configure("Scheda.TFrame", background=PANEL)
         s.configure("Sollevato.TFrame", background=PANEL2)
 
-        s.configure("TLabel", background=INK, foreground=FG, font=self.f_testo)
+        s.configure("TLabel", background=INK, foreground=FG, font=self.f_text)
         s.configure("Scheda.TLabel", background=PANEL, foreground=FG)
         s.configure("Micro.TLabel", background=PANEL, foreground=MUT,
                     font=self.f_micro)
@@ -153,13 +153,13 @@ class Tema(object):
                       "#31171B", "#1E0F12")
 
         # --- campi ----------------------------------------------------
-        for nome in ("TEntry", "TCombobox"):
-            s.configure(nome, fieldbackground=BARRA, background=BARRA,
+        for name in ("TEntry", "TCombobox"):
+            s.configure(name, fieldbackground=SIDEBAR, background=SIDEBAR,
                         foreground=FG, bordercolor=LINE, lightcolor=LINE,
                         darkcolor=LINE, insertcolor=FG, arrowcolor=MUT,
                         selectbackground=ACCENT2, selectforeground="#FFFFFF",
                         padding=4)
-            s.map(nome,
+            s.map(name,
                   bordercolor=[("focus", ACCENT)],
                   lightcolor=[("focus", ACCENT)],
                   darkcolor=[("focus", ACCENT)],
@@ -167,24 +167,24 @@ class Tema(object):
                   foreground=[("disabled", "#4A5C6B")],
                   arrowcolor=[("disabled", "#3A4A58")])
         # la tendina della combobox e' un Listbox Tk classico, si veste a parte
-        radice.option_add("*TCombobox*Listbox.background", PANEL2)
-        radice.option_add("*TCombobox*Listbox.foreground", FG)
-        radice.option_add("*TCombobox*Listbox.selectBackground", ACCENT2)
-        radice.option_add("*TCombobox*Listbox.selectForeground", "#FFFFFF")
-        radice.option_add("*TCombobox*Listbox.font", self.f_testo)
+        root.option_add("*TCombobox*Listbox.background", PANEL2)
+        root.option_add("*TCombobox*Listbox.foreground", FG)
+        root.option_add("*TCombobox*Listbox.selectBackground", ACCENT2)
+        root.option_add("*TCombobox*Listbox.selectForeground", "#FFFFFF")
+        root.option_add("*TCombobox*Listbox.font", self.f_text)
 
         # --- radio / spunte -------------------------------------------
-        for nome, fondo in (("TRadiobutton", PANEL), ("Fondo.TRadiobutton", INK)):
-            s.configure(nome, background=fondo, foreground=FG,
-                        indicatorbackground=BARRA, indicatorforeground=ACCENT,
-                        bordercolor=LINE, font=self.f_testo, padding=2)
-            s.map(nome, background=[("active", fondo)],
+        for name, background in (("TRadiobutton", PANEL), ("Fondo.TRadiobutton", INK)):
+            s.configure(name, background=background, foreground=FG,
+                        indicatorbackground=SIDEBAR, indicatorforeground=ACCENT,
+                        bordercolor=LINE, font=self.f_text, padding=2)
+            s.map(name, background=[("active", background)],
                   indicatorbackground=[("selected", ACCENT),
                                        ("active", PANEL2)])
 
         # --- barra di avanzamento -------------------------------------
-        s.configure("Sottile.Horizontal.TProgressbar", troughcolor=BARRA,
-                    background=ACCENT, bordercolor=BARRA, lightcolor=ACCENT,
+        s.configure("Sottile.Horizontal.TProgressbar", troughcolor=SIDEBAR,
+                    background=ACCENT, bordercolor=SIDEBAR, lightcolor=ACCENT,
                     darkcolor=ACCENT2, thickness=5)
 
         # --- scrollbar -------------------------------------------------
@@ -197,12 +197,12 @@ class Tema(object):
         s.configure("TSeparator", background=LINE)
 
     @staticmethod
-    def _bottone(s, nome, fondo, testo, bordo, sopra, premuto):
-        s.configure(nome, background=fondo, foreground=testo,
-                    bordercolor=bordo, lightcolor=fondo, darkcolor=fondo,
-                    focusthickness=1, focuscolor=bordo,
+    def _bottone(s, name, background, text, border, sopra, premuto):
+        s.configure(name, background=background, foreground=text,
+                    bordercolor=border, lightcolor=background, darkcolor=background,
+                    focusthickness=1, focuscolor=border,
                     padding=(11, 6), relief="flat")
-        s.map(nome,
+        s.map(name,
               background=[("pressed", premuto), ("active", sopra),
                           ("disabled", "#141C25")],
               foreground=[("disabled", "#43535F")],
@@ -213,94 +213,94 @@ class Tema(object):
 
 # ------------------------------------------------------------- widget
 
-def scheda(padre, titolo=None, tema=None):
+def card(parent, title=None, theme=None):
     """Card: fondo --panel, filetto --line, intestazione in micro-etichetta.
 
     Restituisce (contenitore_esterno, corpo). Si mette la roba nel corpo.
     """
-    fuori = tk.Frame(padre, background=PANEL, highlightbackground=LINE,
+    out = tk.Frame(parent, background=PANEL, highlightbackground=LINE,
                      highlightcolor=LINE, highlightthickness=1, bd=0)
-    corpo = tk.Frame(fuori, background=PANEL)
-    if titolo is not None:
-        testata = tk.Frame(fuori, background=PANEL)
-        testata.pack(fill="x", padx=12, pady=(9, 0))
-        etichetta = tk.Label(testata, text=micro(titolo), background=PANEL,
-                             foreground=MUT, font=tema.f_micro if tema else None,
+    body = tk.Frame(out, background=PANEL)
+    if title is not None:
+        header_area = tk.Frame(out, background=PANEL)
+        header_area.pack(fill="x", padx=12, pady=(9, 0))
+        label_for = tk.Label(header_area, text=micro(title), background=PANEL,
+                             foreground=MUT, font=theme.f_micro if theme else None,
                              anchor="w")
-        etichetta.pack(side="left")
-        tk.Frame(fuori, background=LINE, height=1).pack(fill="x", padx=12,
+        label_for.pack(side="left")
+        tk.Frame(out, background=LINE, height=1).pack(fill="x", padx=12,
                                                         pady=(7, 0))
-        fuori.etichetta_titolo = etichetta
-    corpo.pack(fill="both", expand=True, padx=12, pady=10)
-    fuori.corpo = corpo
-    return fuori, corpo
+        out.etichetta_titolo = label_for
+    body.pack(fill="both", expand=True, padx=12, pady=10)
+    out.body = body
+    return out, body
 
 
 class Chip(tk.Frame):
     """Pillola di stato: puntino colorato + testo."""
 
-    def __init__(self, padre, tema, fondo=PANEL):
-        tk.Frame.__init__(self, padre, background=fondo)
-        self.tema = tema
-        self.fondo = fondo
-        self.pillola = tk.Frame(self, background=fondo, highlightthickness=1,
-                                highlightbackground=fondo, bd=0)
-        self.punto = tk.Canvas(self.pillola, width=8, height=8, highlightthickness=0,
-                               background=fondo, bd=0)
-        self.punto.pack(side="left", padx=(8, 6), pady=4)
-        self.testo = tk.Label(self.pillola, background=fondo, foreground=MUT,
-                              font=tema.f_testo, anchor="w", justify="left",
+    def __init__(self, parent, theme, background=PANEL):
+        tk.Frame.__init__(self, parent, background=background)
+        self.theme = theme
+        self.background = background
+        self.pill = tk.Frame(self, background=background, highlightthickness=1,
+                                highlightbackground=background, bd=0)
+        self.dot = tk.Canvas(self.pill, width=8, height=8, highlightthickness=0,
+                               background=background, bd=0)
+        self.dot.pack(side="left", padx=(8, 6), pady=4)
+        self.text = tk.Label(self.pill, background=background, foreground=MUT,
+                              font=theme.f_text, anchor="w", justify="left",
                               wraplength=820)
-        self.testo.pack(side="left", padx=(0, 10), pady=3)
-        self.pillola.pack(anchor="w")
+        self.text.pack(side="left", padx=(0, 10), pady=3)
+        self.pill.pack(anchor="w")
         self._id = None
-        self.spegni()
+        self.hide()
 
-    def spegni(self):
-        self.pillola.pack_forget()
+    def hide(self):
+        self.pill.pack_forget()
 
-    def mostra(self, testo, colore=MUT, fondo=None, bordo=None):
-        sfondo = fondo or self.fondo
-        self.pillola.configure(background=sfondo,
-                               highlightbackground=bordo or sfondo)
-        self.punto.configure(background=sfondo)
-        self.testo.configure(background=sfondo, foreground=colore, text=testo)
-        self.punto.delete("all")
-        self.punto.create_oval(1, 1, 7, 7, fill=colore, outline="")
-        self.pillola.pack(anchor="w")
+    def show(self, text, colour=MUT, background=None, border=None):
+        background_colour = background or self.background
+        self.pill.configure(background=background_colour,
+                               highlightbackground=border or background_colour)
+        self.dot.configure(background=background_colour)
+        self.text.configure(background=background_colour, foreground=colour, text=text)
+        self.dot.delete("all")
+        self.dot.create_oval(1, 1, 7, 7, fill=colour, outline="")
+        self.pill.pack(anchor="w")
 
 
-class Spunta(tk.Frame):
+class Checkbox(tk.Frame):
     """A hand-drawn checkbox: 14px, 3px corners, the tick traced.
 
     ttk.Checkbutton under clam shows a system square that clashes with
     everything else; this is the design system's box, drawn on a Canvas.
     """
 
-    LATO = 15
+    SIDE = 15
 
-    def __init__(self, padre, tema, variabile, testo="", comando=None,
-                 fondo=PANEL, colore=FG):
-        tk.Frame.__init__(self, padre, background=fondo, cursor="hand2")
-        self.var = variabile
-        self.comando = comando
-        self.colore = colore
-        self.tela = tk.Canvas(self, width=self.LATO + 2, height=self.LATO + 2,
-                              highlightthickness=0, background=fondo, bd=0)
-        self.tela.pack(side="left")
-        self.etichetta = tk.Label(self, text=testo, background=fondo,
-                                  foreground=colore, font=tema.f_testo)
-        self.etichetta.pack(side="left", padx=(8, 0))
-        for widget in (self, self.tela, self.etichetta):
+    def __init__(self, parent, theme, variabile, text="", command=None,
+                 background=PANEL, colour=FG):
+        tk.Frame.__init__(self, parent, background=background, cursor="hand2")
+        self.variable = variabile
+        self.command = command
+        self.colour = colour
+        self.canvas = tk.Canvas(self, width=self.SIDE + 2, height=self.SIDE + 2,
+                              highlightthickness=0, background=background, bd=0)
+        self.canvas.pack(side="left")
+        self.label_for = tk.Label(self, text=text, background=background,
+                                  foreground=colour, font=theme.f_text)
+        self.label_for.pack(side="left", padx=(8, 0))
+        for widget in (self, self.canvas, self.label_for):
             widget.bind("<Button-1>", self._inverti)
-        self.var.trace_add("write", lambda *_: self.ridisegna())
-        self.ridisegna()
+        self.variable.trace_add("write", lambda *_: self.redraw())
+        self.redraw()
 
     def configure(self, cnf=None, **kw):
         """Also accepts `testo=`, so the translator treats it like the others."""
-        testo = kw.pop("testo", None)
-        if testo is not None:
-            self.etichetta.configure(text=testo)
+        text = kw.pop("testo", None)
+        if text is not None:
+            self.label_for.configure(text=text)
         if cnf or kw:
             return tk.Frame.configure(self, cnf, **kw)
         return None
@@ -308,47 +308,47 @@ class Spunta(tk.Frame):
     config = configure
 
     def _inverti(self, _evento=None):
-        if str(self.etichetta.cget("state")) == "disabled":
+        if str(self.label_for.cget("state")) == "disabled":
             return
-        self.var.set(0 if self.var.get() else 1)
-        if self.comando:
-            self.comando()
+        self.variable.set(0 if self.variable.get() else 1)
+        if self.command:
+            self.command()
 
-    def ridisegna(self):
-        c = self.tela
+    def redraw(self):
+        c = self.canvas
         c.delete("all")
-        acceso = bool(self.var.get())
-        b, l = 1, self.LATO
+        enabled = bool(self.variable.get())
+        b, l = 1, self.SIDE
         c.create_rectangle(b, b, b + l, b + l,
-                           fill=ACCENT if acceso else BARRA,
-                           outline=ACCENT if acceso else LINE, width=1)
-        if acceso:
+                           fill=ACCENT if enabled else SIDEBAR,
+                           outline=ACCENT if enabled else LINE, width=1)
+        if enabled:
             # spunta tracciata a mano, non un carattere di font
             c.create_line(b + 3.5, b + 7.5, b + 6.2, b + 10.5, b + 11.5, b + 4.5,
                           fill="#08131C", width=2, capstyle="round",
                           joinstyle="round")
 
 
-def gradiente(tela, larghezza, altezza, da=HEADER_DA, a=HEADER_A, gradi=103):
+def gradient(canvas, width, height, da=HEADER_DA, a=HEADER_A, gradi=103):
     """The header gradient, drawn as stripes.
 
     tkinter has no gradients: N lines are drawn, interpolating the colour. At
     103 degrees the direction is nearly horizontal, with a slight tilt.
     """
     import math
-    tela.delete("gradiente")
-    da_r, da_g, da_b = tela.winfo_rgb(da)
-    a_r, a_g, a_b = tela.winfo_rgb(a)
+    canvas.delete("gradiente")
+    da_r, da_g, da_b = canvas.winfo_rgb(da)
+    a_r, a_g, a_b = canvas.winfo_rgb(a)
     radianti = math.radians(gradi - 90)
-    scarto = math.tan(radianti) * altezza
-    passi = max(int(larghezza + abs(scarto)), 2)
+    spare = math.tan(radianti) * height
+    passi = max(int(width + abs(spare)), 2)
     for i in range(passi):
         t = i / float(passi - 1)
-        colore = "#%02x%02x%02x" % (
+        colour = "#%02x%02x%02x" % (
             int((da_r + (a_r - da_r) * t)) >> 8,
             int((da_g + (a_g - da_g) * t)) >> 8,
             int((da_b + (a_b - da_b) * t)) >> 8)
-        x = i - abs(scarto) * 0.5
-        tela.create_line(x, 0, x + scarto, altezza, fill=colore,
+        x = i - abs(spare) * 0.5
+        canvas.create_line(x, 0, x + spare, height, fill=colour,
                          tags="gradiente")
-    tela.tag_lower("gradiente")
+    canvas.tag_lower("gradiente")

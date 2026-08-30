@@ -17,47 +17,47 @@ import shutil
 import subprocess
 import sys
 
-QUI = os.path.dirname(os.path.abspath(__file__))
-VENV = os.path.join(QUI, ".venv")
+HERE = os.path.dirname(os.path.abspath(__file__))
+VENV = os.path.join(HERE, ".venv")
 PYTHON_VENV = os.path.join(VENV, "Scripts", "python.exe")
-DIPENDENZE = ["pyserial>=3.5", "pyinstaller>=6.0"]
-NOME = "SPIranha"
+DEPENDENCIES = ["pyserial>=3.5", "pyinstaller>=6.0"]
+NAME = "SPIranha"
 ISCC = [
     r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
     r"C:\Program Files\Inno Setup 6\ISCC.exe",
 ]
 
 
-def esegui(args, **kw):
+def run(args, **kw):
     print(">", " ".join(args))
-    return subprocess.call(args, cwd=QUI, **kw)
+    return subprocess.call(args, cwd=HERE, **kw)
 
 
-def prepara_venv():
+def prepare_venv():
     if not os.path.isfile(PYTHON_VENV):
         print("Creo l'ambiente virtuale in .venv")
-        if esegui([sys.executable, "-m", "venv", VENV]) != 0:
+        if run([sys.executable, "-m", "venv", VENV]) != 0:
             sys.exit("non riesco a creare .venv")
-    if esegui([PYTHON_VENV, "-m", "pip", "install", "--upgrade", "pip"]) != 0:
+    if run([PYTHON_VENV, "-m", "pip", "install", "--upgrade", "pip"]) != 0:
         sys.exit("pip non si aggiorna")
-    if esegui([PYTHON_VENV, "-m", "pip", "install"] + DIPENDENZE) != 0:
+    if run([PYTHON_VENV, "-m", "pip", "install"] + DEPENDENCIES) != 0:
         sys.exit("le dipendenze non si installano (serve la rete)")
 
 
-VERSIONE = "1.2.0"
+VERSION = "1.2.0"
 
 
-def prepara_risorse():
+def prepare_resources():
     """Icon and file properties: they matter for something you hand out."""
-    icona = os.path.join(QUI, "SPIranha.ico")
+    icona = os.path.join(HERE, "SPIranha.ico")
     if not os.path.isfile(icona):
         print("Genero l'icona")
-        esegui([sys.executable, os.path.join(QUI, "icon.py")])
-    versione = os.path.join(QUI, "build", "versione.txt")
-    parti = VERSIONE.split(".") + ["0", "0", "0", "0"]
+        run([sys.executable, os.path.join(HERE, "icon.py")])
+    version = os.path.join(HERE, "build", "versione.txt")
+    parti = VERSION.split(".") + ["0", "0", "0", "0"]
     n = tuple(int(p) for p in parti[:4])
-    os.makedirs(os.path.dirname(versione), exist_ok=True)
-    with open(versione, "w", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(version), exist_ok=True)
+    with open(version, "w", encoding="utf-8") as f:
         f.write("""VSVersionInfo(
   ffi=FixedFileInfo(filevers=%r, prodvers=%r, mask=0x3f, flags=0x0,
                     OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
@@ -77,19 +77,19 @@ def prepara_risorse():
                    'By Mattia Tadini and Claude.')])]),
     VarFileInfo([VarStruct('Translation', [1036, 1200])])]
 )
-""" % (n, n, VERSIONE, NOME, NOME, VERSIONE))
-    return icona, versione
+""" % (n, n, VERSION, NAME, NAME, VERSION))
+    return icona, version
 
 
-def costruisci_exe():
-    icona, versione = prepara_risorse()
-    flashrom = os.path.join(QUI, "flashrom", "flashrom.exe")
+def build_exe():
+    icona, version = prepare_resources()
+    flashrom = os.path.join(HERE, "flashrom", "flashrom.exe")
     args = [
         PYTHON_VENV, "-m", "PyInstaller",
         "--noconfirm", "--clean", "--onefile", "--windowed",
-        "--name", NOME,
+        "--name", NAME,
         "--icon", icona,
-        "--version-file", versione,
+        "--version-file", version,
         "--hidden-import", "serial.tools.list_ports",
         "--exclude-module", "numpy",
         "--exclude-module", "PIL",
@@ -101,80 +101,80 @@ def costruisci_exe():
     else:
         print("⚠️ flashrom/flashrom.exe non c'e': l'eseguibile NON sara' portatile")
     # the programmer firmware travels inside too, when it is there
-    fw = os.path.join(QUI, "firmware", "pico_serprog.uf2")
+    fw = os.path.join(HERE, "firmware", "pico_serprog.uf2")
     if os.path.isfile(fw):
         args += ["--add-data", "%s%sfirmware" % (fw, os.pathsep)]
     else:
         print("⚠️ firmware/pico_serprog.uf2 non c'e': niente installazione del "
               "firmware dall'eseguibile")
-    args.append(os.path.join(QUI, "SPIranha.pyw"))
-    if esegui(args) != 0:
+    args.append(os.path.join(HERE, "SPIranha.pyw"))
+    if run(args) != 0:
         sys.exit("PyInstaller ha fallito")
-    exe = os.path.join(QUI, "dist", NOME + ".exe")
+    exe = os.path.join(HERE, "dist", NAME + ".exe")
     print("\nFatto: %s (%.1f MiB)" % (exe, os.path.getsize(exe) / 1048576.0))
     return exe
 
 
-def firma(percorsi):
+def sig(percorsi):
     """Sign with sign.ps1. ⚠️ ORDER MATTERS: the executable first, then the
     installer that carries it. Signing only at the end would leave the exe
     inside the setup unsigned."""
-    script = os.path.join(QUI, "sign.ps1")
+    script = os.path.join(HERE, "sign.ps1")
     if not os.path.isfile(script):
         print("sign.ps1 non c'e': salto la firma")
         return
     args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
             "-File", script, "-Path"] + list(percorsi)
-    esegui(args)
+    run(args)
 
 
-def scrivi_versione_iss():
+def write_iss_version():
     """The version number for Inno Setup: one only, generated from here."""
-    cartella = os.path.join(QUI, "build")
-    if not os.path.isdir(cartella):
-        os.makedirs(cartella)
-    percorso = os.path.join(cartella, "versione.iss")
-    with open(percorso, "w", encoding="utf-8") as f:
-        f.write('#define Versione "%s"\n' % VERSIONE)
-    return percorso
+    folder = os.path.join(HERE, "build")
+    if not os.path.isdir(folder):
+        os.makedirs(folder)
+    path = os.path.join(folder, "versione.iss")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write('#define Versione "%s"\n' % VERSION)
+    return path
 
 
-def costruisci_setup():
-    scrivi_versione_iss()
+def build_setup():
+    write_iss_version()
     iscc = next((p for p in ISCC if os.path.isfile(p)), None)
     if not iscc:
         print("Inno Setup non trovato: salto l'installatore.")
         return None
-    if esegui([iscc, os.path.join(QUI, NOME + ".iss")]) != 0:
+    if run([iscc, os.path.join(HERE, NAME + ".iss")]) != 0:
         sys.exit("Inno Setup ha fallito")
-    return os.path.join(QUI, "dist")
+    return os.path.join(HERE, "dist")
 
 
-def pulisci():
-    for nome in ("build", "dist", ".venv", NOME + ".spec", "__pycache__"):
-        percorso = os.path.join(QUI, nome)
-        if os.path.isdir(percorso):
-            shutil.rmtree(percorso, ignore_errors=True)
-        elif os.path.isfile(percorso):
-            os.remove(percorso)
+def clean():
+    for name in ("build", "dist", ".venv", NAME + ".spec", "__pycache__"):
+        path = os.path.join(HERE, name)
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+        elif os.path.isfile(path):
+            os.remove(path)
     print("pulito")
 
 
 def main():
     if "--clean" in sys.argv:
-        pulisci()
+        clean()
         return 0
-    prepara_venv()
-    exe = costruisci_exe()
+    prepare_venv()
+    exe = build_exe()
     vuole_firma = "--sign" in sys.argv
     if vuole_firma:
-        firma([exe])
+        sig([exe])
     if "--setup" in sys.argv:
-        costruisci_setup()
-        setup = os.path.join(QUI, "dist",
-                             "%s-Setup-%s.exe" % (NOME, VERSIONE))
+        build_setup()
+        setup = os.path.join(HERE, "dist",
+                             "%s-Setup-%s.exe" % (NAME, VERSION))
         if vuole_firma and os.path.isfile(setup):
-            firma([setup])
+            sig([setup])
     return 0
 
 

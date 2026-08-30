@@ -20,47 +20,47 @@ clip on the chip -- and a profile says which of the two to use.
 from __future__ import unicode_literals
 
 # the two kinds of connection the drawing knows how to show
-CONNETTORE = "connettore"       # a header on the board (BC-250: J4004)
-PINZA = "pinza"                 # the clip straight onto the SOIC-8 chip
+HEADER = "connettore"       # a header on the board (BC-250: J4004)
+CLIP = "pinza"                 # the clip straight onto the SOIC-8 chip
 
 
-class Profilo(object):
+class Profile(object):
     """What we know about a board in advance."""
 
-    def __init__(self, chiave, nome, chip=(), byte=None, tensione=3.3,
-                 collegamento=PINZA, connettore=None, md5=None, avvisi=(),
-                 descrizione=None, regioni=()):
-        self.chiave = chiave
-        self.nome = nome                    # {"it":…, "en":…} or a string
+    def __init__(self, key, name, chip=(), size=None, voltage_of=3.3,
+                 connection=CLIP, connettore=None, md5=None, avvisi=(),
+                 description=None, regions=()):
+        self.key = key
+        self.name = name                    # {"it":…, "en":…} or a string
         self.chip = list(chip)              # expected models, first is the one
-        self.byte = byte                    # expected flash size
-        self.tensione = tensione            # chip volts: 3.3 or 1.8
-        self.collegamento = collegamento
+        self.size = size                    # expected flash size
+        self.voltage_of = voltage_of            # chip volts: 3.3 or 1.8
+        self.connection = connection
         self.connettore = connettore        # what it is called, if any
         self.md5 = dict(md5 or {})          # fingerprint -> {"it":…, "en":…}
         self.avvisi = tuple(avvisi)         # the board's own warnings
-        self.descrizione = descrizione
-        self.regioni = tuple(regioni)       # regions we expect to find
+        self.description = description
+        self.regions = tuple(regions)       # regions we expect to find
 
-    def testo(self, campo, lingua="it"):
-        valore = getattr(self, campo, None)
-        if isinstance(valore, dict):
-            return valore.get(lingua) or valore.get("it") or ""
-        return valore or ""
+    def text(self, field, language="it"):
+        value_for = getattr(self, field, None)
+        if isinstance(value_for, dict):
+            return value_for.get(language) or value_for.get("it") or ""
+        return value_for or ""
 
     @property
-    def generico(self):
-        return self.chiave == "generico"
+    def generic(self):
+        return self.key == "generico"
 
 
-PROFILI = [
-    Profilo(
+PROFILES = [
+    Profile(
         "bc250",
         {"it": "AMD BC-250", "en": "AMD BC-250"},
         chip=["MX25L12835F/MX25L12873F", "MX25L12805D", "W25Q128.V"],
-        byte=16 * 1024 * 1024,
-        tensione=3.3,
-        collegamento=CONNETTORE,
+        size=16 * 1024 * 1024,
+        voltage_of=3.3,
+        connection=HEADER,
         connettore="J4004",
         md5={
             "3487f648a69a781d2609a8d4e6f4808e": {
@@ -73,7 +73,7 @@ PROFILI = [
             },
         },
         avvisi=("prof_bc250_sio",),
-        descrizione={
+        description={
             "it": "Connettore J4004 a 8 piedini accanto al chip BIOS. "
                   "Sulla scheda ci sono DUE flash: quella grande da 16 MiB "
                   "è il BIOS, quella da 512 KiB è il SuperIO.",
@@ -81,17 +81,17 @@ PROFILI = [
                   "carries TWO flash chips: the 16 MiB one is the BIOS, the "
                   "512 KiB one is the SuperIO.",
         },
-        regioni=("bios", "apcb", "psp"),
+        regions=("bios", "apcb", "psp"),
     ),
-    Profilo(
+    Profile(
         "generico",
         {"it": "Scheda generica", "en": "Generic board"},
         chip=[],
-        byte=None,
-        tensione=3.3,
-        collegamento=PINZA,
+        size=None,
+        voltage_of=3.3,
+        connection=CLIP,
         avvisi=("prof_gen_pinza",),
-        descrizione={
+        description={
             "it": "Qualunque flash SPI in contenitore SOIC-8, presa con una "
                   "pinza. È il caso più comune fuori da una scheda "
                   "conosciuta.",
@@ -101,44 +101,44 @@ PROFILI = [
     ),
 ]
 
-PER_CHIAVE = dict((p.chiave, p) for p in PROFILI)
-PREDEFINITO = "bc250"
+BY_KEY = dict((p.key, p) for p in PROFILES)
+DEFAULT_KEY = "bc250"
 
 
-def prendi(chiave):
+def by_key(key):
     """The profile with that key, or the default one."""
-    return PER_CHIAVE.get(chiave) or PER_CHIAVE[PREDEFINITO]
+    return BY_KEY.get(key) or BY_KEY[DEFAULT_KEY]
 
 
-def chiavi():
-    return [p.chiave for p in PROFILI]
+def keys_of():
+    return [p.key for p in PROFILES]
 
 
-def nomi(lingua="it"):
-    return [(p.chiave, p.testo("nome", lingua)) for p in PROFILI]
+def names_of(language="it"):
+    return [(p.key, p.text("name", language)) for p in PROFILES]
 
 
-def scostamenti(profilo, chip_trovato=None, byte_trovati=None, regioni=()):
+def deviations(profile, found_chip=None, found_size=None, regions=()):
     """Where the real board does not match what the profile expects.
 
     Returns a list of (message_key, fields). Empty = everything as expected.
     ⚠️ These are warnings, not prohibitions: a chip other than the expected
     one may perfectly well be a later revision of the same board.
     """
-    fuori = []
-    if profilo.byte and byte_trovati and byte_trovati != profilo.byte:
-        fuori.append(("prof_dim_diversa",
-                      {"atteso": profilo.byte, "trovato": byte_trovati}))
-    if profilo.chip and chip_trovato:
-        atteso = [c.lower() for c in profilo.chip]
-        nome = chip_trovato.lower()
-        if not any(nome in c or c in nome for c in atteso):
-            fuori.append(("prof_chip_diverso",
-                          {"atteso": profilo.chip[0], "trovato": chip_trovato}))
-    if profilo.regioni and regioni:
-        trovate = set(regioni)
-        mancanti = [n for n in profilo.regioni if n not in trovate]
+    out = []
+    if profile.size and found_size and found_size != profile.size:
+        out.append(("prof_dim_diversa",
+                      {"atteso": profile.size, "trovato": found_size}))
+    if profile.chip and found_chip:
+        expected = [c.lower() for c in profile.chip]
+        name = found_chip.lower()
+        if not any(name in c or c in name for c in expected):
+            out.append(("prof_chip_diverso",
+                          {"atteso": profile.chip[0], "trovato": found_chip}))
+    if profile.regions and regions:
+        found = set(regions)
+        mancanti = [n for n in profile.regions if n not in found]
         if mancanti:
-            fuori.append(("prof_regioni_mancanti",
+            out.append(("prof_regioni_mancanti",
                           {"quali": ", ".join(mancanti)}))
-    return fuori
+    return out

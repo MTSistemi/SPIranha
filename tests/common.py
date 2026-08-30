@@ -13,65 +13,65 @@ from __future__ import unicode_literals
 import os
 import sys
 
-QUI = os.path.dirname(os.path.abspath(__file__))
-RADICE = os.path.dirname(QUI)
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
 
 # What the full test needs. The stock dump goes by more than one name:
 # all of them are accepted, so nobody has to rename a folder that
 # already works.
 STOCK = ("bc250-stock.rom", "BC250-stock-P3.00-scheda-Mattia.rom")
-ATTESO = ("bc250-risultato-atteso.rom",)
+EXPECTED = ("bc250-risultato-atteso.rom",)
 LAYOUT = ("bc250-layout.txt",)
-NECESSARI = (STOCK, ATTESO, LAYOUT)
+REQUIRED = (STOCK, EXPECTED, LAYOUT)
 
 
-def _primo(cartella, nomi):
-    for nome in nomi:
-        percorso = os.path.join(cartella, nome)
-        if os.path.isfile(percorso):
-            return percorso
+def _primo(folder, names_of):
+    for name in names_of:
+        path = os.path.join(folder, name)
+        if os.path.isfile(path):
+            return path
     return None
 
 
-def trova_backup():
+def find_backup():
     """The folder holding the BC-250 images, or None."""
     candidate = [os.environ.get("SPIRANHA_BIOS_BACKUP")]
     candidate += [
-        os.path.join(RADICE, "bios-backup"),
-        os.path.join(os.path.dirname(RADICE), "bios-backup"),
-        os.path.join(os.path.dirname(RADICE), "SkillFishOS", "bios-backup"),
+        os.path.join(ROOT, "bios-backup"),
+        os.path.join(os.path.dirname(ROOT), "bios-backup"),
+        os.path.join(os.path.dirname(ROOT), "SkillFishOS", "bios-backup"),
     ]
-    for cartella in candidate:
-        if cartella and all(_primo(cartella, n) for n in NECESSARI):
-            return cartella
+    for folder in candidate:
+        if folder and all(_primo(folder, n) for n in REQUIRED):
+            return folder
     return None
 
 
-def file_prova(cartella):
+def test_files(folder):
     """(stock, atteso, layout) dentro la cartella trovata."""
-    return tuple(_primo(cartella, n) for n in NECESSARI)
+    return tuple(_primo(folder, n) for n in REQUIRED)
 
 
-def backup_o_salta():
+def backup_or_skip():
     """Restituisce la cartella, oppure esce con un messaggio chiaro."""
-    cartella = trova_backup()
-    if cartella:
-        return cartella
+    folder = find_backup()
+    if folder:
+        return folder
     print("SKIPPED: cannot find the BC-250 images.")
     print("These are needed, in one folder:")
-    for gruppo in NECESSARI:
+    for gruppo in REQUIRED:
         print("   " + " oppure ".join(gruppo))
     print("Point SPIRANHA_BIOS_BACKUP at it,")
     print("or put them in a 'bios-backup' folder next to the project.")
     sys.exit(0)
 
 
-def flashrom_o_salta():
+def flashrom_or_skip():
     """flashrom.exe, or bail out: it is not in the repository (see
     flashrom/PROVENANCE.md for building it)."""
-    percorso = os.path.join(RADICE, "flashrom", "flashrom.exe")
-    if os.path.isfile(percorso):
-        return percorso
+    path = os.path.join(ROOT, "flashrom", "flashrom.exe")
+    if os.path.isfile(path):
+        return path
     print("SKIPPED: cannot find flashrom/flashrom.exe.")
     print("Not in the repository: build it following flashrom/PROVENANCE.md,")
     print("with the 'dummy' programmer enabled (these tests drive it).")

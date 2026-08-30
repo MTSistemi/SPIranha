@@ -40,48 +40,48 @@ import struct
 import subprocess
 import time
 
-MAGIA0 = 0x0A324655
-MAGIA1 = 0x9E5D5157
-MAGIA_FINE = 0x0AB16F30
-BANDIERA_FAMIGLIA = 0x00002000
-FAMIGLIA_RP2040 = 0xE48BFF56
+MAGIC0 = 0x0A324655
+MAGIC1 = 0x9E5D5157
+MAGIC_END = 0x0AB16F30
+FAMILY_FLAG = 0x00002000
+FAMILY_RP2040 = 0xE48BFF56
 
-BLOCCO = 512
-CARICO = 256
+BLOCK = 512
+PAYLOAD = 256
 BASE_FLASH = 0x10000000
 
 # how many times to retry a copy that cannot even get started
-TENTATIVI_COPIA = 6
+COPY_ATTEMPTS = 6
 FLASH_PICO = 2 * 1024 * 1024        # the original Pico has 2 MiB
 
-BAUD_BOOTSEL = 1200                 # opening at this rate = back to BOOTSEL
-SENZA_FINESTRA = 0x08000000 if os.name == "nt" else 0   # CREATE_NO_WINDOW
-ETICHETTA = "RPI-RP2"
-NOME_FIRMWARE = "pico_serprog.uf2"
-INFORMAZIONI = "INFO_UF2.TXT"
-DRIVE_REMOVIBILE = 2
+BOOTSEL_BAUD = 1200                 # opening at this rate = back to BOOTSEL
+NO_WINDOW = 0x08000000 if os.name == "nt" else 0   # CREATE_NO_WINDOW
+VOLUME_LABEL = "RPI-RP2"
+FIRMWARE_NAME = "pico_serprog.uf2"
+INFO_FILE = "INFO_UF2.TXT"
+DRIVE_REMOVABLE = 2
 
 
-class Scheda(object):
+class Board(object):
     """An RP2040 board in BOOTSEL, seen as a disk."""
 
-    def __init__(self, unita, modello=None, identificativo=None, byte_liberi=0,
-                 seriale=None):
-        self.unita = unita                      # "E:\\"
-        self.modello = modello or "RP2040"
-        self.identificativo = identificativo or "?"
+    def __init__(self, drive, model=None, board_id=None, byte_liberi=0,
+                 serial=None):
+        self.drive = drive                      # "E:\\"
+        self.model = model or "RP2040"
+        self.board_id = board_id or "?"
         self.byte_liberi = byte_liberi
         # ⚠️ This is NOT the serial number the same board shows while the
         # firmware runs: the bootloader exposes one of its own, shorter.
         # Verified on the same board: 12 digits here, 16 over there.
-        self.seriale = seriale
+        self.serial = serial
 
     @property
-    def lettera(self):
-        return self.unita[:2]
+    def letter(self):
+        return self.drive[:2]
 
     def __repr__(self):
-        return "<Scheda %s %s>" % (self.lettera, self.modello)
+        return "<Scheda %s %s>" % (self.letter, self.model)
 
 
 # ------------------------------------------------------------ finding
@@ -89,66 +89,66 @@ class Scheda(object):
 def _unita_rimovibili():
     if os.name != "nt":
         return []
-    trovate = []
+    found = []
     maschera = ctypes.windll.kernel32.GetLogicalDrives()
-    for indice in range(26):
-        if not (maschera >> indice) & 1:
+    for index in range(26):
+        if not (maschera >> index) & 1:
             continue
-        unita = "%s:\\" % chr(ord("A") + indice)
+        drive = "%s:\\" % chr(ord("A") + index)
         try:
-            if ctypes.windll.kernel32.GetDriveTypeW(unita) == DRIVE_REMOVIBILE:
-                trovate.append(unita)
+            if ctypes.windll.kernel32.GetDriveTypeW(drive) == DRIVE_REMOVABLE:
+                found.append(drive)
         except Exception:                        # noqa: BLE001
             continue
-    return trovate
+    return found
 
 
-def _leggi_informazioni(percorso):
+def _leggi_informazioni(path):
     """INFO_UF2.TXT -> (model, board id). The file is two lines."""
-    modello = identificativo = None
+    model = board_id = None
     try:
-        with open(percorso, "rb") as f:
-            testo = f.read(512).decode("ascii", "replace")
+        with open(path, "rb") as f:
+            text = f.read(512).decode("ascii", "replace")
     except OSError:
         return None, None
-    for riga in testo.splitlines():
-        if riga.startswith("Model:"):
-            modello = riga.split(":", 1)[1].strip()
-        elif riga.startswith("Board-ID:"):
-            identificativo = riga.split(":", 1)[1].strip()
-    return modello, identificativo
+    for line in text.splitlines():
+        if line.startswith("Model:"):
+            model = line.split(":", 1)[1].strip()
+        elif line.startswith("Board-ID:"):
+            board_id = line.split(":", 1)[1].strip()
+    return model, board_id
 
 
-def e_rp2040(modello, identificativo):
+def is_rp2040(model, board_id):
     """Does this board declare itself an RP2040?
 
     ⚠️ The real Board-ID is "RPI-RP2", not "RP2...": RP2 is looked for INSIDE
     the string. The first version demanded that it start with RP2 and
     recognised no board at all -- only the hardware caught that.
     """
-    return "RP2" in ("%s %s" % (identificativo or "", modello or "")).upper()
+    return "RP2" in ("%s %s" % (board_id or "", model or "")).upper()
 
 
-def schede_in_bootsel():
+def boards_in_bootsel():
     """The RP2040 boards waiting for firmware, right now."""
-    trovate = []
-    for unita in _unita_rimovibili():
-        informazioni = os.path.join(unita, INFORMAZIONI)
+    found = []
+    for drive in _unita_rimovibili():
+        informazioni = os.path.join(drive, INFO_FILE)
         if not os.path.isfile(informazioni):
             continue
-        modello, identificativo = _leggi_informazioni(informazioni)
+        model, board_id = _leggi_informazioni(informazioni)
         # copying onto some random disk would do no harm, but no good
         # either
-        if not e_rp2040(modello, identificativo):
+        if not is_rp2040(model, board_id):
             continue
         liberi = 0
         try:
-            liberi = shutil.disk_usage(unita).free
+            liberi = shutil.disk_usage(drive).free
         except OSError:
             pass
-        trovate.append(Scheda(unita, modello, identificativo, liberi,
-                              seriale=seriale_di_unita(unita)))
-    return trovate
+        found.append(Board(drive, model, board_id, liberi,
+                              serial=serial_of_drive(drive)))
+    return found
 
 
 # the serial the bootloader exposes is inside the device path:
@@ -157,7 +157,7 @@ _RE_SERIALE = re.compile(r"&([0-9A-F]{8,20})&\d+$", re.IGNORECASE)
 _CACHE_SERIALI = {}
 
 
-def seriale_di_unita(unita):
+def serial_of_drive(drive):
     """The serial number of the board in BOOTSEL, from its drive letter.
 
     ⚠️ It costs a PowerShell call, so the result is kept: the watcher looks at
@@ -165,14 +165,14 @@ def seriale_di_unita(unita):
     does not change board under your feet without the board disappearing
     first, and in that case the entry is thrown away.
     """
-    lettera = (unita or "")[:1].upper()
-    if not lettera:
+    letter = (drive or "")[:1].upper()
+    if not letter:
         return None
-    if lettera in _CACHE_SERIALI:
-        return _CACHE_SERIALI[lettera]
-    seriale = None
+    if letter in _CACHE_SERIALI:
+        return _CACHE_SERIALI[letter]
+    serial = None
     if os.name == "nt":
-        comando = (
+        command = (
             "$ErrorActionPreference='SilentlyContinue';"
             "Get-CimInstance Win32_DiskDrive | ForEach-Object { $d=$_;"
             " Get-CimAssociatedInstance -InputObject $d"
@@ -181,26 +181,26 @@ def seriale_di_unita(unita):
             " -ResultClassName Win32_LogicalDisk } | ForEach-Object {"
             " \"$($_.DeviceID)|$($d.PNPDeviceID)\" } }")
         try:
-            uscita = subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive", "-Command", comando],
+            output = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
                 capture_output=True, timeout=20,
-                creationflags=SENZA_FINESTRA).stdout.decode("utf-8", "replace")
+                creationflags=NO_WINDOW).stdout.decode("utf-8", "replace")
         except Exception:                            # noqa: BLE001
-            uscita = ""
-        for riga in uscita.splitlines():
-            if "|" not in riga:
+            output = ""
+        for line in output.splitlines():
+            if "|" not in line:
                 continue
-            disco, percorso = riga.split("|", 1)
-            if disco.strip().upper().startswith(lettera + ":"):
-                trovato = _RE_SERIALE.search(percorso.strip())
-                if trovato:
-                    seriale = trovato.group(1).upper()
+            disco, path = line.split("|", 1)
+            if disco.strip().upper().startswith(letter + ":"):
+                hit = _RE_SERIALE.search(path.strip())
+                if hit:
+                    serial = hit.group(1).upper()
                 break
-    _CACHE_SERIALI[lettera] = seriale
-    return seriale
+    _CACHE_SERIALI[letter] = serial
+    return serial
 
 
-def dimentica_seriali():
+def forget_serials():
     """To be called when a board goes away: the letter could come back on a
     different one."""
     _CACHE_SERIALI.clear()
@@ -208,81 +208,81 @@ def dimentica_seriali():
 
 # ------------------------------------------------------------ formato UF2
 
-def versione_disponibile(cartella):
+def shipped_version(folder):
     """The version of the UF2 we ship, from the VERSION file next to it."""
     try:
-        percorso = os.path.join(cartella, "VERSION")
-        with io.open(percorso, encoding="utf-8") as f:
-            versione = f.read().strip()
-        return versione or None
+        path = os.path.join(folder, "VERSION")
+        with io.open(path, encoding="utf-8") as f:
+            version = f.read().strip()
+        return version or None
     except Exception:                                  # noqa: BLE001
         return None
 
 
-def blocco_uf2(indirizzo, dati, numero, totale, famiglia=FAMIGLIA_RP2040):
+def uf2_block(address, data, number, total, family=FAMILY_RP2040):
     """One 512-byte block, the way the bootloader wants it."""
-    if len(dati) > CARICO:
-        raise ValueError("carico utile troppo grande: %d" % len(dati))
-    testa = struct.pack("<IIIIIIII", MAGIA0, MAGIA1, BANDIERA_FAMIGLIA,
-                        indirizzo, CARICO, numero, totale, famiglia)
-    corpo = dati + b"\x00" * (476 - len(dati))
-    return testa + corpo + struct.pack("<I", MAGIA_FINE)
+    if len(data) > PAYLOAD:
+        raise ValueError("carico utile troppo grande: %d" % len(data))
+    header = struct.pack("<IIIIIIII", MAGIC0, MAGIC1, FAMILY_FLAG,
+                        address, PAYLOAD, number, total, family)
+    body = data + b"\x00" * (476 - len(data))
+    return header + body + struct.pack("<I", MAGIC_END)
 
 
-def leggi_uf2(percorso):
+def read_uf2(path):
     """Checks a .uf2 and reports what is in it.
 
     Returns (blocks, first_address, last_address, families). Raises ValueError
     when the file is not a valid UF2: this is the check made BEFORE copying it
     onto a board.
     """
-    with open(percorso, "rb") as f:
-        dati = f.read()
-    if not dati or len(dati) % BLOCCO:
+    with open(path, "rb") as f:
+        data = f.read()
+    if not data or len(data) % BLOCK:
         raise ValueError("non e' un UF2: la lunghezza non e' multipla di 512")
-    blocchi = len(dati) // BLOCCO
+    blocks = len(data) // BLOCK
     indirizzi = []
-    famiglie = set()
-    for indice in range(blocchi):
-        pezzo = dati[indice * BLOCCO:(indice + 1) * BLOCCO]
-        m0, m1, _bandiere, indirizzo, quanti, numero, totale, famiglia = \
-            struct.unpack("<IIIIIIII", pezzo[:32])
-        fine = struct.unpack("<I", pezzo[-4:])[0]
-        if m0 != MAGIA0 or m1 != MAGIA1 or fine != MAGIA_FINE:
-            raise ValueError("blocco %d: le magie non tornano" % indice)
-        if totale != blocchi:
+    families = set()
+    for index in range(blocks):
+        chunk = data[index * BLOCK:(index + 1) * BLOCK]
+        m0, m1, _bandiere, address, how_many, number, total, family = \
+            struct.unpack("<IIIIIIII", chunk[:32])
+        end = struct.unpack("<I", chunk[-4:])[0]
+        if m0 != MAGIC0 or m1 != MAGIC1 or end != MAGIC_END:
+            raise ValueError("blocco %d: le magie non tornano" % index)
+        if total != blocks:
             raise ValueError("blocco %d: dice %d blocchi, il file ne ha %d"
-                             % (indice, totale, blocchi))
-        if numero != indice:
-            raise ValueError("blocco %d: si dichiara il numero %d" % (indice, numero))
-        if quanti > CARICO:
-            raise ValueError("blocco %d: carico utile %d" % (indice, quanti))
-        indirizzi.append(indirizzo)
-        famiglie.add(famiglia)
-    return blocchi, min(indirizzi), max(indirizzi) + CARICO - 1, famiglie
+                             % (index, total, blocks))
+        if number != index:
+            raise ValueError("blocco %d: si dichiara il numero %d" % (index, number))
+        if how_many > PAYLOAD:
+            raise ValueError("blocco %d: carico utile %d" % (index, how_many))
+        indirizzi.append(address)
+        families.add(family)
+    return blocks, min(indirizzi), max(indirizzi) + PAYLOAD - 1, families
 
 
-def genera_cancellazione(percorso, byte=FLASH_PICO):
+def make_eraser(path, size=FLASH_PICO):
     """Writes a .uf2 that returns the board to its factory state.
 
     It writes 0xFF across the whole flash: since the bootloader erases each
     sector before writing it, the result is an erased flash. With no valid
     second stage, the board comes back up in BOOTSEL.
     """
-    if byte % CARICO:
-        raise ValueError("la dimensione dev'essere multipla di %d" % CARICO)
-    totale = byte // CARICO
-    vuoto = b"\xff" * CARICO
-    with open(percorso, "wb") as f:
-        for numero in range(totale):
-            f.write(blocco_uf2(BASE_FLASH + numero * CARICO, vuoto,
-                               numero, totale))
-    return percorso
+    if size % PAYLOAD:
+        raise ValueError("la dimensione dev'essere multipla di %d" % PAYLOAD)
+    total = size // PAYLOAD
+    empty = b"\xff" * PAYLOAD
+    with open(path, "wb") as f:
+        for number in range(total):
+            f.write(uf2_block(BASE_FLASH + number * PAYLOAD, empty,
+                               number, total))
+    return path
 
 
 # ------------------------------------------------- rientro nel bootloader
 
-def rientra_in_bootsel(porta):
+def back_to_bootsel(port):
     """Asks the firmware to restart into the ROM bootloader.
 
     The port is opened at 1200 baud: that is the Arduino Leonardo convention,
@@ -300,9 +300,9 @@ def rientra_in_bootsel(porta):
     except ImportError:
         return False, "pyserial non e' installato"
     try:
-        collegamento = serial.Serial(porta, BAUD_BOOTSEL, timeout=1)
+        connection = serial.Serial(port, BOOTSEL_BAUD, timeout=1)
         try:
-            collegamento.close()
+            connection.close()
         except Exception:                            # noqa: BLE001
             pass
     except Exception:                                # noqa: BLE001
@@ -312,34 +312,34 @@ def rientra_in_bootsel(porta):
 
 # ------------------------------------------------------------ installazione
 
-def installa(percorso_uf2, scheda, su_riga=None):
+def install(uf2_path, card, on_line=None):
     """Copies the firmware onto the board. Returns (done, reason).
 
     ⚠️ There is no verification by reading back: as soon as the bootloader is
     done the board detaches and restarts, so the copy "fails" at the end and
     that is NORMAL. The real check is that it comes back as a serial port.
     """
-    def dillo(testo):
-        if su_riga:
-            su_riga(testo)
+    def dillo(text):
+        if on_line:
+            on_line(text)
 
-    if not os.path.isfile(percorso_uf2):
-        return False, "non trovo %s" % percorso_uf2
+    if not os.path.isfile(uf2_path):
+        return False, "non trovo %s" % uf2_path
     try:
-        blocchi, primo, ultimo, famiglie = leggi_uf2(percorso_uf2)
+        blocks, first, last, families = read_uf2(uf2_path)
     except ValueError as e:
         return False, "%s" % e
-    if FAMIGLIA_RP2040 not in famiglie:
+    if FAMILY_RP2040 not in families:
         return False, "questo .uf2 non e' per RP2040"
     dillo("%s: %d blocchi, 0x%08X-0x%08X" % (
-        os.path.basename(percorso_uf2), blocchi, primo, ultimo))
+        os.path.basename(uf2_path), blocks, first, last))
 
-    servono = blocchi * BLOCCO
-    if scheda.byte_liberi and servono > scheda.byte_liberi:
+    needed = blocks * BLOCK
+    if card.byte_liberi and needed > card.byte_liberi:
         return False, "non ci sta: servono %d byte, liberi %d" % (
-            servono, scheda.byte_liberi)
+            needed, card.byte_liberi)
 
-    destinazione = os.path.join(scheda.unita, os.path.basename(percorso_uf2))
+    destination = os.path.join(card.drive, os.path.basename(uf2_path))
     # ⚠️ An error once the copy has started and an error BEFORE a single
     # byte is written look the same (both are OSError) and are nothing
     # alike: the first is the board restarting, the second is a copy that
@@ -347,30 +347,30 @@ def installa(percorso_uf2, scheda, su_riga=None):
     # that was never written. It happens for real: a board fresh into
     # BOOTSEL answers "Permission denied" until Windows has finished
     # mounting the drive.
-    for tentativo in range(TENTATIVI_COPIA):
-        scritti = 0
+    for attempt in range(COPY_ATTEMPTS):
+        written_bytes = 0
         try:
-            with open(percorso_uf2, "rb") as sorgente:
-                with open(destinazione, "wb") as uscita:
+            with open(uf2_path, "rb") as source_image:
+                with open(destination, "wb") as output:
                     while True:
-                        pezzo = sorgente.read(64 * 1024)
-                        if not pezzo:
+                        chunk = source_image.read(64 * 1024)
+                        if not chunk:
                             break
-                        uscita.write(pezzo)
-                        scritti += len(pezzo)
+                        output.write(chunk)
+                        written_bytes += len(chunk)
                     try:
-                        uscita.flush()
-                        os.fsync(uscita.fileno())
+                        output.flush()
+                        os.fsync(output.fileno())
                     except OSError:
                         pass      # la scheda si e' gia' staccata: va bene cosi'
         except OSError as e:
-            if scritti:
+            if written_bytes:
                 # the disk vanishes under our feet as soon as the
                 # bootloader has it all: this is the normal course
                 dillo("la scheda si e' staccata durante la copia "
                       "(e' normale): %s" % e)
                 return True, None
-            if tentativo + 1 < TENTATIVI_COPIA:
+            if attempt + 1 < COPY_ATTEMPTS:
                 dillo("il disco non accetta ancora la copia, riprovo: %s" % e)
                 time.sleep(0.7)
                 continue

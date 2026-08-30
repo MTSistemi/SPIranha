@@ -54,36 +54,36 @@ _INTERESSANTI = re.compile(
     re.IGNORECASE)
 _RUMORE = re.compile(r"^\s*(\.+|\[?[A-Z]+:\s*\d+%\]?\.*)\s*$")
 
-SENZA_FINESTRA = 0
+NO_WINDOW = 0
 if os.name == "nt":
-    SENZA_FINESTRA = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 
 
-def porta_per_flashrom(dispositivo):
+def port_for_flashrom(device):
     """COM6 resta COM6; COM10 diventa \\\\.\\COM10, altrimenti Windows non lo apre."""
-    m = _RE_COM.match(dispositivo or "")
+    m = _RE_COM.match(device or "")
     if m and int(m.group(1)) >= 10:
         return r"\\.\COM" + m.group(1)
-    return dispositivo
+    return device
 
 
-class Esito(object):
-    def __init__(self, codice, righe, interrotto=False, errore=None):
-        self.codice = codice
-        self.righe = righe
-        self.interrotto = interrotto
-        self.errore = errore
+class Result(object):
+    def __init__(self, code, lines, aborted=False, error=None):
+        self.code = code
+        self.lines = lines
+        self.aborted = aborted
+        self.error = error
 
     @property
     def ok(self):
-        return self.errore is None and not self.interrotto and self.codice == 0
+        return self.error is None and not self.aborted and self.code == 0
 
     @property
-    def testo(self):
-        return "\n".join(self.righe)
+    def text(self):
+        return "\n".join(self.lines)
 
 
-class Protezione(object):
+class Protection(object):
     """Lo stato del blocco in scrittura di un chip SPI.
 
     ⚠️ Perche' conta: e' il modo piu' comune in cui una scrittura di BIOS
@@ -91,109 +91,109 @@ class Protezione(object):
     accetta i comandi e non cambia. Meglio saperlo prima.
     """
 
-    def __init__(self, inizio=None, lunghezza=None, descrizione=None,
-                 modo=None, sostenuta=True, motivo=None):
-        self.inizio = inizio
-        self.lunghezza = lunghezza
-        self.descrizione = descrizione
-        self.modo = modo
-        self.sostenuta = sostenuta      # il chip sa rispondere?
-        self.motivo = motivo
+    def __init__(self, start=None, length=None, description=None,
+                 mode=None, supported=True, reason=None):
+        self.start = start
+        self.length = length
+        self.description = description
+        self.mode = mode
+        self.supported = supported      # il chip sa rispondere?
+        self.reason = reason
 
     @property
-    def attiva(self):
+    def active(self):
         """C'e' davvero un pezzo di chip protetto?"""
-        return bool(self.lunghezza) and (self.modo or "").lower() != "disabled"
+        return bool(self.length) and (self.mode or "").lower() != "disabled"
 
     @property
-    def fine(self):
-        if self.inizio is None or not self.lunghezza:
+    def end(self):
+        if self.start is None or not self.length:
             return None
-        return self.inizio + self.lunghezza - 1
+        return self.start + self.length - 1
 
-    def tocca(self, inizio, fine):
+    def overlaps(self, start, end):
         """L'intervallo protetto si sovrappone a quello che vogliamo scrivere?"""
-        if not self.attiva:
+        if not self.active:
             return False
-        return not (fine < self.inizio or inizio > self.fine)
+        return not (end < self.start or start > self.end)
 
 
 class Chip(object):
-    def __init__(self, nome=None, produttore=None, kb=None, candidati=None):
-        self.nome = nome
-        self.produttore = produttore
+    def __init__(self, name=None, vendor=None, kb=None, candidates=None):
+        self.name = name
+        self.vendor = vendor
         self.kb = kb
-        self.candidati = candidati or []
+        self.candidates = candidates or []
 
     @property
-    def byte(self):
+    def size(self):
         return self.kb * 1024 if self.kb else None
 
     @property
-    def descrizione(self):
-        pezzi = [p for p in (self.produttore, self.nome) if p]
-        testo = " ".join(pezzi) if pezzi else "?"
+    def description(self):
+        chunks = [p for p in (self.vendor, self.name) if p]
+        text = " ".join(chunks) if chunks else "?"
         if self.kb:
-            testo += " (%d KiB)" % self.kb
-        return testo
+            text += " (%d KiB)" % self.kb
+        return text
 
 
 class Flashrom(object):
-    def __init__(self, percorso, programmatore=None):
-        self.percorso = percorso
+    def __init__(self, path, programmatore=None):
+        self.path = path
         # Normalmente serprog. Si puo' forzare (per esempio "dummy:...") per
         # provare tutta la catena senza attaccare niente a niente.
         self.programmatore = programmatore
         self._processo = None
-        self._blocco = threading.Lock()
+        self._block_rect = threading.Lock()
 
     # -- costruzione della riga di comando ------------------------------
-    def _programmatore(self, porta, baud=115200, spispeed=None):
+    def _programmatore(self, port, baud=115200, spispeed=None):
         if self.programmatore:
             return self.programmatore
-        valore = "serprog:dev=%s:%d" % (porta_per_flashrom(porta), baud)
+        value_for = "serprog:dev=%s:%d" % (port_for_flashrom(port), baud)
         if spispeed:
-            valore += ",spispeed=%s" % spispeed
-        return valore
+            value_for += ",spispeed=%s" % spispeed
+        return value_for
 
-    def argomenti(self, porta, baud=115200, spispeed=None, chip=None,
-                  dettagli=False, avanzamento=True):
-        args = [self.percorso, "-p", self._programmatore(porta, baud, spispeed)]
+    def arguments(self, port, baud=115200, spispeed=None, chip=None,
+                  verbose=False, progress=True):
+        args = [self.path, "-p", self._programmatore(port, baud, spispeed)]
         if chip:
             args += ["-c", chip]
-        if dettagli:
+        if verbose:
             args += ["-V"]
-        if avanzamento:
+        if progress:
             args += ["--progress"]
         return args
 
     @staticmethod
-    def _eventi(tampone, su_evento):
+    def _eventi(buffer, on_event):
         """Estrae dal tampone gli eventi completi e restituisce (resto, quanti)."""
-        trovati = []
-        for m in _RE_FASE.finditer(tampone):
-            trovati.append((m.start(), m.end(),
+        found_items = []
+        for m in _RE_FASE.finditer(buffer):
+            found_items.append((m.start(), m.end(),
                             ("fase", m.group(1), int(m.group(2)))))
-        for m in _RE_BLOCCO.finditer(tampone):
-            tipo = "cancella" if m.group(1) == "E" else "scrive"
-            trovati.append((m.start(), m.end(),
-                            (tipo, int(m.group(2), 16), int(m.group(3), 16))))
-        if not trovati:
-            return tampone, 0
-        trovati.sort()
-        for _inizio, _fine, evento in trovati:
-            su_evento(*evento)
-        return tampone[trovati[-1][1]:], len(trovati)
+        for m in _RE_BLOCCO.finditer(buffer):
+            kind = "cancella" if m.group(1) == "E" else "scrive"
+            found_items.append((m.start(), m.end(),
+                            (kind, int(m.group(2), 16), int(m.group(3), 16))))
+        if not found_items:
+            return buffer, 0
+        found_items.sort()
+        for _inizio, _fine, event in found_items:
+            on_event(*event)
+        return buffer[found_items[-1][1]:], len(found_items)
 
     @staticmethod
-    def riga_leggibile(args):
-        pezzi = []
+    def readable_line(args):
+        chunks = []
         for a in args:
-            pezzi.append('"%s"' % a if " " in a else a)
-        return " ".join(pezzi)
+            chunks.append('"%s"' % a if " " in a else a)
+        return " ".join(chunks)
 
     # -- esecuzione ------------------------------------------------------
-    def esegui(self, args, su_riga=None, su_evento=None, tutto_il_registro=True):
+    def run(self, args, on_line=None, on_event=None, tutto_il_registro=True):
         """Lancia flashrom e restituisce l'Esito. Bloccante: chiamare da un thread.
 
         `su_evento(tipo, *dati)` riceve l'avanzamento man mano che esce:
@@ -202,115 +202,115 @@ class Flashrom(object):
           ("scrive", inizio, fine)   da -V, l'intervallo scritto
         `tutto_il_registro=False` tiene fuori dal registro il rumore di -V.
         """
-        righe = []
+        lines = []
 
-        def emetti(testo):
-            if not testo or _RUMORE.match(testo):
+        def emetti(text):
+            if not text or _RUMORE.match(text):
                 return
             # percentuali e marcatori sono eventi, non testo da leggere
-            pulito = _RE_BLOCCO.sub("", _RE_FASE.sub("", testo)).strip(" .")
+            pulito = _RE_BLOCCO.sub("", _RE_FASE.sub("", text)).strip(" .")
             if not pulito:
                 return
             if not tutto_il_registro:
                 if _INTERNE.search(pulito) or not _INTERESSANTI.search(pulito):
                     return
-            righe.append(pulito)
-            if su_riga:
-                su_riga(pulito)
+            lines.append(pulito)
+            if on_line:
+                on_line(pulito)
 
         try:
-            processo = subprocess.Popen(
+            process = subprocess.Popen(
                 args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,
-                creationflags=SENZA_FINESTRA,
+                creationflags=NO_WINDOW,
                 bufsize=0,
             )
         except OSError as e:
-            return Esito(None, righe, errore="%s" % e)
+            return Result(None, lines, error="%s" % e)
 
-        with self._blocco:
-            self._processo = processo
+        with self._block_rect:
+            self._processo = process
 
         # flashrom scrive l'avanzamento con \r: si legge a byte e si spezza su
         # entrambi i terminatori, altrimenti la barra non compare mai.
         # ⚠️ I marcatori E(...)/W(...) e le percentuali NON vanno a capo: escono
         # in mezzo alle altre righe. Per questo si tiene un tampone a parte su
         # cui si cercano gli eventi, indipendente dalle righe del registro.
-        avanzo = bytearray()
-        tampone = ""
+        leftover = bytearray()
+        buffer = ""
         try:
             while True:
-                pezzo = processo.stdout.read(1)
-                if not pezzo:
+                chunk = process.stdout.read(1)
+                if not chunk:
                     break
-                carattere = pezzo.decode("utf-8", "replace")
-                if su_evento:
-                    tampone += carattere
-                    if len(tampone) > 512:
-                        tampone, consumato = self._eventi(tampone, su_evento)
+                font = chunk.decode("utf-8", "replace")
+                if on_event:
+                    buffer += font
+                    if len(buffer) > 512:
+                        buffer, consumato = self._eventi(buffer, on_event)
                         if not consumato:
-                            tampone = tampone[-64:]
-                if pezzo in (b"\n", b"\r"):
-                    if avanzo:
-                        testo = avanzo.decode("utf-8", "replace").rstrip()
-                        if su_evento:
-                            tampone, _ = self._eventi(tampone, su_evento)
-                        emetti(testo)
-                        avanzo = bytearray()
+                            buffer = buffer[-64:]
+                if chunk in (b"\n", b"\r"):
+                    if leftover:
+                        text = leftover.decode("utf-8", "replace").rstrip()
+                        if on_event:
+                            buffer, _ = self._eventi(buffer, on_event)
+                        emetti(text)
+                        leftover = bytearray()
                 else:
-                    avanzo += pezzo
-            if su_evento:
-                self._eventi(tampone, su_evento)
-            if avanzo:
-                emetti(avanzo.decode("utf-8", "replace").rstrip())
+                    leftover += chunk
+            if on_event:
+                self._eventi(buffer, on_event)
+            if leftover:
+                emetti(leftover.decode("utf-8", "replace").rstrip())
         finally:
-            processo.stdout.close()
-            codice = processo.wait()
-            with self._blocco:
-                interrotto = getattr(self, "_interrotto", False)
+            process.stdout.close()
+            code = process.wait()
+            with self._block_rect:
+                aborted = getattr(self, "_interrotto", False)
                 self._interrotto = False
                 self._processo = None
 
-        return Esito(codice, righe, interrotto=interrotto)
+        return Result(code, lines, aborted=aborted)
 
-    def interrompi(self):
-        with self._blocco:
-            processo = self._processo
-            if processo is None:
+    def abort(self):
+        with self._block_rect:
+            process = self._processo
+            if process is None:
                 return False
             self._interrotto = True
         try:
-            processo.terminate()
+            process.terminate()
         except OSError:
             return False
         return True
 
     @property
-    def in_esecuzione(self):
-        with self._blocco:
+    def running(self):
+        with self._block_rect:
             return self._processo is not None
 
     # -- operazioni -------------------------------------------------------
-    def versione(self):
+    def version(self):
         """La prima riga di `flashrom --version`, o None se non e' flashrom."""
         try:
-            uscita = subprocess.check_output(
-                [self.percorso, "--version"],
+            output = subprocess.check_output(
+                [self.path, "--version"],
                 stderr=subprocess.STDOUT,
-                creationflags=SENZA_FINESTRA,
+                creationflags=NO_WINDOW,
             )
         except (OSError, subprocess.CalledProcessError):
             return None
-        prima = uscita.decode("utf-8", "replace").splitlines()
-        if not prima:
+        before = output.decode("utf-8", "replace").splitlines()
+        if not before:
             return None
-        if "flashrom" not in prima[0].lower():
+        if "flashrom" not in before[0].lower():
             return None
-        return prima[0].strip()
+        return before[0].strip()
 
-    def elenco_chip(self):
+    def chip_list(self):
         """Tutti i chip che questo flashrom conosce, letti da lui.
 
         ⚠️ Non c\u0027e\u0027 una tabella scritta a mano da nessuna parte: chiedendolo
@@ -318,146 +318,146 @@ class Flashrom(object):
         usando davvero. Una lista nostra invecchierebbe in silenzio.
         """
         try:
-            uscita = subprocess.check_output(
-                [self.percorso, "-L"],
+            output = subprocess.check_output(
+                [self.path, "-L"],
                 stderr=subprocess.STDOUT,
-                creationflags=SENZA_FINESTRA,
+                creationflags=NO_WINDOW,
             )
         except (OSError, subprocess.CalledProcessError):
             return []
-        return leggi_elenco_chip(uscita.decode("utf-8", "replace").splitlines())
+        return parse_chip_list(output.decode("utf-8", "replace").splitlines())
 
-    def identifica(self, porta, baud=115200, spispeed=None, chip=None,
-                   dettagli=False, su_riga=None, su_evento=None):
-        args = self.argomenti(porta, baud, spispeed, chip, dettagli,
-                              avanzamento=False) + ["--flash-name"]
-        esito = self.esegui(args, su_riga, su_evento)
-        return esito, leggi_chip(esito.righe)
+    def identify(self, port, baud=115200, spispeed=None, chip=None,
+                   verbose=False, on_line=None, on_event=None):
+        args = self.arguments(port, baud, spispeed, chip, verbose,
+                              progress=False) + ["--flash-name"]
+        result = self.run(args, on_line, on_event)
+        return result, parse_chip(result.lines)
 
-    def protezione(self, porta, baud=115200, spispeed=None, chip=None,
-                   dettagli=False, su_riga=None):
+    def protection(self, port, baud=115200, spispeed=None, chip=None,
+                   verbose=False, on_line=None):
         """Chiede al chip com'e' messo il blocco in scrittura."""
-        args = self.argomenti(porta, baud, spispeed, chip, dettagli,
-                              avanzamento=False) + ["--wp-status"]
-        esito = self.esegui(args, su_riga)
-        return esito, leggi_protezione(esito.righe, esito.ok)
+        args = self.arguments(port, baud, spispeed, chip, verbose,
+                              progress=False) + ["--wp-status"]
+        result = self.run(args, on_line)
+        return result, parse_protection(result.lines, result.ok)
 
-    def sblocca(self, porta, baud=115200, spispeed=None, chip=None,
-                dettagli=False, su_riga=None):
+    def unlock(self, port, baud=115200, spispeed=None, chip=None,
+                verbose=False, on_line=None):
         """Toglie il blocco: --wp-disable e intervallo azzerato.
 
         ⚠️ Cambia lo STATO DEL CHIP, non un'impostazione del programma. Va
         chiesto, non fatto di nascosto.
         """
-        args = self.argomenti(porta, baud, spispeed, chip, dettagli,
-                              avanzamento=False) + ["--wp-range=0,0", "--wp-disable"]
-        return self.esegui(args, su_riga)
+        args = self.arguments(port, baud, spispeed, chip, verbose,
+                              progress=False) + ["--wp-range=0,0", "--wp-disable"]
+        return self.run(args, on_line)
 
-    def leggi(self, destinazione, porta, baud=115200, spispeed=None, chip=None,
-              dettagli=False, su_riga=None, su_evento=None):
-        args = self.argomenti(porta, baud, spispeed, chip, dettagli) + \
-            ["-r", destinazione]
-        return self.esegui(args, su_riga, su_evento, tutto_il_registro=dettagli)
+    def read(self, destination, port, baud=115200, spispeed=None, chip=None,
+              verbose=False, on_line=None, on_event=None):
+        args = self.arguments(port, baud, spispeed, chip, verbose) + \
+            ["-r", destination]
+        return self.run(args, on_line, on_event, tutto_il_registro=verbose)
 
-    def leggi_regione(self, layout, regione, destinazione, porta, baud=115200,
-                      spispeed=None, chip=None, dettagli=False, su_riga=None,
-                      su_evento=None):
+    def read_region(self, layout, region, destination, port, baud=115200,
+                      spispeed=None, chip=None, verbose=False, on_line=None,
+                      on_event=None):
         """Legge SOLO una regione del layout: serve alle prove rapide."""
-        args = self.argomenti(porta, baud, spispeed, chip, dettagli) + \
-            ["-l", layout, "-i", "%s:%s" % (regione, destinazione), "-r"]
-        return self.esegui(args, su_riga, su_evento, tutto_il_registro=dettagli)
+        args = self.arguments(port, baud, spispeed, chip, verbose) + \
+            ["-l", layout, "-i", "%s:%s" % (region, destination), "-r"]
+        return self.run(args, on_line, on_event, tutto_il_registro=verbose)
 
-    def scrivi(self, immagine, porta, baud=115200, spispeed=None, chip=None,
-               layout=None, regione=None, dettagli=False, su_riga=None,
-               su_evento=None):
+    def write(self, image, port, baud=115200, spispeed=None, chip=None,
+               layout=None, region=None, verbose=False, on_line=None,
+               on_event=None):
         # ⚠️ -V si forza sempre in scrittura: e' l'unico modo per avere i
         # marcatori E(...)/W(...), cioe' i blocchi veri della mappa. Il registro
         # pero' resta pulito se l'utente non ha chiesto i dettagli.
-        args = self.argomenti(porta, baud, spispeed, chip,
-                              dettagli=dettagli or su_evento is not None)
-        if layout and regione:
-            args += ["-l", layout, "-i", regione]
-        args += ["-w", immagine]
-        return self.esegui(args, su_riga, su_evento, tutto_il_registro=dettagli)
+        args = self.arguments(port, baud, spispeed, chip,
+                              verbose=verbose or on_event is not None)
+        if layout and region:
+            args += ["-l", layout, "-i", region]
+        args += ["-w", image]
+        return self.run(args, on_line, on_event, tutto_il_registro=verbose)
 
 
-def leggi_chip(righe):
+def parse_chip(lines):
     """Estrae dal chiacchiericcio di flashrom quale chip ha trovato."""
     chip = Chip()
     ambiguo = False
-    for riga in righe:
-        m = _RE_TROVATO.search(riga)
+    for line in lines:
+        m = _RE_TROVATO.search(line)
         if m:
-            chip.produttore, chip.nome, chip.kb = m.group(1), m.group(2), int(m.group(3))
+            chip.vendor, chip.name, chip.kb = m.group(1), m.group(2), int(m.group(3))
             continue
-        m = _RE_NOME.search(riga)
+        m = _RE_NOME.search(line)
         if m:
-            chip.produttore, chip.nome = m.group(1), m.group(2)
+            chip.vendor, chip.name = m.group(1), m.group(2)
             continue
-        if _RE_AMBIGUO.search(riga):
+        if _RE_AMBIGUO.search(line):
             ambiguo = True
             continue
         if ambiguo:
-            m = _RE_CANDIDATO.match(riga)
-            if m and "flashrom" not in riga.lower():
-                chip.candidati.append(m.group(1))
+            m = _RE_CANDIDATO.match(line)
+            if m and "flashrom" not in line.lower():
+                chip.candidates.append(m.group(1))
     if ambiguo:
-        chip.nome = None
+        chip.name = None
     return chip
 
 
-def leggi_protezione(righe, esito_ok=True):
+def parse_protection(lines, esito_ok=True):
     """Estrae lo stato del blocco da cio' che flashrom ha detto."""
-    testo = "\n".join(righe)
-    intervallo = _RE_WP_INTERVALLO.search(testo)
-    modo = _RE_WP_MODO.search(testo)
-    if not intervallo and not modo:
+    text = "\n".join(lines)
+    span = _RE_WP_INTERVALLO.search(text)
+    mode = _RE_WP_MODO.search(text)
+    if not span and not mode:
         # chip che non sa rispondere, o programmatore che non ce la fa
-        motivo = None
-        for riga in righe:
-            if "wp" in riga.lower() and ("not support" in riga.lower()
-                                         or "failed" in riga.lower()
-                                         or "error" in riga.lower()):
-                motivo = riga.strip()
+        reason = None
+        for line in lines:
+            if "wp" in line.lower() and ("not support" in line.lower()
+                                         or "failed" in line.lower()
+                                         or "error" in line.lower()):
+                reason = line.strip()
                 break
-        return Protezione(sostenuta=False, motivo=motivo)
-    return Protezione(
-        inizio=int(intervallo.group(1), 16) if intervallo else None,
-        lunghezza=int(intervallo.group(2), 16) if intervallo else None,
-        descrizione=intervallo.group(3).strip() if intervallo else None,
-        modo=modo.group(1).strip() if modo else None,
-        sostenuta=esito_ok)
+        return Protection(supported=False, reason=reason)
+    return Protection(
+        start=int(span.group(1), 16) if span else None,
+        length=int(span.group(2), 16) if span else None,
+        description=span.group(3).strip() if span else None,
+        mode=mode.group(1).strip() if mode else None,
+        supported=esito_ok)
 
 
-class ChipNoto(object):
+class KnownChip(object):
     """Una riga dell\u0027elenco di flashrom."""
 
-    def __init__(self, produttore, nome, kb=None, tipo=None, prove=None):
-        self.produttore = produttore
-        self.nome = nome
+    def __init__(self, vendor, name, kb=None, kind=None, tested=None):
+        self.vendor = vendor
+        self.name = name
         self.kb = kb
-        self.tipo = tipo
-        self.prove = prove or ""      # P/R/E/W: cosa e\u0027 stato provato davvero
+        self.kind = kind
+        self.tested = tested or ""      # P/R/E/W: cosa e\u0027 stato provato davvero
 
     @property
-    def byte(self):
+    def size(self):
         return self.kb * 1024 if self.kb else None
 
     @property
     def spi(self):
-        return (self.tipo or "").upper() == "SPI"
+        return (self.kind or "").upper() == "SPI"
 
     @property
-    def completo(self):
-        return "%s %s" % (self.produttore, self.nome)
+    def full_name(self):
+        return "%s %s" % (self.vendor, self.name)
 
     @property
-    def sperimentato(self):
+    def well_tested(self):
         """flashrom dice di averci letto E scritto sopra?"""
-        return "R" in self.prove and "W" in self.prove
+        return "R" in self.tested and "W" in self.tested
 
     def __repr__(self):
-        return "<%s %s %s>" % (self.produttore, self.nome, self.tipo)
+        return "<%s %s %s>" % (self.vendor, self.name, self.kind)
 
 
 # Le righe dell'elenco sono a colonne fisse, ma i nomi lunghi vanno a capo
@@ -472,45 +472,45 @@ _INIZIO_ELENCO = "Supported flash chips"
 _LARGHEZZA_PRODUTTORE = 29
 
 
-def leggi_elenco_chip(righe):
+def parse_chip_list(lines):
     """Le righe di `flashrom -L` diventano ChipNoto."""
-    fuori = []
-    dentro = False
-    for riga in righe:
-        testo = riga.rstrip()
-        if not dentro:
-            if testo.startswith(_INIZIO_ELENCO):
-                dentro = True
+    out = []
+    inside = False
+    for line in lines:
+        text = line.rstrip()
+        if not inside:
+            if text.startswith(_INIZIO_ELENCO):
+                inside = True
             continue
-        if not testo.strip():
+        if not text.strip():
             continue
-        if testo.startswith(("Vendor", "(P =")) or testo.lstrip().startswith("OK "):
+        if text.startswith(("Vendor", "(P =")) or text.lstrip().startswith("OK "):
             continue
-        produttore = testo[:_LARGHEZZA_PRODUTTORE].strip()
-        resto = testo[_LARGHEZZA_PRODUTTORE:]
-        if not produttore:
+        vendor = text[:_LARGHEZZA_PRODUTTORE].strip()
+        resto = text[_LARGHEZZA_PRODUTTORE:]
+        if not vendor:
             # continuazione del nome di sopra
-            if fuori and resto.strip():
-                fuori[-1].nome += resto.strip()
+            if out and resto.strip():
+                out[-1].name += resto.strip()
             continue
-        campi = re.split(r"\s{2,}", resto.strip())
-        campi = [c for c in campi if c]
-        if len(campi) < 2:
+        fields = re.split(r"\s{2,}", resto.strip())
+        fields = [c for c in fields if c]
+        if len(fields) < 2:
             # una riga senza dimensione ne' tipo non e' una riga di chip
             continue
-        nome = campi[0]
-        tipo = campi[-1]
+        name = fields[0]
+        kind = fields[-1]
         kb = None
         try:
-            kb = int(campi[-2])
+            kb = int(fields[-2])
         except (ValueError, IndexError):
             kb = None
-        prove = "".join(campi[1:-2])
-        fuori.append(ChipNoto(produttore, nome, kb, tipo, prove))
-    return fuori
+        tested = "".join(fields[1:-2])
+        out.append(KnownChip(vendor, name, kb, kind, tested))
+    return out
 
 
-def trova_eseguibile(cartella_app, extra=None):
+def find_executable(app_folder, extra=None):
     """Cerca flashrom.exe: dentro l'eseguibile, accanto, in una sottocartella,
     nel PATH.
 
@@ -518,42 +518,42 @@ def trova_eseguibile(cartella_app, extra=None):
     passa la cartella temporanea dove PyInstaller scompatta cio' che ha dentro,
     cosi' il programma portatile si porta dietro il suo flashrom.
     """
-    nomi = ["flashrom.exe", "flashrom"] if os.name == "nt" else ["flashrom"]
-    radici = list(extra or []) + [cartella_app]
-    candidati = []
-    for radice in radici:
-        if not radice:
+    names_of = ["flashrom.exe", "flashrom"] if os.name == "nt" else ["flashrom"]
+    radici = list(extra or []) + [app_folder]
+    candidates = []
+    for root in radici:
+        if not root:
             continue
-        for nome in nomi:
-            candidati.append(os.path.join(radice, nome))
-            candidati.append(os.path.join(radice, "flashrom", nome))
-    for percorso in candidati:
-        if os.path.isfile(percorso):
-            return percorso
-    for cartella in os.environ.get("PATH", "").split(os.pathsep):
-        for nome in nomi:
-            percorso = os.path.join(cartella.strip('"'), nome)
-            if os.path.isfile(percorso):
-                return percorso
+        for name in names_of:
+            candidates.append(os.path.join(root, name))
+            candidates.append(os.path.join(root, "flashrom", name))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        for name in names_of:
+            path = os.path.join(folder.strip('"'), name)
+            if os.path.isfile(path):
+                return path
     return None
 
 
-def leggi_layout(percorso):
+def read_layout(path):
     """[(nome, inizio, fine)] dal file di layout di flashrom.
 
     ⚠️ Il parser di flashrom non accetta commenti: qui li tolleriamo solo per
     non far sparire righe buone, ma il file che gli passiamo resta il suo.
     """
-    regioni = []
-    with open(percorso, "rb") as f:
-        for riga in f.read().decode("utf-8", "replace").splitlines():
-            riga = riga.strip()
-            if not riga or riga.startswith("#"):
+    regions = []
+    with open(path, "rb") as f:
+        for line in f.read().decode("utf-8", "replace").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
                 continue
             try:
-                intervallo, nome = riga.split(None, 1)
-                inizio, fine = intervallo.split(":")
-                regioni.append((nome.strip(), int(inizio, 16), int(fine, 16)))
+                span, name = line.split(None, 1)
+                start, end = span.split(":")
+                regions.append((name.strip(), int(start, 16), int(end, 16)))
             except ValueError:
                 continue
-    return regioni
+    return regions

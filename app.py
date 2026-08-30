@@ -38,15 +38,15 @@ import wiring
 import voltage as V
 import serprog
 import theme as T
-from i18n import LINGUE, NOMI_LINGUA, Lingua
+from i18n import LANGUAGES, LANGUAGE_NAMES, Language
 
-APPNOME = "SPIranha"
+APP_NAME = "SPIranha"
 BAUD = 115200
-BLOCCO = 1024 * 1024
+BLOCK = 1024 * 1024
 
 
-VELOCITA = ["", "8M", "4M", "2M", "1M", "500k"]
-VELOCITA_ETICHETTE = {
+SPEEDS = ["", "8M", "4M", "2M", "1M", "500k"]
+SPEED_LABELS = {
     "": "12 MHz (firmware)",
     "8M": "8 MHz", "4M": "4 MHz", "2M": "2 MHz",
     "1M": "1 MHz", "500k": "500 kHz",
@@ -54,18 +54,18 @@ VELOCITA_ETICHETTE = {
 
 # I modelli suggeriti li porta il profilo: qui resta solo la voce vuota, che
 # vuol dire «fai riconoscere il chip a flashrom».
-CHIP_SUGGERITI = [""]
+SUGGESTED_CHIPS = [""]
 
 # Quanto si legge per qualificare il collegamento: abbastanza da accorgersi di
 # un cavo incerto, poco abbastanza da poterlo rifare a ogni velocita'.
-PROVA_QUALIFICA = 256 * 1024
+QUALIFY_BYTES = 256 * 1024
 
 # I quattro stati di un messaggio, nei colori del tema.
-VERDE = T.OK
-ROSSO = T.CRIT
-AMBRA = T.WARN
-GRIGIO = T.MUT
-FONDI = {
+GREEN = T.OK
+RED = T.CRIT
+AMBER = T.WARN
+GREY = T.MUT
+TINTS = {
     T.OK: (T.OK_BG, T.OK_BORDO),
     T.CRIT: (T.CRIT_BG, T.CRIT_BORDO),
     T.WARN: (T.WARN_BG, T.WARN_BORDO),
@@ -74,13 +74,13 @@ FONDI = {
 
 # ---------------------------------------------------------------- utilita'
 
-def cartella_app():
+def app_folder():
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def cartella_config():
+def config_folder():
     """Dove stanno le impostazioni.
 
     ⚠️ SPIRANHA_CONFIG esiste per le prove, e non e' un vezzo: le prove
@@ -92,49 +92,49 @@ def cartella_config():
     if forzata:
         return forzata
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
-    return os.path.join(base, APPNOME)
+    return os.path.join(base, APP_NAME)
 
 
-def cartella_predefinita():
+def default_folder():
     documenti = os.path.join(os.path.expanduser("~"), "Documents")
-    for candidata in (
+    for candidate in (
         os.path.join(documenti, "Claude", "SkillFishOS", "bios-backup"),
         os.path.join(documenti, "bios-backup"),
     ):
-        if os.path.isdir(candidata):
-            return candidata
+        if os.path.isdir(candidate):
+            return candidate
     return documenti
 
 
-def md5_file(percorso, fermati=None):
+def md5_of_file(path, stop_flag=None):
     h = hashlib.md5()
-    with open(percorso, "rb") as f:
+    with open(path, "rb") as f:
         while True:
-            pezzo = f.read(BLOCCO)
-            if not pezzo:
+            chunk = f.read(BLOCK)
+            if not chunk:
                 break
-            h.update(pezzo)
-            if fermati is not None and fermati.is_set():
+            h.update(chunk)
+            if stop_flag is not None and stop_flag.is_set():
                 return None
     return h.hexdigest()
 
 
-def marca_ora():
+def timestamp():
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-def _durata(secondi):
+def _durata(seconds):
     """Un tempo che resta alla fine, detto corto."""
-    secondi = int(max(0, secondi))
-    if secondi < 60:
-        return "%ds" % secondi
-    if secondi < 3600:
-        return "%dm %02ds" % (secondi // 60, secondi % 60)
-    return "%dh %02dm" % (secondi // 3600, (secondi % 3600) // 60)
+    seconds = int(max(0, seconds))
+    if seconds < 60:
+        return "%ds" % seconds
+    if seconds < 3600:
+        return "%dm %02ds" % (seconds // 60, seconds % 60)
+    return "%dh %02dm" % (seconds // 3600, (seconds % 3600) // 60)
 
 
-def md5_dati(dati):
-    return hashlib.md5(dati).hexdigest()
+def md5_of(data):
+    return hashlib.md5(data).hexdigest()
 
 
 # ---------------------------------------------------------------- finestra
@@ -143,202 +143,202 @@ class App(tk.Tk):
 
     def __init__(self):
         tk.Tk.__init__(self)
-        self.conf = self._carica_config()
-        self.L = Lingua(self.conf.get("lingua", "it"))
+        self.settings = self._load_config()
+        self.L = Language(self.settings.get("lingua", "it"))
 
-        self.coda = queue.Queue()
-        self.occupato = False
-        self.operazione_scrittura = False
-        self.fermati = threading.Event()
+        self.tail_of = queue.Queue()
+        self.busy = False
+        self.writing = False
+        self.stop_flag = threading.Event()
 
         # stato della procedura: ogni requisito e' una condizione per scrivere
         self.chip = None                 # fr.Chip identificato
-        self.protezione = None           # fr.Protezione, letta col chip
-        self.profilo = profiles.prendi(self.conf.get("profilo"))
-        self.fw_scheda = None            # versione dichiarata dal programmatore
-        self.chip_a_18 = None            # il chip vuole 1,8 V? None = non si sa
-        self.chip_noti = []              # l'elenco che flashrom dichiara
-        self.fw_chiesto = set()          # seriali a cui l'abbiamo gia' chiesta
-        self.lettura_verificata = None   # md5 dell'ultima lettura doppia riuscita
-        self.righe_registro = []
-        self.regioni = []                # (nome, inizio, fine) dal file di layout
-        self.versione_flashrom = ""
-        self.lettura_file = None         # file dell'ultima lettura verificata
-        self.secco = None                # esito della prova a secco
+        self.protection = None           # fr.Protezione, letta col chip
+        self.profile = profiles.by_key(self.settings.get("profilo"))
+        self.board_firmware = None            # versione dichiarata dal programmatore
+        self.chip_is_1v8 = None            # il chip vuole 1,8 V? None = non si sa
+        self.known_chips = []              # l'elenco che flashrom dichiara
+        self.firmware_asked = set()          # seriali a cui l'abbiamo gia' chiesta
+        self.verified_read = None   # md5 dell'ultima lettura doppia riuscita
+        self.log_lines = []
+        self.regions = []                # (nome, inizio, fine) dal file di layout
+        self.flashrom_version = ""
+        self.read_path = None         # file dell'ultima lettura verificata
+        self.dry = None                # esito della prova a secco
         self.secco_firma = None
-        self.fase = None                 # fase in corso, per mappa e avanzamento
-        self.inizio_fase = None
-        self.intervallo_scritto = None
-        self.intervallo_lettura = (0, 16 * 1024 * 1024 - 1)
-        self.schede_note = boards.Anagrafica(self.conf.get("schede"))
-        self.scheda_bootsel = None       # RP2040 in attesa di firmware
-        self.attesa_bootsel = None
+        self.phase = None                 # fase in corso, per mappa e avanzamento
+        self.phase_start = None
+        self.written_span = None
+        self.read_span = (0, 16 * 1024 * 1024 - 1)
+        self.known_boards = boards.Registry(self.settings.get("schede"))
+        self.bootsel_board = None       # RP2040 in attesa di firmware
+        self.bootsel_watch = None
 
         self.flash = None
-        percorso = self.conf.get("flashrom")
-        if not (percorso and os.path.isfile(percorso)):
+        path = self.settings.get("flashrom")
+        if not (path and os.path.isfile(path)):
             # nell'eseguibile unico flashrom viaggia dentro: _MEIPASS e' la
             # cartella dove PyInstaller lo scompatta all'avvio
-            percorso = fr.trova_eseguibile(
-                cartella_app(), extra=[getattr(sys, "_MEIPASS", None)])
-        if percorso:
-            self._imposta_flashrom(percorso, silenzioso=True)
+            path = fr.find_executable(
+                app_folder(), extra=[getattr(sys, "_MEIPASS", None)])
+        if path:
+            self._imposta_flashrom(path, silenzioso=True)
 
         self._etichette = []             # (widget, chiave, attributo, trasforma)
         self._messaggi = []              # Messaggio da ridisegnare al cambio lingua
 
-        self.tema = T.Tema(self)
-        self._costruisci()
-        self._traduci()
-        self.rileva_porte()
-        T.titolo_scuro(self)
-        self.after(60, self._pompa)
-        self.after(400, self._guarda_bootsel)
+        self.theme = T.Theme(self)
+        self._build_ui()
+        self._retranslate()
+        self.detect_ports()
+        T.dark_title_bar(self)
+        self.after(60, self._pump)
+        self.after(400, self._watch_bootsel)
         # l'elenco dei modelli si riempie da solo poco dopo l'apertura: la
         # finestra deve comparire subito, non aspettare flashrom
-        self.after(600, self._carica_elenco_chip)
-        self.protocol("WM_DELETE_WINDOW", self._chiudi)
+        self.after(600, self._load_chip_list)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ------------------------------------------------------------ config
-    def _carica_config(self):
+    def _load_config(self):
         try:
-            with open(os.path.join(cartella_config(), "config.json"), "rb") as f:
+            with open(os.path.join(config_folder(), "config.json"), "rb") as f:
                 return json.loads(f.read().decode("utf-8"))
         except (OSError, ValueError):
             return {}
 
-    def _salva_config(self):
-        self.conf.update({
-            "lingua": self.L.codice,
-            "flashrom": self.flash.percorso if self.flash else None,
-            "porta": self.var_porta.get(),
-            "spispeed": self.var_velocita.get(),
-            "cartella": self.var_cartella.get(),
+    def _save_config(self):
+        self.settings.update({
+            "lingua": self.L.code,
+            "flashrom": self.flash.path if self.flash else None,
+            "porta": self.var_port.get(),
+            "spispeed": self.var_speed.get(),
+            "cartella": self.var_folder.get(),
             "chip": self.var_chip.get(),
-            "immagine": self.var_immagine.get(),
+            "immagine": self.var_image.get(),
             "layout": self.var_layout.get(),
-            "profilo": self.profilo.chiave,
-            "atteso": self.var_atteso.get(),
-            "dettagli": bool(self.var_dettagli.get()),
-            "schede": self.schede_note.come_elenco(),
+            "profilo": self.profile.key,
+            "atteso": self.var_expected.get(),
+            "dettagli": bool(self.var_verbose.get()),
+            "schede": self.known_boards.as_list(),
         })
         try:
-            os.makedirs(cartella_config(), exist_ok=True)
-            with open(os.path.join(cartella_config(), "config.json"), "wb") as f:
-                f.write(json.dumps(self.conf, indent=2).encode("utf-8"))
+            os.makedirs(config_folder(), exist_ok=True)
+            with open(os.path.join(config_folder(), "config.json"), "wb") as f:
+                f.write(json.dumps(self.settings, indent=2).encode("utf-8"))
         except OSError:
             pass
 
     # ------------------------------------------------- costruzione grafica
-    def _etichetta(self, widget, chiave, attributo="text", trasforma=None):
+    def _translated(self, widget, key, attribute="text", transform=None):
         """Registra un widget perche' si riscriva al cambio lingua."""
-        self._etichette.append((widget, chiave, attributo, trasforma))
+        self._etichette.append((widget, key, attribute, transform))
         return widget
 
-    def _traduci(self):
+    def _retranslate(self):
         self.title(self.L("titolo"))
-        for widget, chiave, attributo, trasforma in self._etichette:
-            testo = self.L(chiave)
-            if trasforma:
-                testo = trasforma(testo)
+        for widget, key, attribute, transform in self._etichette:
+            text = self.L(key)
+            if transform:
+                text = transform(text)
             try:
-                widget.configure(**{attributo: testo})
+                widget.configure(**{attribute: text})
             except tk.TclError:
                 pass
-        for messaggio in self._messaggi:
-            messaggio.ridisegna()
-        if hasattr(self, "et_promemoria"):
-            self._scrivi_promemoria()
+        for message in self._messaggi:
+            message.redraw()
+        if hasattr(self, "lbl_reminder"):
+            self._write_reminder()
         # ⚠️ Anche il selettore e la barra di stato: cambiando lingua da
         # codice restavano indietro, e si vedeva «Italiano» sopra una
         # finestra in inglese.
-        if hasattr(self, "var_lingua"):
-            self.var_lingua.set(NOMI_LINGUA.get(self.L.codice, ""))
-        if hasattr(self, "var_stato"):
-            self.var_stato.set(self.L("occupato") if self.occupato
+        if hasattr(self, "var_language"):
+            self.var_language.set(LANGUAGE_NAMES.get(self.L.code, ""))
+        if hasattr(self, "var_status"):
+            self.var_status.set(self.L("occupato") if self.busy
                                else self.L("pronto"))
-        if hasattr(self, "combo_profilo"):
-            self._riempi_profili()
-        self.var_velocita_etichetta.set(VELOCITA_ETICHETTE.get(self.var_velocita.get(), ""))
-        if hasattr(self, "legenda"):
-            self.legenda.traduci()
-            self._riposo_mappa()
+        if hasattr(self, "combo_profile"):
+            self._fill_profiles()
+        self.var_speed_label.set(SPEED_LABELS.get(self.var_speed.get(), ""))
+        if hasattr(self, "legend"):
+            self.legend.translate()
+            self._map_at_rest()
         # ⚠️ Va chiamata anche all'avvio: _guarda_bootsel aggiorna solo quando
         # lo stato CAMBIA, e all'inizio "nessuna scheda" non e' un cambiamento.
         if hasattr(self, "msg_firmware"):
-            self._aggiorna_firmware()
-        self._disegna_testata()
-        self._aggiorna_stato_flashrom()
-        self._aggiorna_scrittura()
-        finestra = getattr(self, "_finestra_schema", None)
-        if finestra is not None and finestra.winfo_exists():
-            finestra.title(self.L("sch_titolo"))
-            finestra.disegna()
+            self._update_firmware_row()
+        self._draw_header()
+        self._update_flashrom_banner()
+        self._update_write_state()
+        window = getattr(self, "_wiring_window", None)
+        if window is not None and window.winfo_exists():
+            window.title(self.L("sch_titolo"))
+            window.draw()
 
     SOGLIA_DUE_COLONNE = 940      # sotto questa larghezza si impila tutto
 
-    def _costruisci(self):
+    def _build_ui(self):
         self.geometry("1040x876")
         self.minsize(620, 540)
 
-        self.radice = tk.Frame(self, background=T.INK)
-        self.radice.pack(fill="both", expand=True)
+        self.root = tk.Frame(self, background=T.INK)
+        self.root.pack(fill="both", expand=True)
 
-        self._costruisci_testata(self.radice)
-        self._costruisci_banner(self.radice)
-        self.schede = [
-            self._crea_collegamento(self.radice),
-            self._crea_chip(self.radice),
-            self._crea_lettura(self.radice),
-            self._crea_scrittura(self.radice),
+        self._costruisci_testata(self.root)
+        self._build_banner(self.root)
+        self.boards = [
+            self._make_connection_card(self.root),
+            self._make_chip_card(self.root),
+            self._make_read_card(self.root),
+            self._make_write_card(self.root),
         ]
-        self.scheda_mappa = self._crea_mappa(self.radice)
-        self.scheda_registro = self._crea_registro(self.radice)
-        self._costruisci_barra(self.radice)
+        self.scheda_mappa = self._make_map_card(self.root)
+        self.scheda_registro = self._make_log_card(self.root)
+        self._costruisci_barra(self.root)
 
         self._colonne = None
-        self._riflusso(due=True)
+        self._riflusso(two=True)
         self._attesa_riflusso = None
         self.bind("<Configure>", self._forse_riflusso)
 
     # -- responsive: una o due colonne secondo lo spazio --------------------
-    def _forse_riflusso(self, evento):
-        if evento.widget is not self:
+    def _forse_riflusso(self, event):
+        if event.widget is not self:
             return
         if self._attesa_riflusso:
             self.after_cancel(self._attesa_riflusso)
         self._attesa_riflusso = self.after(
-            90, lambda: self._riflusso(due=self.winfo_width() >= self.SOGLIA_DUE_COLONNE))
+            90, lambda: self._riflusso(two=self.winfo_width() >= self.SOGLIA_DUE_COLONNE))
 
-    def _riflusso(self, due):
+    def _riflusso(self, two):
         self._attesa_riflusso = None
-        if due == self._colonne:
+        if two == self._colonne:
             self._adatta_larghezze()
             return
-        self._colonne = due
-        r = self.radice
-        for scheda in self.schede:
-            scheda.grid_forget()
+        self._colonne = two
+        r = self.root
+        for card in self.boards:
+            card.grid_forget()
         self.scheda_mappa.grid_forget()
         self.scheda_registro.grid_forget()
-        self.barra.grid_forget()
+        self.bar.grid_forget()
 
-        for indice in (0, 1):
-            r.columnconfigure(indice, weight=1 if (due or indice == 0) else 0,
-                              uniform="colonne" if due else "")
-        for indice in range(3, 12):
-            r.rowconfigure(indice, weight=0)
+        for index in (0, 1):
+            r.columnconfigure(index, weight=1 if (two or index == 0) else 0,
+                              uniform="colonne" if two else "")
+        for index in range(3, 12):
+            r.rowconfigure(index, weight=0)
 
         pad = dict(padx=8, pady=(8, 0))
-        if due:
-            self.schede[0].grid(row=3, column=0, sticky="new", **pad)
-            self.schede[1].grid(row=4, column=0, sticky="new", **pad)
-            self.schede[2].grid(row=5, column=0, sticky="new", **pad)
-            self.schede[3].grid(row=3, column=1, rowspan=3, sticky="new", **pad)
+        if two:
+            self.boards[0].grid(row=3, column=0, sticky="new", **pad)
+            self.boards[1].grid(row=4, column=0, sticky="new", **pad)
+            self.boards[2].grid(row=5, column=0, sticky="new", **pad)
+            self.boards[3].grid(row=3, column=1, rowspan=3, sticky="new", **pad)
             riga_mappa = 6
         else:
-            for indice, scheda in enumerate(self.schede):
-                scheda.grid(row=3 + indice, column=0, columnspan=2, sticky="new",
+            for index, card in enumerate(self.boards):
+                card.grid(row=3 + index, column=0, columnspan=2, sticky="new",
                             **pad)
             riga_mappa = 7
         self.scheda_mappa.grid(row=riga_mappa, column=0, columnspan=2,
@@ -347,238 +347,238 @@ class App(tk.Tk):
         self.scheda_registro.grid(row=riga_registro, column=0, columnspan=2,
                                   sticky="nsew", padx=8, pady=(8, 0))
         r.rowconfigure(riga_registro, weight=1)
-        self.barra.grid(row=riga_registro + 1, column=0, columnspan=2, sticky="ew",
+        self.bar.grid(row=riga_registro + 1, column=0, columnspan=2, sticky="ew",
                         padx=10, pady=(6, 8))
         self._adatta_larghezze()
 
     def _adatta_larghezze(self):
         """Le scritte lunghe si adattano alla colonna invece di allargare tutto."""
-        larghezza = max(self.winfo_width(), 400)
-        colonna = (larghezza - 32) // (2 if self._colonne else 1)
-        for messaggio in self._messaggi:
-            messaggio.chip.testo.configure(wraplength=max(colonna - 70, 180))
-        for widget, avvolgi in getattr(self, "_avvolgibili", ()):
-            widget.configure(wraplength=max(int(colonna * avvolgi), 150))
+        width = max(self.winfo_width(), 400)
+        column = (width - 32) // (2 if self._colonne else 1)
+        for message in self._messaggi:
+            message.chip.text.configure(wraplength=max(column - 70, 180))
+        for widget, avvolgi in getattr(self, "_wrappables", ()):
+            widget.configure(wraplength=max(int(column * avvolgi), 150))
 
     # -- testata -----------------------------------------------------------
-    def _costruisci_testata(self, padre):
-        self.tela_testata = tk.Canvas(padre, height=54, background=T.HEADER_DA,
+    def _costruisci_testata(self, parent):
+        self.header_canvas = tk.Canvas(parent, height=54, background=T.HEADER_DA,
                                       highlightthickness=0, bd=0)
-        self.tela_testata.grid(row=0, column=0, columnspan=2, sticky="ew")
-        self.tela_testata.bind("<Configure>", lambda _e: self._disegna_testata())
+        self.header_canvas.grid(row=0, column=0, columnspan=2, sticky="ew")
+        self.header_canvas.bind("<Configure>", lambda _e: self._draw_header())
 
-        cornice = tk.Frame(self.tela_testata, background=T.INK)
-        self.var_lingua = tk.StringVar(value=NOMI_LINGUA[self.L.codice])
-        scelta = ttk.Combobox(cornice, textvariable=self.var_lingua, width=9,
-                              state="readonly", font=self.tema.f_testo,
-                              values=[NOMI_LINGUA[c] for c in LINGUE])
-        scelta.pack(side="left")
-        scelta.bind("<<ComboboxSelected>>", self._cambia_lingua)
+        frame = tk.Frame(self.header_canvas, background=T.INK)
+        self.var_language = tk.StringVar(value=LANGUAGE_NAMES[self.L.code])
+        choice = ttk.Combobox(frame, textvariable=self.var_language, width=9,
+                              state="readonly", font=self.theme.f_text,
+                              values=[LANGUAGE_NAMES[c] for c in LANGUAGES])
+        choice.pack(side="left")
+        choice.bind("<<ComboboxSelected>>", self._language_changed)
 
         # ⚠️ Il profilo sta accanto alla lingua e non dentro una scheda: dice
         # SU COSA si sta lavorando, e va visto prima di toccare qualunque cosa.
-        self.var_profilo = tk.StringVar()
-        self.combo_profilo = ttk.Combobox(cornice, textvariable=self.var_profilo,
+        self.var_profile = tk.StringVar()
+        self.combo_profile = ttk.Combobox(frame, textvariable=self.var_profile,
                                           width=16, state="readonly",
-                                          font=self.tema.f_testo)
-        self.combo_profilo.pack(side="left", padx=(8, 0))
-        self.combo_profilo.bind("<<ComboboxSelected>>", self._cambia_profilo)
-        self._riempi_profili()
-        self.tela_testata.create_window(0, 0, window=cornice, anchor="ne",
+                                          font=self.theme.f_text)
+        self.combo_profile.pack(side="left", padx=(8, 0))
+        self.combo_profile.bind("<<ComboboxSelected>>", self._profile_changed)
+        self._fill_profiles()
+        self.header_canvas.create_window(0, 0, window=frame, anchor="ne",
                                         tags="lingua")
-        self.tela_testata.bind("<Configure>", lambda _e: self._disegna_testata())
+        self.header_canvas.bind("<Configure>", lambda _e: self._draw_header())
 
         # promemoria: la regola che non cambia mai
-        pro = tk.Frame(padre, background=T.WARN_BG, highlightthickness=1,
+        pro = tk.Frame(parent, background=T.WARN_BG, highlightthickness=1,
                        highlightbackground=T.WARN_BORDO, bd=0)
         pro.grid(row=1, column=0, columnspan=2, sticky="ew", padx=8, pady=(8, 0))
-        punto = tk.Canvas(pro, width=8, height=8, background=T.WARN_BG,
+        dot = tk.Canvas(pro, width=8, height=8, background=T.WARN_BG,
                           highlightthickness=0)
-        punto.create_oval(0, 0, 8, 8, fill=T.WARN, outline="")
-        punto.pack(side="left", padx=(9, 7), pady=6)
-        etichetta = tk.Label(pro, background=T.WARN_BG, foreground="#E8D6B4",
+        dot.create_oval(0, 0, 8, 8, fill=T.WARN, outline="")
+        dot.pack(side="left", padx=(9, 7), pady=6)
+        label_for = tk.Label(pro, background=T.WARN_BG, foreground="#E8D6B4",
                              anchor="w", justify="left", wraplength=900,
-                             font=self.tema.f_testo)
-        etichetta.pack(side="left", pady=5, padx=(0, 10))
-        self.et_promemoria = etichetta
-        self._avvolgibili = [(etichetta, 1.9)]
-        self._scrivi_promemoria()
+                             font=self.theme.f_text)
+        label_for.pack(side="left", pady=5, padx=(0, 10))
+        self.lbl_reminder = label_for
+        self._avvolgibili = [(label_for, 1.9)]
+        self._write_reminder()
 
-    def _disegna_testata(self):
-        tela = self.tela_testata
-        larghezza = max(tela.winfo_width(), 320)
-        tela.delete("scritte")
-        T.gradiente(tela, larghezza, 54)
-        tela.create_text(18, 18, text=self.L("titolo"), fill=T.FG, anchor="w",
-                         font=self.tema.f_titolo, tags="scritte")
-        tela.create_text(19, 38,
+    def _draw_header(self):
+        canvas = self.header_canvas
+        width = max(canvas.winfo_width(), 320)
+        canvas.delete("scritte")
+        T.gradient(canvas, width, 54)
+        canvas.create_text(18, 18, text=self.L("titolo"), fill=T.FG, anchor="w",
+                         font=self.theme.f_titolo, tags="scritte")
+        canvas.create_text(19, 38,
                          text=self.L("sottotitolo",
-                                     scheda=self.profilo.testo(
-                                         "nome", self.L.codice)),
+                                     board=self.profile.text(
+                                         "name", self.L.code)),
                          fill=T.MUT,
-                         anchor="w", font=self.tema.f_sotto, tags="scritte")
-        tela.create_line(0, 53, larghezza, 53, fill=T.LINE, tags="scritte")
-        tela.coords("lingua", larghezza - 12, 14)
+                         anchor="w", font=self.theme.f_sotto, tags="scritte")
+        canvas.create_line(0, 53, width, 53, fill=T.LINE, tags="scritte")
+        canvas.coords("lingua", width - 12, 14)
 
     # -- banner flashrom ---------------------------------------------------
-    def _costruisci_banner(self, padre):
-        self.banner = tk.Frame(padre, background=T.CRIT_BG, highlightthickness=1,
+    def _build_banner(self, parent):
+        self.banner = tk.Frame(parent, background=T.CRIT_BG, highlightthickness=1,
                                highlightbackground=T.CRIT_BORDO, bd=0)
-        punto = tk.Canvas(self.banner, width=8, height=8, background=T.CRIT_BG,
+        dot = tk.Canvas(self.banner, width=8, height=8, background=T.CRIT_BG,
                           highlightthickness=0)
-        punto.create_oval(0, 0, 8, 8, fill=T.CRIT, outline="")
-        punto.pack(side="left", padx=(9, 7), pady=6)
+        dot.create_oval(0, 0, 8, 8, fill=T.CRIT, outline="")
+        dot.pack(side="left", padx=(9, 7), pady=6)
         self.banner_testo = tk.Label(self.banner, background=T.CRIT_BG,
                                      foreground="#F0C9CB", anchor="w",
                                      justify="left", wraplength=700,
-                                     font=self.tema.f_testo)
+                                     font=self.theme.f_text)
         self.banner_testo.pack(side="left", fill="x", expand=True, pady=5)
-        self._etichetta(self.banner_testo, "flashrom_assente")
+        self._translated(self.banner_testo, "flashrom_assente")
         self.banner_bottone = ttk.Button(self.banner, style="Pericolo.TButton",
-                                         command=self.scegli_flashrom)
+                                         command=self.pick_flashrom)
         self.banner_bottone.pack(side="right", padx=7, pady=5)
-        self._etichetta(self.banner_bottone, "flashrom_individua")
+        self._translated(self.banner_bottone, "flashrom_individua")
         self.banner.grid(row=2, column=0, columnspan=2, sticky="ew", padx=8,
                          pady=(8, 0))
 
-    def _scheda(self, padre, chiave):
-        scheda, corpo = T.scheda(padre, self.L(chiave), self.tema)
-        self._etichetta(scheda.etichetta_titolo, chiave, trasforma=T.micro)
-        return scheda, corpo
+    def _card(self, parent, key):
+        card, body = T.card(parent, self.L(key), self.theme)
+        self._translated(card.etichetta_titolo, key, transform=T.micro)
+        return card, body
 
-    def _micro(self, padre, chiave):
-        return self._etichetta(
-            tk.Label(padre, background=T.PANEL, foreground=T.MUT,
-                     font=self.tema.f_micro, anchor="w"),
-            chiave, trasforma=T.micro)
+    def _micro_label(self, parent, key):
+        return self._translated(
+            tk.Label(parent, background=T.PANEL, foreground=T.MUT,
+                     font=self.theme.f_micro, anchor="w"),
+            key, transform=T.micro)
 
-    def _nota(self, padre, chiave, avvolgi=0.9):
-        etichetta = tk.Label(padre, background=T.PANEL, foreground=T.MUT,
-                             font=self.tema.f_minuto, anchor="w", justify="left",
+    def _note(self, parent, key, avvolgi=0.9):
+        label_for = tk.Label(parent, background=T.PANEL, foreground=T.MUT,
+                             font=self.theme.f_minuto, anchor="w", justify="left",
                              wraplength=320)
-        self._etichetta(etichetta, chiave)
-        self._avvolgibili.append((etichetta, avvolgi))
-        return etichetta
+        self._translated(label_for, key)
+        self._avvolgibili.append((label_for, avvolgi))
+        return label_for
 
-    def _sfoglia(self, padre, comando):
-        return self._etichetta(ttk.Button(padre, style="Secondario.TButton",
-                                          width=3, command=comando), "sfoglia")
+    def _browse_button(self, parent, command):
+        return self._translated(ttk.Button(parent, style="Secondario.TButton",
+                                          width=3, command=command), "sfoglia")
 
     # -- 1. collegamento ---------------------------------------------------
-    def _crea_collegamento(self, padre):
-        scheda, s = self._scheda(padre, "sez_collegamento")
+    def _make_connection_card(self, parent):
+        card, s = self._card(parent, "sez_collegamento")
         s.columnconfigure(1, weight=1)
 
-        self._micro(s, "porta").grid(row=0, column=0, sticky="w", pady=(0, 4))
-        self.var_porta = tk.StringVar(value=self.conf.get("porta", ""))
-        self.combo_porta = ttk.Combobox(s, textvariable=self.var_porta,
-                                        font=self.tema.f_testo)
-        self.combo_porta.grid(row=0, column=1, sticky="ew", padx=(6, 6), pady=(0, 4))
+        self._micro_label(s, "porta").grid(row=0, column=0, sticky="w", pady=(0, 4))
+        self.var_port = tk.StringVar(value=self.settings.get("porta", ""))
+        self.combo_port = ttk.Combobox(s, textvariable=self.var_port,
+                                        font=self.theme.f_text)
+        self.combo_port.grid(row=0, column=1, sticky="ew", padx=(6, 6), pady=(0, 4))
 
-        bottoni = tk.Frame(s, background=T.PANEL)
-        bottoni.grid(row=0, column=2, sticky="e", pady=(0, 4))
-        self._etichetta(ttk.Button(bottoni, style="Secondario.TButton",
-                                   command=self.rileva_porte),
+        buttons = tk.Frame(s, background=T.PANEL)
+        buttons.grid(row=0, column=2, sticky="e", pady=(0, 4))
+        self._translated(ttk.Button(buttons, style="Secondario.TButton",
+                                   command=self.detect_ports),
                         "rileva").pack(side="left", padx=(0, 4))
-        self.b_prova = self._etichetta(
-            ttk.Button(bottoni, style="Secondario.TButton",
-                       command=self.interroga_pico), "prova")
+        self.b_prova = self._translated(
+            ttk.Button(buttons, style="Secondario.TButton",
+                       command=self.query_pico), "prova")
         self.b_prova.pack(side="left", padx=(0, 4))
-        self.b_schema = self._etichetta(
-            ttk.Button(bottoni, style="Ghost.TButton", command=self.apri_schema),
+        self.b_schema = self._translated(
+            ttk.Button(buttons, style="Ghost.TButton", command=self.open_wiring),
             "sch_apri")
         self.b_schema.pack(side="left")
 
-        self._micro(s, "velocita").grid(row=1, column=0, sticky="w")
+        self._micro_label(s, "velocita").grid(row=1, column=0, sticky="w")
         cornice_v = tk.Frame(s, background=T.PANEL)
         cornice_v.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(6, 0))
-        self.var_velocita = tk.StringVar(value=self.conf.get("spispeed", ""))
-        self.var_velocita_etichetta = tk.StringVar()
+        self.var_speed = tk.StringVar(value=self.settings.get("spispeed", ""))
+        self.var_speed_label = tk.StringVar()
         combo_v = ttk.Combobox(cornice_v, width=15, state="readonly",
-                               font=self.tema.f_testo,
-                               textvariable=self.var_velocita_etichetta,
-                               values=[VELOCITA_ETICHETTE[v] for v in VELOCITA])
+                               font=self.theme.f_text,
+                               textvariable=self.var_speed_label,
+                               values=[SPEED_LABELS[v] for v in SPEEDS])
         combo_v.pack(side="left")
-        combo_v.bind("<<ComboboxSelected>>", self._cambia_velocita)
-        self.b_qualifica = self._etichetta(
+        combo_v.bind("<<ComboboxSelected>>", self._speed_changed)
+        self.b_qualify = self._translated(
             ttk.Button(cornice_v, style="Secondario.TButton",
-                       command=self.qualifica_collegamento), "qualifica")
-        self.b_qualifica.pack(side="left", padx=(6, 0))
-        self._nota(cornice_v, "qualifica_nota", 0.5).pack(side="left", padx=8)
+                       command=self.qualify_link), "qualifica")
+        self.b_qualify.pack(side="left", padx=(6, 0))
+        self._note(cornice_v, "qualifica_nota", 0.5).pack(side="left", padx=8)
 
         # --- firmware del programmatore
         filetto = tk.Frame(s, background=T.LINE, height=1)
         filetto.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(10, 8))
 
-        self._micro(s, "firmware").grid(row=3, column=0, sticky="w")
+        self._micro_label(s, "firmware").grid(row=3, column=0, sticky="w")
         cornice_f = tk.Frame(s, background=T.PANEL)
         cornice_f.grid(row=3, column=1, columnspan=2, sticky="ew", padx=(6, 0))
-        self.b_firmware = self._etichetta(
+        self.b_firmware = self._translated(
             ttk.Button(cornice_f, style="Secondario.TButton",
-                       command=self.installa_firmware), "fw_installa")
+                       command=self.install_firmware), "fw_installa")
         self.b_firmware.pack(side="left")
-        self.b_azzera = self._etichetta(
+        self.b_reset = self._translated(
             ttk.Button(cornice_f, style="Ghost.TButton",
-                       command=self.azzera_scheda), "fw_azzera")
-        self.b_azzera.pack(side="left", padx=6)
-        self.b_bootsel = self._etichetta(
+                       command=self.reset_board), "fw_azzera")
+        self.b_reset.pack(side="left", padx=6)
+        self.b_bootsel = self._translated(
             ttk.Button(cornice_f, style="Ghost.TButton",
-                       command=self.rientra_in_bootsel), "fw_bootsel")
+                       command=self.back_to_bootsel), "fw_bootsel")
         self.b_bootsel.pack(side="left")
         # compare solo se c'e' davvero qualcosa da aggiornare
-        self.b_aggiorna = self._etichetta(
+        self.b_update = self._translated(
             ttk.Button(cornice_f, style="Secondario.TButton",
-                       command=self.aggiorna_firmware), "fw_aggiorna")
+                       command=self.update_firmware), "fw_aggiorna")
 
-        self.et_nome = self._micro(s, "nome_scheda")
-        self.et_nome.grid(row=4, column=0, sticky="w", pady=(7, 0))
+        self.lbl_name = self._micro_label(s, "nome_scheda")
+        self.lbl_name.grid(row=4, column=0, sticky="w", pady=(7, 0))
         cornice_n = tk.Frame(s, background=T.PANEL)
         cornice_n.grid(row=4, column=1, columnspan=2, sticky="ew", padx=(6, 0),
                        pady=(7, 0))
-        self.var_nome_scheda = tk.StringVar()
-        self.campo_nome = ttk.Entry(cornice_n, textvariable=self.var_nome_scheda,
-                                    width=26, font=self.tema.f_testo)
-        self.campo_nome.pack(side="left")
-        self.campo_nome.bind("<Return>", lambda _e: self.battezza_scheda())
-        self.campo_nome.bind("<FocusOut>", lambda _e: self.battezza_scheda())
-        self._nota(cornice_n, "nome_scheda_nota", 0.5).pack(side="left", padx=8)
-        self.msg_firmware = Messaggio(self, s)
+        self.var_board_name = tk.StringVar()
+        self.name_field = ttk.Entry(cornice_n, textvariable=self.var_board_name,
+                                    width=26, font=self.theme.f_text)
+        self.name_field.pack(side="left")
+        self.name_field.bind("<Return>", lambda _e: self.name_board())
+        self.name_field.bind("<FocusOut>", lambda _e: self.name_board())
+        self._note(cornice_n, "nome_scheda_nota", 0.5).pack(side="left", padx=8)
+        self.msg_firmware = Message(self, s)
         self.msg_firmware.widget.grid(row=5, column=0, columnspan=3, sticky="w",
                                       pady=(7, 0))
 
-        self.msg_collegamento = Messaggio(self, s)
-        self.msg_collegamento.widget.grid(row=6, column=0, columnspan=3, sticky="w",
+        self.msg_connection = Message(self, s)
+        self.msg_connection.widget.grid(row=6, column=0, columnspan=3, sticky="w",
                                           pady=(7, 0))
-        if not serprog.SERIALE:
-            self.msg_collegamento.mostra("seriale_assente", AMBRA)
-        return scheda
+        if not serprog.HAS_SERIAL:
+            self.msg_connection.show("seriale_assente", AMBER)
+        return card
 
     # -- 2. chip -----------------------------------------------------------
-    def _crea_chip(self, padre):
-        scheda, s = self._scheda(padre, "sez_chip")
+    def _make_chip_card(self, parent):
+        card, s = self._card(parent, "sez_chip")
         s.columnconfigure(2, weight=1)
 
-        self.b_identifica = self._etichetta(
-            ttk.Button(s, style="Secondario.TButton", command=self.identifica_chip),
+        self.b_identify = self._translated(
+            ttk.Button(s, style="Secondario.TButton", command=self.identify_chip),
             "identifica")
-        self.b_identifica.grid(row=0, column=0, sticky="w")
-        self._micro(s, "chip_forzato").grid(row=0, column=1, sticky="e", padx=(10, 6))
-        self.var_chip = tk.StringVar(value=self.conf.get("chip", ""))
+        self.b_identify.grid(row=0, column=0, sticky="w")
+        self._micro_label(s, "chip_forzato").grid(row=0, column=1, sticky="e", padx=(10, 6))
+        self.var_chip = tk.StringVar(value=self.settings.get("chip", ""))
         cornice_m = tk.Frame(s, background=T.PANEL)
         cornice_m.grid(row=0, column=2, sticky="ew")
         cornice_m.columnconfigure(0, weight=1)
         self.combo_chip = ttk.Combobox(cornice_m, textvariable=self.var_chip,
-                                       font=self.tema.f_testo,
-                                       values=CHIP_SUGGERITI + self.profilo.chip)
+                                       font=self.theme.f_text,
+                                       values=SUGGESTED_CHIPS + self.profile.chip)
         self.combo_chip.grid(row=0, column=0, sticky="ew")
-        self.b_cerca_chip = self._etichetta(
+        self.b_search_chip = self._translated(
             ttk.Button(cornice_m, style="Ghost.TButton",
-                       command=self.cerca_modello), "cerca")
-        self.b_cerca_chip.grid(row=0, column=1, padx=(6, 0))
-        self.combo_chip.bind("<<ComboboxSelected>>", lambda _e: self._invalida_chip())
-        self.combo_chip.bind("<KeyRelease>", lambda _e: self._invalida_chip())
+                       command=self.search_model), "cerca")
+        self.b_search_chip.grid(row=0, column=1, padx=(6, 0))
+        self.combo_chip.bind("<<ComboboxSelected>>", lambda _e: self._invalidate_chip())
+        self.combo_chip.bind("<KeyRelease>", lambda _e: self._invalidate_chip())
 
-        self.msg_chip = Messaggio(self, s)
+        self.msg_chip = Message(self, s)
         self.msg_chip.widget.grid(row=1, column=0, columnspan=3, sticky="w",
                                   pady=(7, 0))
 
@@ -586,749 +586,749 @@ class App(tk.Tk):
         # etichetta fissa, e il tasto compare solo se c'e' un blocco da togliere.
         cornice_p = tk.Frame(s, background=T.PANEL)
         cornice_p.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(7, 0))
-        self.msg_protezione = Messaggio(self, cornice_p)
-        self.msg_protezione.widget.pack(side="left")
-        self.b_adattatore = self._etichetta(
+        self.msg_protection = Message(self, cornice_p)
+        self.msg_protection.widget.pack(side="left")
+        self.b_shifter = self._translated(
             ttk.Button(cornice_p, style="Ghost.TButton",
-                       command=self.apri_adattatore), "tens_schema")
-        self.b_adattatore.pack(side="right")
-        self.b_sblocca = self._etichetta(
+                       command=self.open_level_shifter), "tens_schema")
+        self.b_shifter.pack(side="right")
+        self.b_unlock = self._translated(
             ttk.Button(cornice_p, style="Secondario.TButton",
-                       command=self.sblocca_chip), "prot_sblocca")
-        return scheda
+                       command=self.unlock_chip), "prot_sblocca")
+        return card
 
     # -- 3. lettura --------------------------------------------------------
-    def _crea_lettura(self, padre):
-        scheda, s = self._scheda(padre, "sez_lettura")
+    def _make_read_card(self, parent):
+        card, s = self._card(parent, "sez_lettura")
         s.columnconfigure(1, weight=1)
 
-        self._micro(s, "cartella").grid(row=0, column=0, sticky="w")
-        self.var_cartella = tk.StringVar(
-            value=self.conf.get("cartella") or cartella_predefinita())
-        ttk.Entry(s, textvariable=self.var_cartella,
-                  font=self.tema.f_testo).grid(row=0, column=1, sticky="ew",
+        self._micro_label(s, "cartella").grid(row=0, column=0, sticky="w")
+        self.var_folder = tk.StringVar(
+            value=self.settings.get("cartella") or default_folder())
+        ttk.Entry(s, textvariable=self.var_folder,
+                  font=self.theme.f_text).grid(row=0, column=1, sticky="ew",
                                                padx=(6, 4))
-        self._sfoglia(s, self.scegli_cartella).grid(row=0, column=2)
+        self._browse_button(s, self.pick_folder).grid(row=0, column=2)
 
-        cornice = tk.Frame(s, background=T.PANEL)
-        cornice.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(8, 0))
-        self.b_leggi = self._etichetta(
-            ttk.Button(cornice, style="Primario.TButton",
-                       command=self.leggi_e_verifica), "leggi")
+        frame = tk.Frame(s, background=T.PANEL)
+        frame.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        self.b_leggi = self._translated(
+            ttk.Button(frame, style="Primario.TButton",
+                       command=self.read_and_verify), "leggi")
         self.b_leggi.pack(side="left")
-        self._etichetta(ttk.Button(cornice, style="Ghost.TButton",
-                                   command=self.apri_confronto),
+        self._translated(ttk.Button(frame, style="Ghost.TButton",
+                                   command=self.open_compare),
                         "conf_apri").pack(side="left", padx=6)
-        self._nota(cornice, "leggi_nota", 0.5).pack(side="left", padx=8)
+        self._note(frame, "leggi_nota", 0.5).pack(side="left", padx=8)
 
-        self.msg_lettura = Messaggio(self, s)
-        self.msg_lettura.widget.grid(row=2, column=0, columnspan=3, sticky="w",
+        self.msg_read = Message(self, s)
+        self.msg_read.widget.grid(row=2, column=0, columnspan=3, sticky="w",
                                      pady=(7, 0))
-        return scheda
+        return card
 
     # -- 4. scrittura ------------------------------------------------------
-    def _crea_scrittura(self, padre):
-        scheda, s = self._scheda(padre, "sez_scrittura")
+    def _make_write_card(self, parent):
+        card, s = self._card(parent, "sez_scrittura")
         s.columnconfigure(1, weight=1)
 
-        self._micro(s, "modo").grid(row=0, column=0, sticky="w")
+        self._micro_label(s, "modo").grid(row=0, column=0, sticky="w")
         cornice_m = tk.Frame(s, background=T.PANEL)
         cornice_m.grid(row=0, column=1, columnspan=2, sticky="w", padx=(6, 0))
-        self.var_modo = tk.StringVar(value="regione")
-        for valore, chiave in (("regione", "modo_regione"), ("intero", "modo_intero")):
-            b = ttk.Radiobutton(cornice_m, value=valore, variable=self.var_modo,
-                                command=self._aggiorna_scrittura)
+        self.var_mode = tk.StringVar(value="regione")
+        for value_for, key in (("regione", "modo_regione"), ("intero", "modo_intero")):
+            b = ttk.Radiobutton(cornice_m, value=value_for, variable=self.var_mode,
+                                command=self._update_write_state)
             b.pack(side="left", padx=(0, 12))
-            self._etichetta(b, chiave)
+            self._translated(b, key)
 
-        self.var_immagine = tk.StringVar(value=self.conf.get("immagine", ""))
-        self.var_layout = tk.StringVar(value=self.conf.get("layout", ""))
-        self.var_atteso = tk.StringVar(value=self.conf.get("atteso", ""))
-        for r, (chiave, var, comando) in enumerate((
-                ("immagine", self.var_immagine, self.scegli_immagine),
-                ("file_layout", self.var_layout, self.scegli_layout),
-                ("atteso", self.var_atteso, self.scegli_atteso),
+        self.var_image = tk.StringVar(value=self.settings.get("immagine", ""))
+        self.var_layout = tk.StringVar(value=self.settings.get("layout", ""))
+        self.var_expected = tk.StringVar(value=self.settings.get("atteso", ""))
+        for r, (key, variable, command) in enumerate((
+                ("immagine", self.var_image, self.pick_image),
+                ("file_layout", self.var_layout, self.pick_layout),
+                ("atteso", self.var_expected, self.pick_expected),
         ), start=1):
-            self._micro(s, chiave).grid(row=r, column=0, sticky="w", pady=(6, 0))
-            e = ttk.Entry(s, textvariable=var, font=self.tema.f_testo)
+            self._micro_label(s, key).grid(row=r, column=0, sticky="w", pady=(6, 0))
+            e = ttk.Entry(s, textvariable=variable, font=self.theme.f_text)
             e.grid(row=r, column=1, sticky="ew", padx=(6, 4), pady=(6, 0))
-            e.bind("<KeyRelease>", lambda _e: self._aggiorna_scrittura())
-            self._sfoglia(s, comando).grid(row=r, column=2, pady=(6, 0))
-        self._nota(s, "atteso_nota", 0.7).grid(row=4, column=1, sticky="w",
+            e.bind("<KeyRelease>", lambda _e: self._update_write_state())
+            self._browse_button(s, command).grid(row=r, column=2, pady=(6, 0))
+        self._note(s, "atteso_nota", 0.7).grid(row=4, column=1, sticky="w",
                                                padx=(6, 0))
 
-        self.et_regione = self._micro(s, "regione")
-        self.et_regione.grid(row=5, column=0, sticky="w", pady=(6, 0))
-        self.var_regione = tk.StringVar()
-        self.combo_regione = ttk.Combobox(s, textvariable=self.var_regione, width=18,
-                                          state="readonly", font=self.tema.f_testo)
-        self.combo_regione.grid(row=5, column=1, sticky="w", padx=(6, 0), pady=(6, 0))
-        self.b_regioni = self._etichetta(
-            ttk.Button(s, style="Ghost.TButton", command=self.ricava_regioni),
+        self.lbl_region = self._micro_label(s, "regione")
+        self.lbl_region.grid(row=5, column=0, sticky="w", pady=(6, 0))
+        self.var_region = tk.StringVar()
+        self.combo_region = ttk.Combobox(s, textvariable=self.var_region, width=18,
+                                          state="readonly", font=self.theme.f_text)
+        self.combo_region.grid(row=5, column=1, sticky="w", padx=(6, 0), pady=(6, 0))
+        self.b_regions = self._translated(
+            ttk.Button(s, style="Ghost.TButton", command=self.derive_regions),
             "reg_ricava")
-        self.b_regioni.grid(row=5, column=2, sticky="w", pady=(6, 0))
-        self.combo_regione.bind("<<ComboboxSelected>>",
-                                lambda _e: self._aggiorna_scrittura())
+        self.b_regions.grid(row=5, column=2, sticky="w", pady=(6, 0))
+        self.combo_region.bind("<<ComboboxSelected>>",
+                                lambda _e: self._update_write_state())
 
         filetto = tk.Frame(s, background=T.LINE, height=1)
         filetto.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(11, 9))
 
-        self.var_alimentazione = tk.IntVar(value=0)
-        self.spunta_alimentazione = T.Spunta(
-            s, self.tema, self.var_alimentazione,
-            comando=self._aggiorna_scrittura, colore="#F0C9CB")
-        self.spunte = tk.Frame(s, background=T.PANEL)
-        self.spunte.grid(row=7, column=0, columnspan=3, sticky="w")
-        self.spunta_alimentazione.pack(in_=self.spunte, anchor="w")
-        self._etichetta(self.spunta_alimentazione, "spunta_alimentazione",
-                        attributo="testo")
+        self.var_mains_off = tk.IntVar(value=0)
+        self.check_mains_off = T.Checkbox(
+            s, self.theme, self.var_mains_off,
+            command=self._update_write_state, colour="#F0C9CB")
+        self.checks_box = tk.Frame(s, background=T.PANEL)
+        self.checks_box.grid(row=7, column=0, columnspan=3, sticky="w")
+        self.check_mains_off.pack(in_=self.checks_box, anchor="w")
+        self._translated(self.check_mains_off, "spunta_alimentazione",
+                        attribute="testo")
 
         # ⚠️ Compare solo se il chip e' davvero a 1,8 V. Una casella sempre
         # presente si spunta per abitudine e non protegge nessuno.
-        self.var_adattatore = tk.IntVar(value=0)
-        self.spunta_adattatore = T.Spunta(
-            self.spunte, self.tema, self.var_adattatore,
-            comando=self._aggiorna_scrittura, colore="#F0C9CB")
-        self._etichetta(self.spunta_adattatore, "spunta_adattatore",
-                        attributo="testo")
+        self.var_shifter = tk.IntVar(value=0)
+        self.check_shifter = T.Checkbox(
+            self.checks_box, self.theme, self.var_shifter,
+            command=self._update_write_state, colour="#F0C9CB")
+        self._translated(self.check_shifter, "check_shifter",
+                        attribute="testo")
 
-        azioni = tk.Frame(s, background=T.PANEL)
-        azioni.grid(row=8, column=0, columnspan=3, sticky="w", pady=(9, 0))
-        self.b_secco = self._etichetta(
-            ttk.Button(azioni, style="Secondario.TButton",
-                       command=self.prova_a_secco), "prova_secco")
-        self.b_secco.pack(side="left", padx=(0, 8))
-        self.b_scrivi = self._etichetta(
-            ttk.Button(azioni, style="Pericolo.TButton", command=self.scrivi),
+        actions = tk.Frame(s, background=T.PANEL)
+        actions.grid(row=8, column=0, columnspan=3, sticky="w", pady=(9, 0))
+        self.b_dry_run = self._translated(
+            ttk.Button(actions, style="Secondario.TButton",
+                       command=self.dry_run), "prova_secco")
+        self.b_dry_run.pack(side="left", padx=(0, 8))
+        self.b_write = self._translated(
+            ttk.Button(actions, style="Pericolo.TButton", command=self.write),
             "scrivi")
-        self.b_scrivi.pack(side="left")
+        self.b_write.pack(side="left")
 
-        self.msg_scrittura = Messaggio(self, s)
-        self.msg_scrittura.widget.grid(row=9, column=0, columnspan=3, sticky="w",
+        self.msg_write = Message(self, s)
+        self.msg_write.widget.grid(row=9, column=0, columnspan=3, sticky="w",
                                        pady=(7, 0))
         if self.var_layout.get():
-            self._ricarica_regioni()
-        return scheda
+            self._reload_regions()
+        return card
 
     # -- mappa del chip ----------------------------------------------------
-    def _crea_mappa(self, padre):
-        scheda, s = self._scheda(padre, "sez_mappa")
+    def _make_map_card(self, parent):
+        card, s = self._card(parent, "sez_mappa")
         s.columnconfigure(0, weight=1)
 
-        self.mappa = M.Mappa(s, righe=8, su_posizione=self._posizione_mappa)
-        self.mappa.grid(row=0, column=0, sticky="ew")
+        self.chip_map = M.ChipMap(s, lines=8, on_position=self._map_position)
+        self.chip_map.grid(row=0, column=0, sticky="ew")
 
-        piede = tk.Frame(s, background=T.PANEL)
-        piede.grid(row=1, column=0, sticky="ew", pady=(7, 0))
-        self.legenda = M.Legenda(piede, self.tema, self.L)
-        self.legenda.pack(side="left")
-        self.var_mappa = tk.StringVar()
-        tk.Label(piede, textvariable=self.var_mappa, background=T.PANEL,
-                 foreground="#55697C", font=(self.tema.mono, 7)).pack(side="right")
-        self.after(200, self._riposo_mappa)
-        return scheda
+        footer = tk.Frame(s, background=T.PANEL)
+        footer.grid(row=1, column=0, sticky="ew", pady=(7, 0))
+        self.legend = M.Legend(footer, self.theme, self.L)
+        self.legend.pack(side="left")
+        self.var_map_note = tk.StringVar()
+        tk.Label(footer, textvariable=self.var_map_note, background=T.PANEL,
+                 foreground="#55697C", font=(self.theme.mono, 7)).pack(side="right")
+        self.after(200, self._map_at_rest)
+        return card
 
-    def _posizione_mappa(self, posizione):
-        if posizione is None:
-            self._riposo_mappa()
+    def _map_position(self, position):
+        if position is None:
+            self._map_at_rest()
         else:
-            self.var_mappa.set(self.L("mappa_posizione", posizione=posizione))
+            self.var_map_note.set(self.L("mappa_posizione", position=position))
 
-    def _riposo_mappa(self):
-        blocchi = max(self.mappa.blocchi, 1)
-        self.var_mappa.set(self.L(
+    def _map_at_rest(self):
+        blocks = max(self.chip_map.blocks, 1)
+        self.var_map_note.set(self.L(
             "mappa_riposo",
-            dimensione=A.leggibile(self.mappa.dimensione),
-            blocchi=blocchi,
-            grana=A.leggibile(int(self.mappa.dimensione / float(blocchi)))))
+            total_size=A.human_size(self.chip_map.total_size),
+            blocks=blocks,
+            grain=A.human_size(int(self.chip_map.total_size / float(blocks)))))
 
-    def _prepara_mappa(self, intervallo=None):
+    def _prepare_map(self, span=None):
         """Azzera la mappa e, se si lavora su una regione, la evidenzia."""
-        if self.chip and self.chip.byte:
-            self.mappa.imposta(dimensione=self.chip.byte)
-        self.mappa.evidenzia(intervallo)
-        self._riposo_mappa()
+        if self.chip and self.chip.size:
+            self.chip_map.set_size(total_size=self.chip.size)
+        self.chip_map.highlight(span)
+        self._map_at_rest()
 
     # -- registro ----------------------------------------------------------
-    def _crea_registro(self, padre):
-        scheda, s = self._scheda(padre, "sez_registro")
+    def _make_log_card(self, parent):
+        card, s = self._card(parent, "sez_registro")
         s.columnconfigure(0, weight=1)
         s.rowconfigure(0, weight=1)
 
-        cornice = tk.Frame(s, background=T.LOG_BG, highlightthickness=1,
+        frame = tk.Frame(s, background=T.LOG_BG, highlightthickness=1,
                            highlightbackground=T.LINE)
-        cornice.grid(row=0, column=0, sticky="nsew")
-        cornice.columnconfigure(0, weight=1)
-        cornice.rowconfigure(0, weight=1)
+        frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
 
-        self.testo = tk.Text(cornice, height=6, wrap="none", font=self.tema.f_log,
+        self.text = tk.Text(frame, height=6, wrap="none", font=self.theme.f_log,
                              background=T.LOG_BG, foreground="#C3D2DE",
                              insertbackground=T.FG, state="disabled",
                              relief="flat", bd=0, padx=8, pady=6,
                              selectbackground=T.ACCENT2)
-        self.testo.grid(row=0, column=0, sticky="nsew")
-        barra = ttk.Scrollbar(cornice, orient="vertical", command=self.testo.yview)
-        barra.grid(row=0, column=1, sticky="ns")
-        self.testo.configure(yscrollcommand=barra.set)
-        self.testo.tag_configure("ora", foreground=T.LOG_ORA)
-        self.testo.tag_configure("io", foreground="#7FB2FF")
-        self.testo.tag_configure("male", foreground="#FF8686")
-        self.testo.tag_configure("bene", foreground=T.LOG_OK)
-        self.testo.tag_configure("attenzione", foreground=T.WARN)
+        self.text.grid(row=0, column=0, sticky="nsew")
+        bar = ttk.Scrollbar(frame, orient="vertical", command=self.text.yview)
+        bar.grid(row=0, column=1, sticky="ns")
+        self.text.configure(yscrollcommand=bar.set)
+        self.text.tag_configure("ora", foreground=T.LOG_ORA)
+        self.text.tag_configure("io", foreground="#7FB2FF")
+        self.text.tag_configure("male", foreground="#FF8686")
+        self.text.tag_configure("bene", foreground=T.LOG_OK)
+        self.text.tag_configure("attenzione", foreground=T.WARN)
 
-        bottoni = tk.Frame(s, background=T.PANEL)
-        bottoni.grid(row=1, column=0, columnspan=2, sticky="w", pady=(7, 0))
-        self.b_interrompi = self._etichetta(
-            ttk.Button(bottoni, style="Secondario.TButton",
-                       command=self.interrompi), "interrompi")
-        self.b_interrompi.pack(side="left")
-        self.b_interrompi.state(["disabled"])
-        self._etichetta(ttk.Button(bottoni, style="Ghost.TButton",
-                                   command=self.pulisci_registro),
+        buttons = tk.Frame(s, background=T.PANEL)
+        buttons.grid(row=1, column=0, columnspan=2, sticky="w", pady=(7, 0))
+        self.b_abort = self._translated(
+            ttk.Button(buttons, style="Secondario.TButton",
+                       command=self.abort), "interrompi")
+        self.b_abort.pack(side="left")
+        self.b_abort.state(["disabled"])
+        self._translated(ttk.Button(buttons, style="Ghost.TButton",
+                                   command=self.clear_log),
                         "pulisci").pack(side="left", padx=4)
-        self._etichetta(ttk.Button(bottoni, style="Ghost.TButton",
-                                   command=self.salva_registro),
+        self._translated(ttk.Button(buttons, style="Ghost.TButton",
+                                   command=self.save_log),
                         "salva_registro").pack(side="left")
-        self.var_dettagli = tk.IntVar(value=1 if self.conf.get("dettagli") else 0)
-        T.Spunta(bottoni, self.tema, self.var_dettagli, testo="-V").pack(
+        self.var_verbose = tk.IntVar(value=1 if self.settings.get("dettagli") else 0)
+        T.Checkbox(buttons, self.theme, self.var_verbose, text="-V").pack(
             side="left", padx=12)
-        return scheda
+        return card
 
     # -- barra di stato ----------------------------------------------------
-    def _costruisci_barra(self, padre):
-        self.barra = tk.Frame(padre, background=T.INK)
-        self.barra.columnconfigure(1, weight=1)
-        self.avanzamento = ttk.Progressbar(
-            self.barra, mode="indeterminate", length=130,
+    def _costruisci_barra(self, parent):
+        self.bar = tk.Frame(parent, background=T.INK)
+        self.bar.columnconfigure(1, weight=1)
+        self.progress = ttk.Progressbar(
+            self.bar, mode="indeterminate", length=130,
             style="Sottile.Horizontal.TProgressbar")
-        self.avanzamento.grid(row=0, column=0, sticky="w")
-        self.avanzamento.configure(mode="determinate", value=0)
-        self.var_stato = tk.StringVar(value=self.L("pronto"))
-        tk.Label(self.barra, textvariable=self.var_stato, background=T.INK,
-                 foreground=T.MUT, font=self.tema.f_testo).grid(
+        self.progress.grid(row=0, column=0, sticky="w")
+        self.progress.configure(mode="determinate", value=0)
+        self.var_status = tk.StringVar(value=self.L("pronto"))
+        tk.Label(self.bar, textvariable=self.var_status, background=T.INK,
+                 foreground=T.MUT, font=self.theme.f_text).grid(
             row=0, column=1, sticky="w", padx=10)
         self.var_flashrom = tk.StringVar()
-        tk.Label(self.barra, textvariable=self.var_flashrom, background=T.INK,
-                 foreground="#4F657A", font=(self.tema.mono, 7)).grid(
+        tk.Label(self.bar, textvariable=self.var_flashrom, background=T.INK,
+                 foreground="#4F657A", font=(self.theme.mono, 7)).grid(
             row=0, column=2, sticky="e")
 
     # ------------------------------------------------------------ lingua
-    def _cambia_lingua(self, _evento=None):
-        scelto = self.var_lingua.get()
-        for codice, nome in NOMI_LINGUA.items():
-            if nome == scelto:
-                self.L.codice = codice
+    def _language_changed(self, _evento=None):
+        scelto = self.var_language.get()
+        for code, name in LANGUAGE_NAMES.items():
+            if name == scelto:
+                self.L.code = code
                 break
-        self._traduci()
+        self._retranslate()
 
-    def _cambia_velocita(self, _evento=None):
-        etichetta = self.var_velocita_etichetta.get()
-        for valore, testo in VELOCITA_ETICHETTE.items():
-            if testo == etichetta:
-                self.var_velocita.set(valore)
+    def _speed_changed(self, _evento=None):
+        label_for = self.var_speed_label.get()
+        for value_for, text in SPEED_LABELS.items():
+            if text == label_for:
+                self.var_speed.set(value_for)
                 break
-        self._invalida_lettura()
+        self._invalidate_read()
 
-    def apri_adattatore(self):
-        level_shifter.apri(self, self.tema, self.L)
+    def open_level_shifter(self):
+        level_shifter.open_window(self, self.theme, self.L)
 
-    def apri_schema(self):
-        wiring.apri(self, self.tema, self.L,
-                    pinza=self.profilo.collegamento == profiles.PINZA)
+    def open_wiring(self):
+        wiring.open_window(self, self.theme, self.L,
+                    clip=self.profile.connection == profiles.CLIP)
 
-    def apri_confronto(self):
-        compare.apri(self, self.tema, self.L, self.var_cartella.get().strip())
+    def open_compare(self):
+        compare.open_window(self, self.theme, self.L, self.var_folder.get().strip())
 
     # -------------------------------------------------------- flashrom
-    def _imposta_flashrom(self, percorso, silenzioso=False):
-        candidato = fr.Flashrom(percorso)
-        versione = candidato.versione()
-        if versione is None:
+    def _imposta_flashrom(self, path, silenzioso=False):
+        candidato = fr.Flashrom(path)
+        version = candidato.version()
+        if version is None:
             if not silenzioso:
                 messagebox.showerror(self.L("titolo"), self.L("flashrom_non_valido"))
             return False
         self.flash = candidato
-        self.versione_flashrom = versione
+        self.flashrom_version = version
         return True
 
-    def scegli_flashrom(self):
-        percorso = filedialog.askopenfilename(
+    def pick_flashrom(self):
+        path = filedialog.askopenfilename(
             title=self.L("flashrom_scegli"),
             filetypes=[("flashrom.exe", "flashrom.exe"), ("*", "*.*")])
-        if percorso and self._imposta_flashrom(percorso):
-            self._aggiorna_stato_flashrom()
-            self._aggiorna_scrittura()
-            self._salva_config()
+        if path and self._imposta_flashrom(path):
+            self._update_flashrom_banner()
+            self._update_write_state()
+            self._save_config()
 
-    def _aggiorna_stato_flashrom(self):
+    def _update_flashrom_banner(self):
         if self.flash:
             self.banner.grid_remove()
-            pezzi = self.versione_flashrom.split()
+            chunks = self.flashrom_version.split()
             self.var_flashrom.set(self.L("flashrom_trovato",
-                                         versione=pezzi[1] if len(pezzi) > 1 else "",
-                                         percorso=self.flash.percorso))
+                                         version=chunks[1] if len(chunks) > 1 else "",
+                                         path=self.flash.path))
         else:
             self.banner.grid(row=2, column=0, columnspan=2, sticky="ew",
                              padx=8, pady=(8, 0))
             self.var_flashrom.set("")
-        for bottone in (self.b_identifica, self.b_leggi, self.b_qualifica):
-            bottone.state(["!disabled"] if self.flash and not self.occupato
+        for bottone in (self.b_identify, self.b_leggi, self.b_qualify):
+            bottone.state(["!disabled"] if self.flash and not self.busy
                           else ["disabled"])
 
 
     # ------------------------------------------------- firmware del Pico
     def _percorso_firmware(self):
         """pico_serprog.uf2: dentro l'eseguibile, accanto, in firmware\\."""
-        for radice in (getattr(sys, "_MEIPASS", None), cartella_app()):
-            if not radice:
+        for root in (getattr(sys, "_MEIPASS", None), app_folder()):
+            if not root:
                 continue
-            for candidato in (os.path.join(radice, "firmware", pico.NOME_FIRMWARE),
-                              os.path.join(radice, pico.NOME_FIRMWARE)):
+            for candidato in (os.path.join(root, "firmware", pico.FIRMWARE_NAME),
+                              os.path.join(root, pico.FIRMWARE_NAME)):
                 if os.path.isfile(candidato):
                     return candidato
         return None
 
-    def _guarda_bootsel(self):
+    def _watch_bootsel(self):
         """Ogni due secondi: c'e' una scheda che aspetta il firmware?"""
-        if not self.occupato:
+        if not self.busy:
             try:
-                schede = pico.schede_in_bootsel()
+                boards = pico.boards_in_bootsel()
             except Exception:                          # noqa: BLE001
-                schede = []
-            nuova = schede[0] if schede else None
-            prima = self.scheda_bootsel.unita if self.scheda_bootsel else None
-            adesso = nuova.unita if nuova else None
-            if adesso != prima:
-                if nuova is None:
-                    pico.dimentica_seriali()
-                self.scheda_bootsel = nuova
-                if nuova:
-                    self.registro("   RP2040 in BOOTSEL su %s (%s)" % (
-                        nuova.lettera, nuova.identificativo), "io")
-                self._aggiorna_firmware()
-            self._chiedi_versione_se_serve()
-        self.attesa_bootsel = self.after(2000, self._guarda_bootsel)
+                boards = []
+            newer = boards[0] if boards else None
+            before = self.bootsel_board.drive if self.bootsel_board else None
+            adesso = newer.drive if newer else None
+            if adesso != before:
+                if newer is None:
+                    pico.forget_serials()
+                self.bootsel_board = newer
+                if newer:
+                    self.log("   RP2040 in BOOTSEL su %s (%s)" % (
+                        newer.letter, newer.board_id), "io")
+                self._update_firmware_row()
+            self._ask_version_once()
+        self.bootsel_watch = self.after(2000, self._watch_bootsel)
 
     # ------------------------------------------------------- profilo
-    def _scrivi_promemoria(self):
+    def _write_reminder(self):
         """La regola fissa, piu' le avvertenze proprie di questa scheda."""
-        righe = [self.L("promemoria")]
-        righe += [self.L(chiave) for chiave in self.profilo.avvisi]
-        self.et_promemoria.configure(text="  ".join(righe))
+        lines = [self.L("promemoria")]
+        lines += [self.L(key) for key in self.profile.avvisi]
+        self.lbl_reminder.configure(text="  ".join(lines))
 
-    def _carica_elenco_chip(self, poi=None):
+    def _load_chip_list(self, poi=None):
         """Chiede a flashrom l\u0027elenco dei chip, in un thread a parte.
 
         ⚠️ Sono seicento righe da spremere e costano mezzo secondo: farlo
         all\u0027avvio, nel thread della finestra, si vedrebbe.
         """
-        if self.chip_noti or not self.flash:
+        if self.known_chips or not self.flash:
             if poi:
                 poi()
             return
 
-        def lavoro():
+        def work():
             try:
-                return self.flash.elenco_chip()
+                return self.flash.chip_list()
             except Exception:                          # noqa: BLE001
                 return []
 
-        def fine(elenco):
-            self.chip_noti = elenco
-            self._riempi_modelli()
+        def end(listing):
+            self.known_chips = listing
+            self._fill_models()
             if poi:
                 poi()
 
         threading.Thread(
-            target=lambda: self.coda.put(("chiamata", fine, lavoro())),
+            target=lambda: self.tail_of.put(("chiamata", end, work())),
             daemon=True).start()
 
-    def _riempi_modelli(self):
+    def _fill_models(self):
         """La tendina: prima i modelli del profilo, poi tutti gli SPI noti."""
-        valori = list(CHIP_SUGGERITI) + list(self.profilo.chip)
-        visti = set(v for v in valori)
-        for chip in self.chip_noti:
-            if chip.spi and chip.nome not in visti:
-                visti.add(chip.nome)
-                valori.append(chip.nome)
-        self.combo_chip.configure(values=valori)
+        values = list(SUGGESTED_CHIPS) + list(self.profile.chip)
+        visti = set(v for v in values)
+        for chip in self.known_chips:
+            if chip.spi and chip.name not in visti:
+                visti.add(chip.name)
+                values.append(chip.name)
+        self.combo_chip.configure(values=values)
 
-    def cerca_modello(self):
+    def search_model(self):
         """Apre la ricerca fra i modelli, caricando l\u0027elenco se serve."""
-        def apri():
-            if not self.chip_noti:
-                self.msg_chip.mostra("cerca_vuoto", AMBRA)
+        def open_window():
+            if not self.known_chips:
+                self.msg_chip.show("cerca_vuoto", AMBER)
                 return
-            chip_search.apri(self, self.tema, self.L, self.chip_noti,
-                         self._modello_scelto, self.var_chip.get().strip())
+            chip_search.open_window(self, self.theme, self.L, self.known_chips,
+                         self._model_picked, self.var_chip.get().strip())
 
-        self._carica_elenco_chip(poi=apri)
+        self._load_chip_list(poi=open_window)
 
-    def _modello_scelto(self, chip):
-        self.var_chip.set(chip.nome)
-        self._invalida_chip()
-        self._valuta_tensione(chip.nome)
-        self.registro("   %s" % self.L(
-            "cerca_scelto", produttore=chip.produttore, chip=chip.nome,
-            misura=A.leggibile(chip.byte) if chip.byte else "?"), "io")
+    def _model_picked(self, chip):
+        self.var_chip.set(chip.name)
+        self._invalidate_chip()
+        self._check_voltage(chip.name)
+        self.log("   %s" % self.L(
+            "cerca_scelto", vendor=chip.vendor, chip=chip.name,
+            size_text=A.human_size(chip.size) if chip.size else "?"), "io")
 
-    def _riempi_profili(self):
-        nomi = profiles.nomi(self.L.codice)
-        self.combo_profilo.configure(values=[n for _c, n in nomi])
-        self.var_profilo.set(self.profilo.testo("nome", self.L.codice))
+    def _fill_profiles(self):
+        names_of = profiles.names_of(self.L.code)
+        self.combo_profile.configure(values=[n for _c, n in names_of])
+        self.var_profile.set(self.profile.text("name", self.L.code))
 
-    def _cambia_profilo(self, _evento=None):
-        scelto = self.var_profilo.get()
-        for chiave, nome in profiles.nomi(self.L.codice):
-            if nome == scelto:
-                self.profilo = profiles.prendi(chiave)
+    def _profile_changed(self, _evento=None):
+        scelto = self.var_profile.get()
+        for key, name in profiles.names_of(self.L.code):
+            if name == scelto:
+                self.profile = profiles.by_key(key)
                 break
-        self._riempi_modelli()
-        self._invalida_chip()
-        self._scrivi_promemoria()
-        self._disegna_testata()
-        self._salva_config()
-        self.registro("→ %s" % self.profilo.testo("nome", self.L.codice), "io")
-        self.msg_chip.testo_grezzo(
-            self.profilo.testo("descrizione", self.L.codice), GRIGIO)
+        self._fill_models()
+        self._invalidate_chip()
+        self._write_reminder()
+        self._draw_header()
+        self._save_config()
+        self.log("→ %s" % self.profile.text("name", self.L.code), "io")
+        self.msg_chip.raw_text(
+            self.profile.text("description", self.L.code), GREY)
 
-    def _impronta_nota(self, md5):
+    def _known_fingerprint(self, md5):
         """Come si chiama questa immagine, se il profilo la conosce."""
-        voce = self.profilo.md5.get(md5)
-        if not voce:
+        entry = self.profile.md5.get(md5)
+        if not entry:
             return None
-        return voce.get(self.L.codice) or voce.get("it")
+        return entry.get(self.L.code) or entry.get("it")
 
-    def _confronta_col_profilo(self):
+    def _profile_deviations(self):
         """Dove la scheda vera si scosta da quello che il profilo prevede."""
         nomi_regioni = [n for n, _a, _b in getattr(self, "regioni", ())]
-        return profiles.scostamenti(
-            self.profilo,
-            chip_trovato=self.chip.nome if self.chip else None,
-            byte_trovati=self.chip.byte if self.chip else None,
-            regioni=nomi_regioni)
+        return profiles.deviations(
+            self.profile,
+            found_chip=self.chip.name if self.chip else None,
+            found_size=self.chip.size if self.chip else None,
+            regions=nomi_regioni)
 
-    def _aggiorna_firmware(self, con_messaggio=True):
+    def _update_firmware_row(self, con_messaggio=True):
         # il rientro in BOOTSEL si offre solo se c'e' un programmatore collegato
-        porta = self._porta_programmatore()
-        if porta is None:
+        port = self._programmer_port()
+        if port is None:
             # niente programmatore, niente versione: quella di prima non vale
-            self.fw_scheda = None
-        self.b_bootsel.state(["!disabled"] if porta and not self.occupato
+            self.board_firmware = None
+        self.b_bootsel.state(["!disabled"] if port and not self.busy
                              else ["disabled"])
 
         # il campo del nome segue la scheda che si sta guardando
-        run, boot, _etichetta = self._scheda_corrente()
-        nome = self.schede_note.nome(run=run, boot=boot) or ""
-        if not self.campo_nome.focus_get() is self.campo_nome:
-            self.var_nome_scheda.set(nome)
-        self.campo_nome.state(["!disabled"] if (run or boot) else ["disabled"])
+        run, boot, _translated = self._current_board()
+        name = self.known_boards.name(run=run, boot=boot) or ""
+        if not self.name_field.focus_get() is self.name_field:
+            self.var_board_name.set(name)
+        self.name_field.state(["!disabled"] if (run or boot) else ["disabled"])
 
-        scheda = self.scheda_bootsel
-        if scheda is None:
-            spedita = self._versione_spedita()
-            vecchia = (porta is not None and spedita
-                       and serprog.piu_vecchia(self.fw_scheda, spedita))
+        card = self.bootsel_board
+        if card is None:
+            shipped = self._shipped_version()
+            vecchia = (port is not None and shipped
+                       and serprog.is_older(self.board_firmware, shipped))
             if con_messaggio:
-                if porta is None or self.fw_scheda is None:
-                    self.msg_firmware.mostra("fw_nessuna", GRIGIO)
+                if port is None or self.board_firmware is None:
+                    self.msg_firmware.show("fw_nessuna", GREY)
                 elif not vecchia:
-                    self.msg_firmware.mostra("fw_versione_ok", VERDE,
-                                             versione=self.fw_scheda or "?")
-                elif self.fw_scheda:
-                    self.msg_firmware.mostra("fw_versione_vecchia", AMBRA,
-                                             versione=self.fw_scheda,
-                                             nuova=spedita)
+                    self.msg_firmware.show("fw_versione_ok", GREEN,
+                                             version=self.board_firmware or "?")
+                elif self.board_firmware:
+                    self.msg_firmware.show("fw_versione_vecchia", AMBER,
+                                             version=self.board_firmware,
+                                             newer=shipped)
                 else:
-                    self.msg_firmware.mostra("fw_versione_muta", AMBRA,
-                                             nuova=spedita)
+                    self.msg_firmware.show("fw_versione_muta", AMBER,
+                                             newer=shipped)
             if vecchia:
-                self.b_aggiorna.pack(side="left", padx=(6, 0))
-                self.b_aggiorna.state(["!disabled"] if not self.occupato
+                self.b_update.pack(side="left", padx=(6, 0))
+                self.b_update.state(["!disabled"] if not self.busy
                                       else ["disabled"])
             else:
-                self.b_aggiorna.pack_forget()
+                self.b_update.pack_forget()
             self.b_firmware.state(["disabled"])
-            self.b_azzera.state(["disabled"])
+            self.b_reset.state(["disabled"])
             return
-        self.b_aggiorna.pack_forget()
+        self.b_update.pack_forget()
         firmware = self._percorso_firmware()
         if not firmware:
-            self.msg_firmware.mostra("fw_assente", AMBRA)
-        elif nome:
-            self.msg_firmware.mostra("fw_trovata_nome", VERDE, nome=nome,
-                                     modello=scheda.modello,
-                                     unita=scheda.lettera,
-                                     seriale=scheda.seriale or "?")
+            self.msg_firmware.show("fw_assente", AMBER)
+        elif name:
+            self.msg_firmware.show("fw_trovata_nome", GREEN, name=name,
+                                     model=card.model,
+                                     drive=card.letter,
+                                     serial=card.serial or "?")
         else:
-            self.msg_firmware.mostra("fw_trovata_anonima", VERDE,
-                                     modello=scheda.modello,
-                                     unita=scheda.lettera,
-                                     seriale=scheda.seriale or "?")
-        acceso = ["!disabled"] if not self.occupato else ["disabled"]
-        self.b_azzera.state(acceso)
-        self.b_firmware.state(acceso if firmware else ["disabled"])
+            self.msg_firmware.show("fw_trovata_anonima", GREEN,
+                                     model=card.model,
+                                     drive=card.letter,
+                                     serial=card.serial or "?")
+        enabled = ["!disabled"] if not self.busy else ["disabled"]
+        self.b_reset.state(enabled)
+        self.b_firmware.state(enabled if firmware else ["disabled"])
 
-    def battezza_scheda(self):
+    def name_board(self):
         """Da' un nome alla scheda che si sta guardando. Vuoto = la dimentica."""
-        run, boot, _e = self._scheda_corrente()
+        run, boot, _e = self._current_board()
         if not (run or boot):
             return
-        nome = self.var_nome_scheda.get().strip()
-        prima = self.schede_note.nome(run=run, boot=boot) or ""
-        if nome == prima:
+        name = self.var_board_name.get().strip()
+        before = self.known_boards.name(run=run, boot=boot) or ""
+        if name == before:
             return
-        self.schede_note.imposta_nome(nome, run=run, boot=boot)
-        self._salva_config()
-        self.rileva_porte()
-        if nome:
-            self.msg_firmware.mostra("fw_battezzata", VERDE, nome=nome)
+        self.known_boards.set_name(name, run=run, boot=boot)
+        self._save_config()
+        self.detect_ports()
+        if name:
+            self.msg_firmware.show("fw_battezzata", GREEN, name=name)
         else:
-            self.msg_firmware.mostra("fw_dimenticata", GRIGIO)
+            self.msg_firmware.show("fw_dimenticata", GREY)
 
-    def _programma(self, percorso_uf2, chiave_avvio, chiave_fine, aspetta_porta):
+    def _program_board(self, uf2_path, chiave_avvio, chiave_fine, aspetta_porta):
         """Copia un .uf2 sulla scheda e racconta com'e' andata."""
-        scheda = self.scheda_bootsel
-        if scheda is None or not percorso_uf2:
+        card = self.bootsel_board
+        if card is None or not uf2_path:
             return
 
         # ⚠️ Le porte serprog gia' presenti si annotano PRIMA: dopo si aspetta
         # una porta NUOVA. Cercandone una qualunque, con un programmatore gia'
         # collegato si direbbe "fatto" anche a copia fallita.
-        prima = set(d for d, _n, sospetto, _s in serprog.elenca_porte() if sospetto)
+        before = set(d for d, _n, likely, _s in serprog.list_serial_ports() if likely)
 
-        def lavoro():
-            self._messaggio_da_thread(self.msg_firmware, chiave_avvio, AMBRA)
-            fatto, motivo = pico.installa(percorso_uf2, scheda,
-                                          su_riga=self._riga_da_thread)
-            if not fatto:
-                return ("errore", motivo, None)
+        def work():
+            self._message_from_thread(self.msg_firmware, chiave_avvio, AMBER)
+            done, reason = pico.install(uf2_path, card,
+                                          on_line=self._line_from_thread)
+            if not done:
+                return ("errore", reason, None)
             if not aspetta_porta:
                 return ("fatto", None, None)
-            self._messaggio_da_thread(self.msg_firmware, "fw_attendo", GRIGIO)
+            self._message_from_thread(self.msg_firmware, "fw_attendo", GREY)
             # la scheda riparte come porta seriale: le si da' tempo
             for _ in range(30):
                 time.sleep(0.5)
-                adesso = set(d for d, _n, sospetto, _s in serprog.elenca_porte()
-                             if sospetto)
-                for dispositivo in sorted(adesso - prima):
-                    diagnostica = serprog.interroga(dispositivo, BAUD)
-                    if diagnostica.ok and diagnostica.parla_spi:
-                        return ("pronto", dispositivo, diagnostica)
+                adesso = set(d for d, _n, likely, _s in serprog.list_serial_ports()
+                             if likely)
+                for device in sorted(adesso - before):
+                    diagnostics = serprog.query(device, BAUD)
+                    if diagnostics.ok and diagnostics.speaks_spi:
+                        return ("pronto", device, diagnostics)
             return ("muto", None, None)
 
-        def fine(risultato):
-            stato, dato, diagnostica = risultato
-            self.scheda_bootsel = None
-            if stato == "errore":
-                self.msg_firmware.mostra("fw_errore", ROSSO, motivo=dato)
-            elif stato == "pronto":
+        def end(outcome):
+            state, datum, diagnostics = outcome
+            self.bootsel_board = None
+            if state == "errore":
+                self.msg_firmware.show("fw_errore", RED, reason=datum)
+            elif state == "pronto":
                 # ⚠️ Qui e' l'unico momento in cui i due identificativi della
                 # stessa scheda si toccano: era in BOOTSEL, ora e' quella porta.
-                if scheda.seriale:
-                    seriale_run = self._seriale_di_porta(dato)
+                if card.serial:
+                    seriale_run = self._serial_of_port(datum)
                     if seriale_run:
-                        self.schede_note.collega(seriale_run, scheda.seriale)
-                        self._salva_config()
-                self.msg_firmware.mostra("fw_pronto", VERDE, porta=dato)
-                self.registro("   %s, iface v%s, bus %s" % (
-                    diagnostica.nome, diagnostica.versione,
-                    diagnostica.bus_leggibile), "bene")
-                self.rileva_porte()
-            elif stato == "muto":
-                self.msg_firmware.mostra("fw_non_riappare", AMBRA)
+                        self.known_boards.link(seriale_run, card.serial)
+                        self._save_config()
+                self.msg_firmware.show("fw_pronto", GREEN, port=datum)
+                self.log("   %s, iface v%s, bus %s" % (
+                    diagnostics.name, diagnostics.version,
+                    diagnostics.readable_bus), "bene")
+                self.detect_ports()
+            elif state == "muto":
+                self.msg_firmware.show("fw_non_riappare", AMBER)
             else:
-                self.msg_firmware.mostra(chiave_fine, VERDE)
+                self.msg_firmware.show(chiave_fine, GREEN)
             # ⚠️ senza questo, il riepilogo cancellerebbe l'esito appena letto
-            self._aggiorna_firmware(con_messaggio=False)
+            self._update_firmware_row(con_messaggio=False)
 
-        self._avvia(lavoro, fine, "firmware")
+        self._start_job(work, end, "firmware")
 
-    def _versione_spedita(self):
+    def _shipped_version(self):
         """La versione dell'UF2 che abbiamo qui dentro."""
-        percorso = self._percorso_firmware()
-        if not percorso:
+        path = self._percorso_firmware()
+        if not path:
             return None
-        return pico.versione_disponibile(os.path.dirname(percorso))
+        return pico.shipped_version(os.path.dirname(path))
 
-    def _annota_firmware(self, diagnostica, seriale=None):
+    def _note_firmware(self, diagnostics, serial=None):
         """Registra cosa dichiara la scheda interrogata."""
-        if diagnostica is None or not diagnostica.ok:
+        if diagnostics is None or not diagnostics.ok:
             return
-        self.fw_scheda = diagnostica.firmware or ""
-        if seriale:
-            self.fw_chiesto.add(seriale)
+        self.board_firmware = diagnostics.firmware or ""
+        if serial:
+            self.firmware_asked.add(serial)
 
-    def _chiedi_versione_se_serve(self):
+    def _ask_version_once(self):
         """Una volta per scheda, non a ogni giro: apre e chiude la porta.
 
         ⚠️ Nessuno puo' dire da fuori che firmware c'e' su un RP2040: il
         seriale USB e' quello del chip e non cambia mai. Va chiesto alla
         scheda, e la scheda risponde solo dalla 1.1 in poi.
         """
-        if self.occupato:
+        if self.busy:
             return
-        porta = self._porta_programmatore()
-        if not porta:
+        port = self._programmer_port()
+        if not port:
             return
-        seriale = self._seriale_di_porta(porta)
-        if seriale and seriale in self.fw_chiesto:
+        serial = self._serial_of_port(port)
+        if serial and serial in self.firmware_asked:
             return
-        diagnostica = serprog.interroga(porta, BAUD)
-        if diagnostica.ok:
-            self._annota_firmware(diagnostica, seriale)
-            self._aggiorna_firmware()
+        diagnostics = serprog.query(port, BAUD)
+        if diagnostics.ok:
+            self._note_firmware(diagnostics, serial)
+            self._update_firmware_row()
 
-    def _porta_programmatore(self):
+    def _programmer_port(self):
         """La porta di un programmatore collegato adesso, se c'e'."""
-        for dispositivo, _descrizione, sospetto, _seriale in serprog.elenca_porte():
-            if sospetto:
-                return dispositivo
+        for device, _descrizione, likely, _seriale in serprog.list_serial_ports():
+            if likely:
+                return device
         return None
 
-    def _seriale_di_porta(self, porta):
-        for dispositivo, _d, _s, seriale in serprog.elenca_porte():
-            if dispositivo == porta:
-                return seriale
+    def _serial_of_port(self, port):
+        for device, _d, _s, serial in serprog.list_serial_ports():
+            if device == port:
+                return serial
         return None
 
-    def _scheda_corrente(self):
+    def _current_board(self):
         """(chiave_run, chiave_boot, etichetta) di cio' che si sta guardando.
 
         In BOOTSEL comanda la scheda-disco; altrimenti il programmatore
         collegato. Sono due identificativi diversi della stessa cosa, vedi
         boards.py.
         """
-        if self.scheda_bootsel is not None:
-            boot = self.scheda_bootsel.seriale
+        if self.bootsel_board is not None:
+            boot = self.bootsel_board.serial
             return None, boot, boot
-        porta = self._porta_programmatore()
-        if porta:
-            run = self._seriale_di_porta(porta)
+        port = self._programmer_port()
+        if port:
+            run = self._serial_of_port(port)
             return run, None, run
         return None, None, None
 
-    def rientra_in_bootsel(self):
+    def back_to_bootsel(self):
         """Rimette il programmatore in modalita' aggiornamento, da software."""
-        porta = self._porta_programmatore()
-        if not porta:
+        port = self._programmer_port()
+        if not port:
             return
-        seriale_prima = self._seriale_di_porta(porta)
+        seriale_prima = self._serial_of_port(port)
 
-        def lavoro():
-            self._messaggio_da_thread(self.msg_firmware, "fw_bootsel_provo",
-                                      AMBRA, porta=porta)
-            pico.rientra_in_bootsel(porta)
+        def work():
+            self._message_from_thread(self.msg_firmware, "fw_bootsel_provo",
+                                      AMBER, port=port)
+            pico.back_to_bootsel(port)
             # ⚠️ L'esito non si legge dall'apertura della porta, che fallisce
             # apposta: si guarda se la scheda ricompare come disco.
             for _ in range(20):
                 time.sleep(0.5)
-                schede = pico.schede_in_bootsel()
-                if schede:
-                    return ("bootsel", schede[0], None)
+                boards = pico.boards_in_bootsel()
+                if boards:
+                    return ("bootsel", boards[0], None)
             return ("niente", None, None)
 
-        def fine(risultato):
-            stato, scheda, _ = risultato
-            if stato == "bootsel":
+        def end(outcome):
+            state, card, _ = outcome
+            if state == "bootsel":
                 # stessa cosa al contrario: era quella porta, ora e' quel disco
-                if seriale_prima and scheda.seriale:
-                    self.schede_note.collega(seriale_prima, scheda.seriale)
-                    self._salva_config()
-                self.scheda_bootsel = scheda
-                self.msg_firmware.mostra("fw_bootsel_ok", VERDE,
-                                         unita=scheda.lettera)
-                self.rileva_porte()
+                if seriale_prima and card.serial:
+                    self.known_boards.link(seriale_prima, card.serial)
+                    self._save_config()
+                self.bootsel_board = card
+                self.msg_firmware.show("fw_bootsel_ok", GREEN,
+                                         drive=card.letter)
+                self.detect_ports()
             else:
-                self.msg_firmware.mostra("fw_bootsel_no", AMBRA)
-            self._aggiorna_firmware()
+                self.msg_firmware.show("fw_bootsel_no", AMBER)
+            self._update_firmware_row()
 
-        self._avvia(lavoro, fine, "bootsel")
+        self._start_job(work, end, "bootsel")
 
-    def aggiorna_firmware(self):
+    def update_firmware(self):
         """Rientro in BOOTSEL, copia, e ricontrollo: tre passi, un tasto.
 
         ⚠️ Il rientro da software esiste solo dalla 1.1. Una scheda piu'
         vecchia non torna in BOOTSEL da sola e va premuto il pulsante, una
         volta: dopo quell\u0027aggiornamento non serve piu'.
         """
-        porta = self._porta_programmatore()
-        percorso = self._percorso_firmware()
-        if not (porta and percorso):
+        port = self._programmer_port()
+        path = self._percorso_firmware()
+        if not (port and path):
             return
-        seriale_prima = self._seriale_di_porta(porta)
+        seriale_prima = self._serial_of_port(port)
         # la porta della scheda che stiamo aggiornando sparisce e torna: non
         # va contata fra quelle "gia' presenti", o non la vedremmo tornare
-        prima = set(d for d, _n, sospetto, _s in serprog.elenca_porte()
-                    if sospetto)
-        prima.discard(porta)
+        before = set(d for d, _n, likely, _s in serprog.list_serial_ports()
+                    if likely)
+        before.discard(port)
 
-        def lavoro():
-            self._messaggio_da_thread(self.msg_firmware, "fw_aggiorno", AMBRA)
-            pico.rientra_in_bootsel(porta)
-            scheda = None
+        def work():
+            self._message_from_thread(self.msg_firmware, "fw_aggiorno", AMBER)
+            pico.back_to_bootsel(port)
+            card = None
             for _ in range(20):
                 time.sleep(0.5)
-                schede = pico.schede_in_bootsel()
-                if schede:
-                    scheda = schede[0]
+                boards = pico.boards_in_bootsel()
+                if boards:
+                    card = boards[0]
                     break
-            if scheda is None:
+            if card is None:
                 return ("no_bootsel", None, None)
-            self._messaggio_da_thread(self.msg_firmware, "fw_installando",
-                                      AMBRA)
-            fatto, motivo = pico.installa(percorso, scheda,
-                                          su_riga=self._riga_da_thread)
-            if not fatto:
-                return ("errore", motivo, scheda)
-            self._messaggio_da_thread(self.msg_firmware, "fw_attendo", GRIGIO)
+            self._message_from_thread(self.msg_firmware, "fw_installando",
+                                      AMBER)
+            done, reason = pico.install(path, card,
+                                          on_line=self._line_from_thread)
+            if not done:
+                return ("errore", reason, card)
+            self._message_from_thread(self.msg_firmware, "fw_attendo", GREY)
             for _ in range(30):
                 time.sleep(0.5)
-                adesso = set(d for d, _n, sospetto, _s in serprog.elenca_porte()
-                             if sospetto)
-                for dispositivo in sorted(adesso - prima):
-                    diagnostica = serprog.interroga(dispositivo, BAUD)
-                    if diagnostica.ok and diagnostica.parla_spi:
-                        return ("pronto", (dispositivo, diagnostica), scheda)
-            return ("muto", None, scheda)
+                adesso = set(d for d, _n, likely, _s in serprog.list_serial_ports()
+                             if likely)
+                for device in sorted(adesso - before):
+                    diagnostics = serprog.query(device, BAUD)
+                    if diagnostics.ok and diagnostics.speaks_spi:
+                        return ("pronto", (device, diagnostics), card)
+            return ("muto", None, card)
 
-        def fine(risultato):
-            stato, dato, scheda = risultato
-            if scheda is not None and seriale_prima and scheda.seriale:
-                self.schede_note.collega(seriale_prima, scheda.seriale)
-                self._salva_config()
-            self.scheda_bootsel = None
-            if stato == "no_bootsel":
-                self.msg_firmware.mostra("fw_aggiorna_no_bootsel", AMBRA)
-            elif stato == "errore":
-                self.msg_firmware.mostra("fw_errore", ROSSO, motivo=dato)
-            elif stato == "muto":
-                self.msg_firmware.mostra("fw_non_riappare", AMBRA)
+        def end(outcome):
+            state, datum, card = outcome
+            if card is not None and seriale_prima and card.serial:
+                self.known_boards.link(seriale_prima, card.serial)
+                self._save_config()
+            self.bootsel_board = None
+            if state == "no_bootsel":
+                self.msg_firmware.show("fw_aggiorna_no_bootsel", AMBER)
+            elif state == "errore":
+                self.msg_firmware.show("fw_errore", RED, reason=datum)
+            elif state == "muto":
+                self.msg_firmware.show("fw_non_riappare", AMBER)
             else:
-                dispositivo, diagnostica = dato
-                self._annota_firmware(diagnostica,
-                                      self._seriale_di_porta(dispositivo))
-                spedita = self._versione_spedita()
+                device, diagnostics = datum
+                self._note_firmware(diagnostics,
+                                      self._serial_of_port(device))
+                shipped = self._shipped_version()
                 # ⚠️ Non basta che la copia sia riuscita: la versione la deve
                 # dichiarare la scheda, dopo essere ripartita.
-                if diagnostica.firmware == spedita:
-                    self.msg_firmware.mostra("fw_aggiornato", VERDE,
-                                             versione=diagnostica.firmware,
-                                             porta=dispositivo)
+                if diagnostics.firmware == shipped:
+                    self.msg_firmware.show("fw_aggiornato", GREEN,
+                                             version=diagnostics.firmware,
+                                             port=device)
                 else:
-                    self.msg_firmware.mostra("fw_aggiorna_dubbio", ROSSO,
-                                             versione=diagnostica.firmware
-                                             or diagnostica.nome)
-                self.rileva_porte()
-            self._aggiorna_firmware(con_messaggio=False)
+                    self.msg_firmware.show("fw_aggiorna_dubbio", RED,
+                                             version=diagnostics.firmware
+                                             or diagnostics.name)
+                self.detect_ports()
+            self._update_firmware_row(con_messaggio=False)
 
-        self._avvia(lavoro, fine, "aggiornamento firmware")
+        self._start_job(work, end, "aggiornamento firmware")
 
-    def installa_firmware(self):
-        self._programma(self._percorso_firmware(), "fw_installando",
+    def install_firmware(self):
+        self._program_board(self._percorso_firmware(), "fw_installando",
                         "fw_pronto", aspetta_porta=True)
 
-    def azzera_scheda(self):
+    def reset_board(self):
         """Riporta la scheda allo stato di fabbrica. Il .uf2 lo generiamo noi.
 
         ⚠️ DUE CONSENSI, e il secondo e' legato al SERIALE: con tre schede
@@ -1336,188 +1336,188 @@ class App(tk.Tk):
         stai cancellando. Ribattere le ultime quattro cifre obbliga a guardare
         quella giusta.
         """
-        scheda = self.scheda_bootsel
-        if scheda is None:
+        card = self.bootsel_board
+        if card is None:
             return
-        nome = self.schede_note.nome(boot=scheda.seriale)
-        chi = "%s · %s" % (nome, scheda.seriale) if nome else (
-            scheda.seriale or "%s su %s" % (scheda.modello, scheda.lettera))
+        name = self.known_boards.name(boot=card.serial)
+        who = "%s · %s" % (name, card.serial) if name else (
+            card.serial or "%s su %s" % (card.model, card.letter))
 
-        primo = self.L("fw_azzera_uno", chi=chi, byte=A.leggibile(pico.FLASH_PICO))
-        if not Conferma(self, self.L, primo, self.tema,
-                        parola=self.L("parola_cancella")).confermato:
+        first = self.L("fw_azzera_uno", who=who, size=A.human_size(pico.FLASH_PICO))
+        if not Confirm(self, self.L, first, self.theme,
+                        word=self.L("parola_cancella")).confirmed:
             return
 
-        if scheda.seriale:
-            secondo = self.L("fw_azzera_due", unita=scheda.lettera,
-                             seriale=scheda.seriale)
-            parola = boards.coda(scheda.seriale)
+        if card.serial:
+            second = self.L("fw_azzera_due", drive=card.letter,
+                             serial=card.serial)
+            word = boards.tail_of(card.serial)
         else:
-            secondo = self.L("fw_azzera_due_senza", unita=scheda.lettera)
-            parola = self.L("parola_cancella")
-        if not Conferma(self, self.L, secondo, self.tema,
-                        parola=parola).confermato:
+            second = self.L("fw_azzera_due_senza", drive=card.letter)
+            word = self.L("parola_cancella")
+        if not Confirm(self, self.L, second, self.theme,
+                        word=word).confirmed:
             return
-        percorso = os.path.join(cartella_config(), "azzera.uf2")
+        path = os.path.join(config_folder(), "azzera.uf2")
         try:
-            os.makedirs(cartella_config(), exist_ok=True)
-            pico.genera_cancellazione(percorso)
+            os.makedirs(config_folder(), exist_ok=True)
+            pico.make_eraser(path)
         except OSError as e:
-            self.msg_firmware.mostra("fw_errore", ROSSO, motivo="%s" % e)
+            self.msg_firmware.show("fw_errore", RED, reason="%s" % e)
             return
-        self._programma(percorso, "fw_azzerando", "fw_azzerato",
+        self._program_board(path, "fw_azzerando", "fw_azzerato",
                         aspetta_porta=False)
 
     # ------------------------------------------------------------ porte
-    def rileva_porte(self):
-        porte = serprog.elenca_porte()
-        valori = []
-        for dispositivo, descrizione, sospetto, seriale in porte:
+    def detect_ports(self):
+        ports = serprog.list_serial_ports()
+        values = []
+        for device, description, likely, serial in ports:
             # il nome dato alla scheda vale piu' della descrizione di Windows
-            nome = self.schede_note.nome(run=seriale) if seriale else None
-            if nome:
-                valori.append("%s — %s · %s" % (dispositivo, nome, seriale))
-            elif sospetto and seriale:
-                valori.append("%s — %s · %s" % (dispositivo, descrizione, seriale))
+            name = self.known_boards.name(run=serial) if serial else None
+            if name:
+                values.append("%s — %s · %s" % (device, name, serial))
+            elif likely and serial:
+                values.append("%s — %s · %s" % (device, description, serial))
             else:
-                valori.append("%s — %s" % (dispositivo, descrizione))
-        self.combo_porta.configure(values=valori)
-        if porte:
-            attuale = self._porta_scelta()
-            candidata = next((v for v, p in zip(valori, porte) if p[2]), valori[0])
-            programmatori = [p[0] for p in porte if p[2]]
+                values.append("%s — %s" % (device, description))
+        self.combo_port.configure(values=values)
+        if ports:
+            current = self._chosen_port()
+            candidate = next((v for v, p in zip(values, ports) if p[2]), values[0])
+            programmatori = [p[0] for p in ports if p[2]]
             # ⚠️ Non basta che la porta salvata esista ancora: se quella scelta
             # NON e' un programmatore e uno collegato c'e', si passa a quello.
             # Altrimenti, dopo che il Pico sparisce e torna, resta selezionata
             # una porta qualunque (Bluetooth, seriale di sistema).
-            if (not attuale or attuale not in [p[0] for p in porte]
-                    or (programmatori and attuale not in programmatori)):
-                self.var_porta.set(candidata)
+            if (not current or current not in [p[0] for p in ports]
+                    or (programmatori and current not in programmatori)):
+                self.var_port.set(candidate)
             else:
                 # ⚠️ La porta e' la stessa ma la SCRITTA puo' essere cambiata:
                 # dopo aver battezzato una scheda restava esposta la vecchia
                 # descrizione di Windows, e il nome dato sembrava perso.
-                for valore, porta in zip(valori, porte):
-                    if porta[0] == attuale and valore != self.var_porta.get():
-                        self.var_porta.set(valore)
+                for value_for, port in zip(values, ports):
+                    if port[0] == current and value_for != self.var_port.get():
+                        self.var_port.set(value_for)
                         break
-        elif serprog.SERIALE:
-            self.msg_collegamento.mostra("nessuna_porta", AMBRA)
+        elif serprog.HAS_SERIAL:
+            self.msg_connection.show("nessuna_porta", AMBER)
 
-    def _porta_scelta(self):
-        testo = (self.var_porta.get() or "").strip()
-        return testo.split("—")[0].strip() if "—" in testo else testo
+    def _chosen_port(self):
+        text = (self.var_port.get() or "").strip()
+        return text.split("—")[0].strip() if "—" in text else text
 
-    def interroga_pico(self):
-        porta = self._porta_scelta()
-        if not porta:
-            self.msg_collegamento.mostra("nessuna_porta", AMBRA)
+    def query_pico(self):
+        port = self._chosen_port()
+        if not port:
+            self.msg_connection.show("nessuna_porta", AMBER)
             return
-        self.registro("→ serprog: %s" % porta, "io")
-        diagnostica = serprog.interroga(porta, BAUD)
-        if not diagnostica.ok:
-            self.msg_collegamento.mostra("pico_non_apre", ROSSO,
-                                         porta=porta, motivo=diagnostica.errore)
+        self.log("→ serprog: %s" % port, "io")
+        diagnostics = serprog.query(port, BAUD)
+        if not diagnostics.ok:
+            self.msg_connection.show("pico_non_apre", RED,
+                                         port=port, reason=diagnostics.error)
             return
-        self.msg_collegamento.mostra(
-            "pico_riconosciuto", VERDE if diagnostica.parla_spi else AMBRA,
-            nome=diagnostica.nome, versione=diagnostica.versione,
-            bus=diagnostica.bus_leggibile)
-        self.registro("   %s, iface v%s, bus %s" % (
-            diagnostica.nome, diagnostica.versione, diagnostica.bus_leggibile))
-        self._annota_firmware(diagnostica, self._seriale_di_porta(porta))
-        self._aggiorna_firmware(con_messaggio=False)
-        if not diagnostica.parla_spi:
-            self.msg_collegamento.mostra("pico_no_spi", ROSSO)
+        self.msg_connection.show(
+            "pico_riconosciuto", GREEN if diagnostics.speaks_spi else AMBER,
+            name=diagnostics.name, version=diagnostics.version,
+            bus=diagnostics.readable_bus)
+        self.log("   %s, iface v%s, bus %s" % (
+            diagnostics.name, diagnostics.version, diagnostics.readable_bus))
+        self._note_firmware(diagnostics, self._serial_of_port(port))
+        self._update_firmware_row(con_messaggio=False)
+        if not diagnostics.speaks_spi:
+            self.msg_connection.show("pico_no_spi", RED)
 
     # ------------------------------------------------------------- chip
-    def _invalida_chip(self):
+    def _invalidate_chip(self):
         self.chip = None
-        self.chip_a_18 = None
-        if hasattr(self, "spunta_adattatore"):
-            self.spunta_adattatore.pack_forget()
-        self.protezione = None
-        if hasattr(self, "msg_protezione"):
-            self._mostra_protezione()
-        self._invalida_lettura()
+        self.chip_is_1v8 = None
+        if hasattr(self, "check_shifter"):
+            self.check_shifter.pack_forget()
+        self.protection = None
+        if hasattr(self, "msg_protection"):
+            self._show_protection()
+        self._invalidate_read()
 
-    def _invalida_lettura(self):
-        self.lettura_verificata = None
-        self._aggiorna_scrittura()
+    def _invalidate_read(self):
+        self.verified_read = None
+        self._update_write_state()
 
-    def identifica_chip(self):
-        porta = self._porta_scelta()
-        if not self.flash or not porta:
+    def identify_chip(self):
+        port = self._chosen_port()
+        if not self.flash or not port:
             return
 
-        def lavoro():
-            esito, chip = self.flash.identifica(
-                porta, BAUD, self.var_velocita.get() or None,
+        def work():
+            result, chip = self.flash.identify(
+                port, BAUD, self.var_speed.get() or None,
                 self.var_chip.get().strip() or None,
-                bool(self.var_dettagli.get()), self._riga_da_thread)
-            protezione = None
-            if esito.ok and chip.nome:
+                bool(self.var_verbose.get()), self._line_from_thread)
+            protection = None
+            if result.ok and chip.name:
                 # ⚠️ Si chiede SUBITO: e' il modo piu' comune in cui una
                 # scrittura non passa, e scoprirlo dopo la cancellazione e'
                 # tardi.
-                _e, protezione = self.flash.protezione(
-                    porta, BAUD, self.var_velocita.get() or None,
-                    chip.nome, bool(self.var_dettagli.get()),
-                    self._riga_da_thread)
-            identita = None
-            if not (esito.ok and chip.nome) and not chip.candidati:
+                _e, protection = self.flash.protection(
+                    port, BAUD, self.var_speed.get() or None,
+                    chip.name, bool(self.var_verbose.get()),
+                    self._line_from_thread)
+            identity = None
+            if not (result.ok and chip.name) and not chip.candidates:
                 # ⚠️ Solo qui: se flashrom ha riconosciuto il chip, chiederlo
                 # una seconda volta non aggiunge niente e tocca i fili per
                 # niente.
-                identita = serprog.identifica_chip(porta, BAUD)
-            return esito, chip, protezione, identita
+                identity = serprog.identify_chip(port, BAUD)
+            return result, chip, protection, identity
 
-        def fine(risultato):
-            esito, chip, protezione, identita = risultato
-            if chip.candidati:
-                self.combo_chip.configure(values=CHIP_SUGGERITI + chip.candidati)
-                self.msg_chip.mostra("chip_ambiguo", AMBRA)
+        def end(outcome):
+            result, chip, protection, identity = outcome
+            if chip.candidates:
+                self.combo_chip.configure(values=SUGGESTED_CHIPS + chip.candidates)
+                self.msg_chip.show("chip_ambiguo", AMBER)
                 return
-            if not esito.ok or not chip.nome:
-                self.msg_chip.mostra("chip_non_trovato", ROSSO)
-                self._racconta_identita(identita)
+            if not result.ok or not chip.name:
+                self.msg_chip.show("chip_non_trovato", RED)
+                self._report_identity(identity)
                 return
             self.chip = chip
-            self.protezione = protezione
-            self.msg_chip.mostra("chip_trovato", VERDE, chip=chip.descrizione)
-            self._valuta_tensione(chip.nome)
+            self.protection = protection
+            self.msg_chip.show("chip_trovato", GREEN, chip=chip.description)
+            self._check_voltage(chip.name)
             # ⚠️ Uno scostamento dal profilo si dice e basta: non si blocca
             # niente. Chi ha la scheda davanti ne sa piu' di una tabella.
-            for chiave, campi in self._confronta_col_profilo():
-                self.registro("   %s" % self.L(chiave, **campi), "attenzione")
-            self._mostra_protezione()
-            self._aggiorna_scrittura()
+            for key, fields in self._profile_deviations():
+                self.log("   %s" % self.L(key, **fields), "attenzione")
+            self._show_protection()
+            self._update_write_state()
 
-        self._avvia(lavoro, fine, "identifica")
+        self._start_job(work, end, "identifica")
 
-    def _valuta_tensione(self, nome):
+    def _check_voltage(self, name):
         """Dal modello si capisce a che tensione lavora il chip.
 
         ⚠️ Non c\u0027e\u0027 modo di misurarla da qui, ma il nome basta: nelle
         famiglie SPI NOR la versione a 1,8 V si distingue da una lettera. E
         sbagliare tensione non da\u0027 un errore: da\u0027 un chip morto.
         """
-        volt, famiglia = V.tensione(nome)
-        self.chip_a_18 = None if volt is None else (volt == V.BASSA)
-        if self.chip_a_18:
-            self.registro("!! %s" % self.L("tens_bassa", famiglia=famiglia),
+        volts, family = V.voltage_of(name)
+        self.chip_is_1v8 = None if volts is None else (volts == V.LOW)
+        if self.chip_is_1v8:
+            self.log("!! %s" % self.L("tens_bassa", family=family),
                           "male")
-            self.spunta_adattatore.pack(anchor="w", pady=(5, 0))
+            self.check_shifter.pack(anchor="w", pady=(5, 0))
         else:
-            self.spunta_adattatore.pack_forget()
-            self.var_adattatore.set(0)
-            if volt is None:
-                self.registro("   %s" % self.L("tens_ignota"), "attenzione")
+            self.check_shifter.pack_forget()
+            self.var_shifter.set(0)
+            if volts is None:
+                self.log("   %s" % self.L("tens_ignota"), "attenzione")
             else:
-                self.registro("   %s" % self.L("tens_alta", famiglia=famiglia))
-        self._aggiorna_scrittura()
+                self.log("   %s" % self.L("tens_alta", family=family))
+        self._update_write_state()
 
-    def _racconta_identita(self, identita):
+    def _report_identity(self, identity):
         """Cosa ha risposto il chip quando gliel\u0027abbiamo chiesto noi.
 
         ⚠️ Serve a separare due guai che sembrano lo stesso: un chip che
@@ -1525,179 +1525,179 @@ class App(tk.Tk):
         forza un modello simile e si va avanti; nel secondo si rifanno i
         collegamenti, e provare modelli a caso non porta da nessuna parte.
         """
-        if identita is None:
+        if identity is None:
             return
-        if not identita.ok:
-            self.registro("   %s" % self.L("jedec_errore",
-                                           motivo=identita.errore), "attenzione")
+        if not identity.ok:
+            self.log("   %s" % self.L("jedec_errore",
+                                           reason=identity.error), "attenzione")
             return
-        if not identita.risponde:
-            self.msg_chip.mostra("jedec_muto", ROSSO)
-            self.registro("   %s (JEDEC %s)" % (self.L("jedec_muto"),
-                                                identita.jedec), "male")
+        if not identity.answers:
+            self.msg_chip.show("jedec_muto", RED)
+            self.log("   %s (JEDEC %s)" % (self.L("jedec_muto"),
+                                                identity.jedec), "male")
             return
-        self.msg_chip.mostra("jedec_risponde", AMBRA,
-                             descrizione=identita.descrizione())
-        self.registro("   %s" % self.L("jedec_risponde",
-                                       descrizione=identita.descrizione()),
+        self.msg_chip.show("jedec_risponde", AMBER,
+                             description=identity.description())
+        self.log("   %s" % self.L("jedec_risponde",
+                                       description=identity.description()),
                       "attenzione")
 
-    def _mostra_protezione(self):
-        p = self.protezione
+    def _show_protection(self):
+        p = self.protection
         if p is None:
-            self.msg_protezione.pulisci()
-            self.b_sblocca.pack_forget()
+            self.msg_protection.clean()
+            self.b_unlock.pack_forget()
             return
-        if not p.sostenuta:
-            self.msg_protezione.mostra("prot_ignota", GRIGIO)
-            self.b_sblocca.pack_forget()
+        if not p.supported:
+            self.msg_protection.show("prot_ignota", GREY)
+            self.b_unlock.pack_forget()
             return
-        if not p.attiva:
-            self.msg_protezione.mostra("prot_libera", VERDE)
-            self.b_sblocca.pack_forget()
+        if not p.active:
+            self.msg_protection.show("prot_libera", GREEN)
+            self.b_unlock.pack_forget()
             return
-        self.b_sblocca.pack(side="right", padx=(10, 8))
-        intervallo = self._intervallo_regione()
-        scontro = intervallo and p.tocca(intervallo[0], intervallo[1])
+        self.b_unlock.pack(side="right", padx=(10, 8))
+        span = self._region_span()
+        scontro = span and p.overlaps(span[0], span[1])
         if scontro:
-            self.msg_protezione.mostra("prot_scontro", ROSSO,
-                                       inizio=p.inizio, fine=p.fine)
+            self.msg_protection.show("prot_scontro", RED,
+                                       start=p.start, end=p.end)
         else:
-            self.msg_protezione.mostra("prot_attiva", AMBRA, inizio=p.inizio,
-                                       fine=p.fine, descrizione=p.descrizione,
-                                       modo=p.modo)
-        self.b_sblocca.state(["!disabled"] if not self.occupato else ["disabled"])
+            self.msg_protection.show("prot_attiva", AMBER, start=p.start,
+                                       end=p.end, description=p.description,
+                                       mode=p.mode)
+        self.b_unlock.state(["!disabled"] if not self.busy else ["disabled"])
 
-    def sblocca_chip(self):
+    def unlock_chip(self):
         """Toglie la protezione. Cambia lo stato del chip: si chiede prima."""
-        porta = self._porta_scelta()
-        if not (self.flash and porta and self.chip):
+        port = self._chosen_port()
+        if not (self.flash and port and self.chip):
             return
-        testo = self.L("prot_conferma", chip=self.chip.descrizione)
-        if not Conferma(self, self.L, testo, self.tema,
-                        parola=self.L("parola_sblocca")).confermato:
+        text = self.L("prot_conferma", chip=self.chip.description)
+        if not Confirm(self, self.L, text, self.theme,
+                        word=self.L("parola_sblocca")).confirmed:
             return
 
-        def lavoro():
-            comuni = dict(porta=porta, baud=BAUD,
-                          spispeed=self.var_velocita.get() or None,
-                          chip=self._chip_per_flashrom(),
-                          dettagli=bool(self.var_dettagli.get()),
-                          su_riga=self._riga_da_thread)
-            esito = self.flash.sblocca(**comuni)
-            _e, dopo = self.flash.protezione(**comuni)
-            return esito, dopo
+        def work():
+            common = dict(port=port, baud=BAUD,
+                          spispeed=self.var_speed.get() or None,
+                          chip=self._chip_for_flashrom(),
+                          verbose=bool(self.var_verbose.get()),
+                          on_line=self._line_from_thread)
+            result = self.flash.unlock(**common)
+            _e, after = self.flash.protection(**common)
+            return result, after
 
-        def fine(risultato):
-            esito, dopo = risultato
-            self.protezione = dopo
-            if dopo is not None and not dopo.attiva:
-                self.registro("   %s" % self.L("prot_sbloccato"), "bene")
+        def end(outcome):
+            result, after = outcome
+            self.protection = after
+            if after is not None and not after.active:
+                self.log("   %s" % self.L("prot_sbloccato"), "bene")
             else:
-                self.msg_protezione.mostra("prot_non_tolta", ROSSO,
-                                           codice=esito.codice)
-                self.registro("!! %s" % self.L("prot_non_tolta",
-                                               codice=esito.codice), "male")
-                self._aggiorna_scrittura()
+                self.msg_protection.show("prot_non_tolta", RED,
+                                           code=result.code)
+                self.log("!! %s" % self.L("prot_non_tolta",
+                                               code=result.code), "male")
+                self._update_write_state()
                 return
-            self._mostra_protezione()
-            self._aggiorna_scrittura()
+            self._show_protection()
+            self._update_write_state()
 
-        self._avvia(lavoro, fine, "sblocco")
+        self._start_job(work, end, "sblocco")
 
     # ---------------------------------------------------------- lettura
-    def leggi_e_verifica(self):
-        porta = self._porta_scelta()
-        if not self.flash or not porta:
+    def read_and_verify(self):
+        port = self._chosen_port()
+        if not self.flash or not port:
             return
-        cartella = self.var_cartella.get().strip()
+        folder = self.var_folder.get().strip()
         try:
-            os.makedirs(cartella, exist_ok=True)
+            os.makedirs(folder, exist_ok=True)
         except OSError as e:
-            self.msg_lettura.testo_grezzo("%s" % e, ROSSO)
+            self.msg_read.raw_text("%s" % e, RED)
             return
 
-        marca = marca_ora()
-        primo = os.path.join(cartella, "%s-letto-%s.rom"
-                             % (self.profilo.chiave, marca))
-        secondo = os.path.join(cartella, "%s-verifica-%s.rom"
-                               % (self.profilo.chiave, marca))
+        stamp = timestamp()
+        first = os.path.join(folder, "%s-letto-%s.rom"
+                             % (self.profile.key, stamp))
+        second = os.path.join(folder, "%s-verifica-%s.rom"
+                               % (self.profile.key, stamp))
 
-        self._prepara_mappa()
-        self.intervallo_lettura = (0, (self.chip.byte if self.chip and self.chip.byte
+        self._prepare_map()
+        self.read_span = (0, (self.chip.size if self.chip and self.chip.size
                                        else 16 * 1024 * 1024) - 1)
 
-        def lavoro():
-            comuni = dict(porta=porta, baud=BAUD,
-                          spispeed=self.var_velocita.get() or None,
-                          chip=self._chip_per_flashrom(),
-                          dettagli=bool(self.var_dettagli.get()),
-                          su_riga=self._riga_da_thread,
-                          su_evento=self._evento_da_thread)
-            self._messaggio_da_thread(self.msg_lettura, "lettura_1", GRIGIO)
-            esito = self.flash.leggi(primo, **comuni)
-            if not esito.ok:
-                return ("errore", esito, None, None)
-            self._messaggio_da_thread(self.msg_lettura, "lettura_2", GRIGIO)
-            esito = self.flash.leggi(secondo, **comuni)
-            if not esito.ok:
-                return ("errore", esito, None, None)
-            return ("ok", esito, md5_file(primo), md5_file(secondo))
+        def work():
+            common = dict(port=port, baud=BAUD,
+                          spispeed=self.var_speed.get() or None,
+                          chip=self._chip_for_flashrom(),
+                          verbose=bool(self.var_verbose.get()),
+                          on_line=self._line_from_thread,
+                          on_event=self._evento_da_thread)
+            self._message_from_thread(self.msg_read, "lettura_1", GREY)
+            result = self.flash.read(first, **common)
+            if not result.ok:
+                return ("errore", result, None, None)
+            self._message_from_thread(self.msg_read, "lettura_2", GREY)
+            result = self.flash.read(second, **common)
+            if not result.ok:
+                return ("errore", result, None, None)
+            return ("ok", result, md5_of_file(first), md5_of_file(second))
 
-        def fine(risultato):
-            stato, esito, a, b = risultato
-            if stato == "errore":
-                self._esito_flashrom(self.msg_lettura, esito)
+        def end(outcome):
+            state, result, a, b = outcome
+            if state == "errore":
+                self._flashrom_failed(self.msg_read, result)
                 return
             if a != b:
-                self.msg_lettura.mostra("lettura_diversa", ROSSO, a=a[:8], b=b[:8])
-                self.registro("!! letture diverse: %s != %s" % (a, b), "male")
+                self.msg_read.show("lettura_diversa", RED, a=a[:8], b=b[:8])
+                self.log("!! letture diverse: %s != %s" % (a, b), "male")
                 return
-            self.lettura_verificata = a
-            self.lettura_file = primo
-            self.secco = None          # cambiata la base, la prova va rifatta
-            self.mappa.segna(0, self.intervallo_lettura[1], M.VERIFICATO)
+            self.verified_read = a
+            self.read_path = first
+            self.dry = None          # cambiata la base, la prova va rifatta
+            self.chip_map.mark(0, self.read_span[1], M.VERIFIED)
             try:
-                os.remove(secondo)
+                os.remove(second)
             except OSError:
                 pass
-            self.msg_lettura.mostra("lettura_ok", VERDE, md5=a)
-            self.registro("   %s" % self.L("lettura_salvata", percorso=primo), "bene")
-            nota = self._impronta_nota(a)
-            self.registro("   %s" % self.L(
+            self.msg_read.show("lettura_ok", GREEN, md5=a)
+            self.log("   %s" % self.L("lettura_salvata", path=first), "bene")
+            nota = self._known_fingerprint(a)
+            self.log("   %s" % self.L(
                 "riconosciuto_come",
-                cosa=nota or self.L("md5_sconosciuto")))
-            atteso = os.path.join(cartella, "%s-risultato-atteso.rom"
-                                  % self.profilo.chiave)
-            if not self.var_atteso.get() and os.path.isfile(atteso):
-                self.var_atteso.set(atteso)
-            self._confronta_col_precedente(cartella, primo)
-            self._aggiorna_scrittura()
+                what=nota or self.L("md5_sconosciuto")))
+            expected = os.path.join(folder, "%s-risultato-atteso.rom"
+                                  % self.profile.key)
+            if not self.var_expected.get() and os.path.isfile(expected):
+                self.var_expected.set(expected)
+            self._compare_with_previous(folder, first)
+            self._update_write_state()
 
-        self._avvia(lavoro, fine, "lettura")
+        self._start_job(work, end, "lettura")
 
-    def _letture_precedenti(self, cartella, escluso=None):
+    def _previous_reads(self, folder, escluso=None):
         """I backup gia' presenti in cartella, dal piu' recente."""
-        prefisso = "%s-letto-" % self.profilo.chiave
-        trovati = []
+        prefisso = "%s-letto-" % self.profile.key
+        found_items = []
         try:
-            nomi = os.listdir(cartella)
+            names_of = os.listdir(folder)
         except OSError:
             return []
-        for nome in nomi:
-            if not (nome.startswith(prefisso) and nome.endswith(".rom")):
+        for name in names_of:
+            if not (name.startswith(prefisso) and name.endswith(".rom")):
                 continue
-            percorso = os.path.join(cartella, nome)
-            if escluso and os.path.abspath(percorso) == os.path.abspath(escluso):
+            path = os.path.join(folder, name)
+            if escluso and os.path.abspath(path) == os.path.abspath(escluso):
                 continue
             try:
-                trovati.append((os.path.getmtime(percorso), percorso))
+                found_items.append((os.path.getmtime(path), path))
             except OSError:
                 continue
-        trovati.sort(reverse=True)
-        return [p for _t, p in trovati]
+        found_items.sort(reverse=True)
+        return [p for _t, p in found_items]
 
-    def _confronta_col_precedente(self, cartella, appena_letto):
+    def _compare_with_previous(self, folder, appena_letto):
         """Confronta la lettura appena fatta con il backup precedente.
 
         ⚠️ Serve a rispondere a una domanda che viene sempre e a cui nessuno
@@ -1705,746 +1705,746 @@ class App(tk.Tk):
         lasciato?». Il confronto lo fa il programma, non l\u0027occhio su due
         md5 lunghi trentadue cifre.
         """
-        precedenti = self._letture_precedenti(cartella, escluso=appena_letto)
+        precedenti = self._previous_reads(folder, escluso=appena_letto)
         if not precedenti:
-            self.registro("   %s" % self.L("conf_primo"))
+            self.log("   %s" % self.L("conf_primo"))
             return
-        prima = precedenti[0]
-        nome = A.nome_file(prima)
+        before = precedenti[0]
+        name = A.file_name(before)
         try:
-            vecchia = A.leggi(prima)
-            nuova = A.leggi(appena_letto)
+            vecchia = A.read(before)
+            newer = A.read(appena_letto)
         except OSError:
             return
-        if len(vecchia) != len(nuova):
-            self.registro("   %s" % self.L("conf_altra_misura", file=nome),
+        if len(vecchia) != len(newer):
+            self.log("   %s" % self.L("conf_altra_misura", file=name),
                           "attenzione")
             return
-        esito = A.confronta(vecchia, nuova)
-        intervalli = esito["allineati"]
-        if esito["uguali"] or not intervalli:
-            self.registro("   %s" % self.L("conf_uguale", file=nome), "bene")
+        result = A.compare_images(vecchia, newer)
+        spans = result["allineati"]
+        if result["uguali"] or not spans:
+            self.log("   %s" % self.L("conf_uguale", file=name), "bene")
             return
-        inizio = min(a for a, _b in intervalli)
-        fine = max(b for _a, b in intervalli)
-        quanti = len(esito["blocchi"])
-        self.registro("   %s" % self.L("conf_diverso", file=nome, quanti=quanti,
-                                       inizio=inizio, fine=fine), "attenzione")
-        for a, b in intervalli[:8]:
-            self.registro("      0x%06X-0x%06X  %s" % (
-                a, b, A.leggibile(b - a + 1)))
+        start = min(a for a, _b in spans)
+        end = max(b for _a, b in spans)
+        how_many = len(result["blocchi"])
+        self.log("   %s" % self.L("conf_diverso", file=name, how_many=how_many,
+                                       start=start, end=end), "attenzione")
+        for a, b in spans[:8]:
+            self.log("      0x%06X-0x%06X  %s" % (
+                a, b, A.human_size(b - a + 1)))
 
-    def _esito_flashrom(self, messaggio, esito):
+    def _flashrom_failed(self, message, result):
         """Quando flashrom si rifiuta: dirlo chiaro e lasciare il dettaglio nel
         registro, che c'e' gia' finito riga per riga."""
-        if esito.interrotto:
-            messaggio.testo_grezzo(self.L("interrotto"), AMBRA)
+        if result.aborted:
+            message.raw_text(self.L("interrotto"), AMBER)
             return
-        if esito.errore:
-            messaggio.testo_grezzo(esito.errore, ROSSO)
+        if result.error:
+            message.raw_text(result.error, RED)
             return
-        messaggio.mostra("lettura_fallita", ROSSO, codice=esito.codice)
+        message.show("lettura_fallita", RED, code=result.code)
 
-    def _chip_per_flashrom(self):
+    def _chip_for_flashrom(self):
         forzato = self.var_chip.get().strip()
         if forzato:
             return forzato
-        return self.chip.nome if self.chip and self.chip.nome else None
+        return self.chip.name if self.chip and self.chip.name else None
 
     # ------------------------------------------------- qualifica del cavo
-    def qualifica_collegamento(self):
+    def qualify_link(self):
         """Cerca la velocita' piu' alta che dia due letture identiche.
 
         Legge una regione piccola invece di tutto il chip: la stessa domanda,
         in pochi secondi invece che in minuti.
         """
-        porta = self._porta_scelta()
-        if not self.flash or not porta:
+        port = self._chosen_port()
+        if not self.flash or not port:
             return
-        cartella = self.var_cartella.get().strip()
+        folder = self.var_folder.get().strip()
         try:
-            os.makedirs(cartella, exist_ok=True)
+            os.makedirs(folder, exist_ok=True)
         except OSError as e:
-            self.msg_collegamento.testo_grezzo("%s" % e, ROSSO)
+            self.msg_connection.raw_text("%s" % e, RED)
             return
 
-        dimensione = self.chip.byte if self.chip and self.chip.byte else 16 * 1024 * 1024
-        prova_byte = min(PROVA_QUALIFICA, dimensione)
-        layout = os.path.join(cartella, "qualifica-layout.txt")
+        total_size = self.chip.size if self.chip and self.chip.size else 16 * 1024 * 1024
+        prova_byte = min(QUALIFY_BYTES, total_size)
+        layout = os.path.join(folder, "qualifica-layout.txt")
         with open(layout, "wb") as f:
             f.write(("%08x:%08x prova\n%08x:%08x resto\n" % (
-                0, prova_byte - 1, prova_byte, dimensione - 1)).encode("ascii"))
-        primo = os.path.join(cartella, "qualifica-a.bin")
-        secondo = os.path.join(cartella, "qualifica-b.bin")
-        self._prepara_mappa()
-        self.intervallo_lettura = (0, prova_byte - 1)
+                0, prova_byte - 1, prova_byte, total_size - 1)).encode("ascii"))
+        first = os.path.join(folder, "qualifica-a.bin")
+        second = os.path.join(folder, "qualifica-b.bin")
+        self._prepare_map()
+        self.read_span = (0, prova_byte - 1)
 
-        def lavoro():
-            for velocita in VELOCITA:
-                etichetta = VELOCITA_ETICHETTE[velocita]
-                self._messaggio_da_thread(self.msg_collegamento,
-                                          "qualifica_prova", GRIGIO,
-                                          velocita=etichetta)
-                comuni = dict(porta=porta, baud=BAUD,
-                              spispeed=velocita or None,
-                              chip=self._chip_per_flashrom(),
-                              dettagli=bool(self.var_dettagli.get()),
-                              su_riga=self._riga_da_thread,
-                              su_evento=self._evento_da_thread)
-                a = self.flash.leggi_regione(layout, "prova", primo, **comuni)
-                if self.fermati.is_set():
+        def work():
+            for speed in SPEEDS:
+                label_for = SPEED_LABELS[speed]
+                self._message_from_thread(self.msg_connection,
+                                          "qualifica_prova", GREY,
+                                          speed=label_for)
+                common = dict(port=port, baud=BAUD,
+                              spispeed=speed or None,
+                              chip=self._chip_for_flashrom(),
+                              verbose=bool(self.var_verbose.get()),
+                              on_line=self._line_from_thread,
+                              on_event=self._evento_da_thread)
+                a = self.flash.read_region(layout, "prova", first, **common)
+                if self.stop_flag.is_set():
                     return ("interrotto", None, None)
-                b = self.flash.leggi_regione(layout, "prova", secondo, **comuni)
+                b = self.flash.read_region(layout, "prova", second, **common)
                 if not (a.ok and b.ok):
                     continue
-                if md5_file(primo) == md5_file(secondo):
-                    return ("ok", velocita, prova_byte)
+                if md5_of_file(first) == md5_of_file(second):
+                    return ("ok", speed, prova_byte)
             return ("no", None, None)
 
-        def fine(risultato):
-            stato, velocita, quanti = risultato
-            for percorso in (primo, secondo, layout):
+        def end(outcome):
+            state, speed, how_many = outcome
+            for path in (first, second, layout):
                 try:
-                    os.remove(percorso)
+                    os.remove(path)
                 except OSError:
                     pass
-            if stato == "ok":
-                self.var_velocita.set(velocita)
-                self.var_velocita_etichetta.set(VELOCITA_ETICHETTE[velocita])
-                self._invalida_lettura()
-                self.msg_collegamento.mostra(
-                    "qualifica_ok", VERDE, velocita=VELOCITA_ETICHETTE[velocita],
-                    byte=A.leggibile(quanti))
-            elif stato == "no":
-                self.msg_collegamento.mostra("qualifica_nessuna", ROSSO)
+            if state == "ok":
+                self.var_speed.set(speed)
+                self.var_speed_label.set(SPEED_LABELS[speed])
+                self._invalidate_read()
+                self.msg_connection.show(
+                    "qualifica_ok", GREEN, speed=SPEED_LABELS[speed],
+                    size=A.human_size(how_many))
+            elif state == "no":
+                self.msg_connection.show("qualifica_nessuna", RED)
 
-        self._avvia(lavoro, fine, "qualifica")
+        self._start_job(work, end, "qualifica")
 
     # --------------------------------------------------------- prova a secco
-    def _intervallo_regione(self):
+    def _region_span(self):
         """(inizio, fine) della regione scelta, oppure None per il chip intero."""
-        if self.var_modo.get() != "regione":
+        if self.var_mode.get() != "regione":
             return None
-        nome = self.var_regione.get()
-        for regione, inizio, fine in self.regioni:
-            if regione == nome:
-                return (inizio, fine)
+        name = self.var_region.get()
+        for region, start, end in self.regions:
+            if region == name:
+                return (start, end)
         return None
 
-    def prova_a_secco(self):
+    def dry_run(self):
         """Calcola come verra' la flash, senza toccarla."""
-        if not (self.lettura_file and os.path.isfile(self.lettura_file)):
-            self.msg_scrittura.mostra("scrivi_bloccato", AMBRA,
-                                      cosa=self.L("req_lettura"))
+        if not (self.read_path and os.path.isfile(self.read_path)):
+            self.msg_write.show("scrivi_bloccato", AMBER,
+                                      what=self.L("req_lettura"))
             return
-        immagine = self.var_immagine.get().strip()
-        if not immagine or not os.path.isfile(immagine):
-            self.msg_scrittura.mostra("scrivi_bloccato", AMBRA,
-                                      cosa=self.L("req_immagine"))
+        image = self.var_image.get().strip()
+        if not image or not os.path.isfile(image):
+            self.msg_write.show("scrivi_bloccato", AMBER,
+                                      what=self.L("req_immagine"))
             return
-        regione = self._intervallo_regione()
-        if self.var_modo.get() == "regione" and regione is None:
-            self.msg_scrittura.mostra("scrivi_bloccato", AMBRA,
-                                      cosa=self.L("req_layout"))
+        region = self._region_span()
+        if self.var_mode.get() == "regione" and region is None:
+            self.msg_write.show("scrivi_bloccato", AMBER,
+                                      what=self.L("req_layout"))
             return
-        atteso = self.var_atteso.get().strip()
+        expected = self.var_expected.get().strip()
 
-        def lavoro():
-            attuale = A.leggi(self.lettura_file)
-            sorgente = A.leggi(immagine)
-            esito = A.prova_a_secco(attuale, sorgente, regione, md5=md5_dati)
-            md5_atteso = md5_file(atteso) if atteso and os.path.isfile(atteso) else None
-            return esito, md5_atteso, regione
+        def work():
+            current = A.read(self.read_path)
+            source_image = A.read(image)
+            result = A.dry_run(current, source_image, region, md5=md5_of)
+            expected_md5 = md5_of_file(expected) if expected and os.path.isfile(expected) else None
+            return result, expected_md5, region
 
-        def fine(risultato):
-            esito, md5_atteso, intervallo = risultato
-            if esito.errore:
-                self.secco = None
-                self.msg_scrittura.testo_grezzo(esito.errore, ROSSO)
-                self._aggiorna_scrittura()
+        def end(outcome):
+            result, expected_md5, span = outcome
+            if result.error:
+                self.dry = None
+                self.msg_write.raw_text(result.error, RED)
+                self._update_write_state()
                 return
-            self.secco = esito
+            self.dry = result
             self.secco_firma = self._firma_secco()
-            self._prepara_mappa(intervallo)
-            self.mappa.segna_intervalli(esito.cambia, M.SCRITTO)
-            self.mappa.segna_intervalli(esito.fuori, M.DIVERSO)
+            self._prepare_map(span)
+            self.chip_map.mark_spans(result.changes, M.WRITTEN)
+            self.chip_map.mark_spans(result.outside, M.MISMATCH)
 
-            if esito.nulla_da_fare:
-                self.msg_scrittura.mostra("secco_nulla", AMBRA)
-            elif esito.fuori:
-                self.msg_scrittura.mostra(
-                    "secco_fuori", AMBRA, intervalli=len(esito.fuori),
-                    byte=A.leggibile(esito.byte_cambiati), md5=esito.md5[:12])
+            if result.nothing_to_do:
+                self.msg_write.show("secco_nulla", AMBER)
+            elif result.outside:
+                self.msg_write.show(
+                    "secco_fuori", AMBER, spans=len(result.outside),
+                    size=A.human_size(result.bytes_changed), md5=result.md5[:12])
             else:
-                self.msg_scrittura.mostra(
-                    "secco_ok_uno" if len(esito.cambia) == 1 else "secco_ok",
-                    VERDE, byte=A.leggibile(esito.byte_cambiati),
-                    intervalli=len(esito.cambia), md5=esito.md5[:12])
-            self.registro("   md5 %s · %s · %d %s" % (
-                esito.md5, A.leggibile(esito.byte_cambiati), len(esito.cambia),
+                self.msg_write.show(
+                    "secco_ok_uno" if len(result.changes) == 1 else "secco_ok",
+                    GREEN, size=A.human_size(result.bytes_changed),
+                    spans=len(result.changes), md5=result.md5[:12])
+            self.log("   md5 %s · %s · %d %s" % (
+                result.md5, A.human_size(result.bytes_changed), len(result.changes),
                 "intervalli"), "bene")
-            for inizio, fine_ in esito.cambia[:12]:
-                self.registro("     0x%06X-0x%06X  %s" % (
-                    inizio, fine_, A.leggibile(fine_ - inizio + 1)))
-            if md5_atteso:
-                if md5_atteso == esito.md5:
-                    self.registro("   %s" % self.L("secco_atteso_uguale"), "bene")
+            for start, fine_ in result.changes[:12]:
+                self.log("     0x%06X-0x%06X  %s" % (
+                    start, fine_, A.human_size(fine_ - start + 1)))
+            if expected_md5:
+                if expected_md5 == result.md5:
+                    self.log("   %s" % self.L("secco_atteso_uguale"), "bene")
                 else:
-                    self.msg_scrittura.mostra("secco_atteso_diverso", ROSSO,
-                                              calcolato=esito.md5[:8],
-                                              atteso=md5_atteso[:8])
-                    self.registro("!! %s" % self.L(
-                        "secco_atteso_diverso", calcolato=esito.md5,
-                        atteso=md5_atteso), "male")
-                    self.secco = None
-            self._aggiorna_scrittura()
+                    self.msg_write.show("secco_atteso_diverso", RED,
+                                              computed=result.md5[:8],
+                                              expected=expected_md5[:8])
+                    self.log("!! %s" % self.L(
+                        "secco_atteso_diverso", computed=result.md5,
+                        expected=expected_md5), "male")
+                    self.dry = None
+            self._update_write_state()
 
-        self._avvia(lavoro, fine, "prova a secco")
+        self._start_job(work, end, "prova a secco")
 
     # --------------------------------------------------------- scrittura
-    def _requisiti_mancanti(self):
-        mancano = []
+    def _missing_requirements(self):
+        missing = []
         if not self.flash:
-            mancano.append(self.L("req_flashrom"))
+            missing.append(self.L("req_flashrom"))
         if not self.chip:
-            mancano.append(self.L("req_chip"))
-        if not self.lettura_verificata:
-            mancano.append(self.L("req_lettura"))
-        immagine = self.var_immagine.get().strip()
-        if not immagine or not os.path.isfile(immagine):
-            mancano.append(self.L("req_immagine"))
-        elif self.chip and self.chip.byte:
-            trovata = os.path.getsize(immagine)
-            if trovata != self.chip.byte:
-                mancano.append(self.L("req_dimensione", attesa=self.chip.byte,
-                                      trovata=trovata))
-        if self.var_modo.get() == "regione":
+            missing.append(self.L("req_chip"))
+        if not self.verified_read:
+            missing.append(self.L("req_lettura"))
+        image = self.var_image.get().strip()
+        if not image or not os.path.isfile(image):
+            missing.append(self.L("req_immagine"))
+        elif self.chip and self.chip.size:
+            found_one = os.path.getsize(image)
+            if found_one != self.chip.size:
+                missing.append(self.L("req_dimensione", pending=self.chip.size,
+                                      found_one=found_one))
+        if self.var_mode.get() == "regione":
             layout = self.var_layout.get().strip()
-            if not layout or not os.path.isfile(layout) or not self.var_regione.get():
-                mancano.append(self.L("req_layout"))
-        if not self.var_alimentazione.get():
-            mancano.append(self.L("req_alimentazione"))
-        if self.chip_a_18 and not self.var_adattatore.get():
-            mancano.append(self.L("req_adattatore"))
+            if not layout or not os.path.isfile(layout) or not self.var_region.get():
+                missing.append(self.L("req_layout"))
+        if not self.var_mains_off.get():
+            missing.append(self.L("req_alimentazione"))
+        if self.chip_is_1v8 and not self.var_shifter.get():
+            missing.append(self.L("req_adattatore"))
         # ⚠️ Un chip protetto accetta i comandi e non cambia: la scrittura
         # sembrerebbe riuscita e non lo sarebbe.
-        intervallo = self._intervallo_regione() or (
-            (0, self.chip.byte - 1) if self.chip and self.chip.byte else None)
-        if (self.protezione is not None and intervallo
-                and self.protezione.tocca(intervallo[0], intervallo[1])):
-            mancano.append(self.L("req_protezione"))
+        span = self._region_span() or (
+            (0, self.chip.size - 1) if self.chip and self.chip.size else None)
+        if (self.protection is not None and span
+                and self.protection.overlaps(span[0], span[1])):
+            missing.append(self.L("req_protezione"))
         # ⚠️ La prova a secco e' obbligatoria: e' l'unico controllo che guarda
         # il CONTENUTO invece dei nomi dei file, e produce l'immagine attesa
         # con cui si verifichera' il chip alla fine.
-        if self.secco is None or self.secco_firma != self._firma_secco():
-            mancano.append(self.L("req_secco"))
-        return mancano
+        if self.dry is None or self.secco_firma != self._firma_secco():
+            missing.append(self.L("req_secco"))
+        return missing
 
     def _firma_secco(self):
         """Da cosa dipende la prova a secco: se cambia, va rifatta."""
-        immagine = self.var_immagine.get().strip()
+        image = self.var_image.get().strip()
         try:
-            marca = os.path.getmtime(immagine) if immagine else 0
+            stamp = os.path.getmtime(image) if image else 0
         except OSError:
-            marca = 0
-        return (self.lettura_verificata, immagine, marca, self.var_modo.get(),
-                self.var_regione.get(), self.var_layout.get().strip(),
-                self.var_atteso.get().strip())
+            stamp = 0
+        return (self.verified_read, image, stamp, self.var_mode.get(),
+                self.var_region.get(), self.var_layout.get().strip(),
+                self.var_expected.get().strip())
 
-    def _aggiorna_scrittura(self):
-        regione = self.var_modo.get() == "regione"
-        self.combo_regione.configure(state="readonly" if regione else "disabled")
-        self.et_regione.configure(foreground=T.MUT if regione else "#455563")
+    def _update_write_state(self):
+        region = self.var_mode.get() == "regione"
+        self.combo_region.configure(state="readonly" if region else "disabled")
+        self.lbl_region.configure(foreground=T.MUT if region else "#455563")
 
-        mancano = self._requisiti_mancanti()
-        if self.occupato or mancano:
-            self.b_scrivi.state(["disabled"])
+        missing = self._missing_requirements()
+        if self.busy or missing:
+            self.b_write.state(["disabled"])
         else:
-            self.b_scrivi.state(["!disabled"])
-        if mancano:
-            self.msg_scrittura.mostra("scrivi_bloccato", GRIGIO, cosa=", ".join(mancano))
+            self.b_write.state(["!disabled"])
+        if missing:
+            self.msg_write.show("scrivi_bloccato", GREY, what=", ".join(missing))
         else:
-            self.msg_scrittura.pulisci()
+            self.msg_write.clean()
 
-    def _immagine_di_riferimento(self):
+    def _reference_image(self):
         """Da quale file si guardano le regioni, e in quest\u0027ordine.
 
         ⚠️ Prima la lettura del chip: le regioni che contano sono quelle di
         cio\u0027 che c\u0027e\u0027 adesso sul chip, non quelle dell\u0027immagine nuova.
         Se non si e\u0027 ancora letto, si ripiega su cosa ci si aspetta.
         """
-        for percorso in (getattr(self, "lettura_file", None),
-                         self.var_atteso.get().strip(),
-                         self.var_immagine.get().strip()):
-            if percorso and os.path.isfile(percorso):
-                return percorso
+        for path in (getattr(self, "read_path", None),
+                         self.var_expected.get().strip(),
+                         self.var_image.get().strip()):
+            if path and os.path.isfile(path):
+                return path
         return None
 
-    def ricava_regioni(self):
+    def derive_regions(self):
         """Legge la mappa che l\u0027immagine si porta dentro e ne fa un layout."""
-        percorso = self._immagine_di_riferimento()
-        if not percorso:
-            self.msg_scrittura.mostra("reg_senza_immagine", AMBRA)
+        path = self._reference_image()
+        if not path:
+            self.msg_write.show("reg_senza_immagine", AMBER)
             return
         try:
-            with open(percorso, "rb") as f:
-                dati = f.read()
+            with open(path, "rb") as f:
+                data = f.read()
         except OSError as e:                           # noqa: BLE001
-            self.msg_scrittura.mostra("reg_non_scrivo", ROSSO, motivo="%s" % e)
+            self.msg_write.show("reg_non_scrivo", RED, reason="%s" % e)
             return
-        origine, trovate = reg.trova(dati)
-        self.registro("→ %s" % A.nome_file(percorso), "io")
-        if not trovate:
-            self.msg_scrittura.mostra("reg_niente", AMBRA)
-            self.registro("   %s" % self.L("reg_niente"))
+        source, found = reg.find_regions(data)
+        self.log("→ %s" % A.file_name(path), "io")
+        if not found:
+            self.msg_write.show("reg_niente", AMBER)
+            self.log("   %s" % self.L("reg_niente"))
             return
-        radice = os.path.splitext(percorso)[0] + "-regions.layout"
+        root = os.path.splitext(path)[0] + "-regions.layout"
         try:
-            with open(radice, "wb") as f:
-                f.write(reg.come_layout(trovate, len(dati)).encode("ascii"))
+            with open(root, "wb") as f:
+                f.write(reg.as_layout(found, len(data)).encode("ascii"))
         except OSError as e:                           # noqa: BLE001
-            self.msg_scrittura.mostra("reg_non_scrivo", ROSSO, motivo="%s" % e)
+            self.msg_write.show("reg_non_scrivo", RED, reason="%s" % e)
             return
-        for regione in trovate:
-            self.registro("   %08x:%08x %s" % (regione.inizio, regione.fine,
-                                               regione.nome))
-        self.var_layout.set(radice)
-        self._ricarica_regioni()
-        self._salva_config()
-        self.msg_scrittura.mostra("reg_trovate", VERDE, quante=len(trovate),
-                                  origine=self.L("reg_origine_%s" % origine),
-                                  file=A.nome_file(radice))
+        for region in found:
+            self.log("   %08x:%08x %s" % (region.start, region.end,
+                                               region.name))
+        self.var_layout.set(root)
+        self._reload_regions()
+        self._save_config()
+        self.msg_write.show("reg_trovate", GREEN, count=len(found),
+                                  source=self.L("reg_origine_%s" % source),
+                                  file=A.file_name(root))
 
-    def _ricarica_regioni(self):
-        percorso = self.var_layout.get().strip()
-        self.regioni = []
-        if percorso and os.path.isfile(percorso):
+    def _reload_regions(self):
+        path = self.var_layout.get().strip()
+        self.regions = []
+        if path and os.path.isfile(path):
             try:
-                self.regioni = fr.leggi_layout(percorso)
+                self.regions = fr.read_layout(path)
             except OSError:
-                self.regioni = []
-        nomi = [n for n, _, _ in self.regioni]
-        self.combo_regione.configure(values=nomi)
-        if self.var_regione.get() not in nomi:
-            self.var_regione.set("uefi" if "uefi" in nomi else (nomi[0] if nomi else ""))
-        self._aggiorna_scrittura()
+                self.regions = []
+        names_of = [n for n, _, _ in self.regions]
+        self.combo_region.configure(values=names_of)
+        if self.var_region.get() not in names_of:
+            self.var_region.set("uefi" if "uefi" in names_of else (names_of[0] if names_of else ""))
+        self._update_write_state()
 
-    def scrivi(self):
-        mancano = self._requisiti_mancanti()
-        if mancano:
-            self.msg_scrittura.mostra("scrivi_bloccato", ROSSO, cosa=", ".join(mancano))
+    def write(self):
+        missing = self._missing_requirements()
+        if missing:
+            self.msg_write.show("scrivi_bloccato", RED, what=", ".join(missing))
             return
 
-        immagine = self.var_immagine.get().strip()
-        regione = self.var_regione.get() if self.var_modo.get() == "regione" else None
-        if regione:
-            voce = next((r for r in self.regioni if r[0] == regione), None)
-            testo = self.L("conferma_testo_regione", regione=regione,
-                           byte=voce[2] - voce[1] + 1 if voce else 0,
-                           inizio=voce[1] if voce else 0, fine=voce[2] if voce else 0,
-                           chip=self.chip.descrizione, immagine=immagine)
+        image = self.var_image.get().strip()
+        region = self.var_region.get() if self.var_mode.get() == "regione" else None
+        if region:
+            entry = next((r for r in self.regions if r[0] == region), None)
+            text = self.L("conferma_testo_regione", region=region,
+                           size=entry[2] - entry[1] + 1 if entry else 0,
+                           start=entry[1] if entry else 0, end=entry[2] if entry else 0,
+                           chip=self.chip.description, image=image)
         else:
-            testo = self.L("conferma_testo_intero", byte=os.path.getsize(immagine),
-                           chip=self.chip.descrizione, immagine=immagine)
+            text = self.L("conferma_testo_intero", size=os.path.getsize(image),
+                           chip=self.chip.description, image=image)
 
-        if not Conferma(self, self.L, testo, self.tema).confermato:
+        if not Confirm(self, self.L, text, self.theme).confirmed:
             return
 
-        porta = self._porta_scelta()
-        cartella = self.var_cartella.get().strip()
-        attesa = self.secco.risultato          # calcolata dalla prova a secco
-        md5_attesa = self.secco.md5
-        intervallo = self._intervallo_regione() or (0, len(attesa) - 1)
+        port = self._chosen_port()
+        folder = self.var_folder.get().strip()
+        pending = self.dry.outcome          # calcolata dalla prova a secco
+        md5_attesa = self.dry.md5
+        span = self._region_span() or (0, len(pending) - 1)
 
-        self._prepara_mappa(self._intervallo_regione())
-        self.intervallo_lettura = (0, len(attesa) - 1)
+        self._prepare_map(self._region_span())
+        self.read_span = (0, len(pending) - 1)
 
-        def lavoro():
-            comuni = dict(porta=porta, baud=BAUD,
-                          spispeed=self.var_velocita.get() or None,
-                          chip=self._chip_per_flashrom(),
-                          dettagli=bool(self.var_dettagli.get()),
-                          su_riga=self._riga_da_thread,
-                          su_evento=self._evento_da_thread)
-            self._messaggio_da_thread(self.msg_scrittura, "scrittura_avvio", AMBRA)
-            esito = self.flash.scrivi(immagine,
+        def work():
+            common = dict(port=port, baud=BAUD,
+                          spispeed=self.var_speed.get() or None,
+                          chip=self._chip_for_flashrom(),
+                          verbose=bool(self.var_verbose.get()),
+                          on_line=self._line_from_thread,
+                          on_event=self._evento_da_thread)
+            self._message_from_thread(self.msg_write, "scrittura_avvio", AMBER)
+            result = self.flash.write(image,
                                       layout=self.var_layout.get().strip() or None,
-                                      regione=regione, **comuni)
-            if not esito.ok:
-                return ("errore", esito, None)
+                                      region=region, **common)
+            if not result.ok:
+                return ("errore", result, None)
 
             # ⚠️ La verifica finale e' NOSTRA e indipendente da quella di
             # flashrom: si rilegge tutto il chip e lo si confronta byte per byte
             # con l'immagine che la prova a secco aveva calcolato.
-            self._messaggio_da_thread(self.msg_scrittura, "verifica_finale", GRIGIO)
-            dopo = os.path.join(cartella, "bc250-dopo-%s.rom" % marca_ora())
-            esito2 = self.flash.leggi(dopo, **comuni)
+            self._message_from_thread(self.msg_write, "verifica_finale", GREY)
+            after = os.path.join(folder, "bc250-dopo-%s.rom" % timestamp())
+            esito2 = self.flash.read(after, **common)
             if not esito2.ok:
                 return ("errore", esito2, None)
-            letto = A.leggi(dopo)
-            if len(letto) != len(attesa):
+            letto = A.read(after)
+            if len(letto) != len(pending):
                 return ("errore", esito2, None)
-            diversi = A.unisci(A.blocchi_diversi(attesa, letto), A.SETTORE,
-                               limite=len(attesa))
+            different = A.merge_runs(A.differing_blocks(pending, letto), A.SECTOR,
+                               limit=len(pending))
             byte_diversi = sum(f - i + 1 for i, f in
-                               A.intervalli_esatti(attesa, letto, diversi))
-            coerente = A.coerenza(letto, intervallo[0], intervallo[1])
-            return ("fatto", esito, (dopo, diversi, byte_diversi, coerente,
-                                     md5_dati(letto)))
+                               A.exact_spans(pending, letto, different))
+            coherent = A.coherence(letto, span[0], span[1])
+            return ("fatto", result, (after, different, byte_diversi, coherent,
+                                     md5_of(letto)))
 
-        def fine(risultato):
-            stato, esito, dati = risultato
-            if stato == "errore":
-                self.msg_scrittura.mostra("scrittura_fallita", ROSSO,
-                                          codice=esito.codice)
-                self.registro("!! %s" % self.L("scrittura_fallita",
-                                               codice=esito.codice), "male")
+        def end(outcome):
+            state, result, data = outcome
+            if state == "errore":
+                self.msg_write.show("scrittura_fallita", RED,
+                                          code=result.code)
+                self.log("!! %s" % self.L("scrittura_fallita",
+                                               code=result.code), "male")
                 return
-            self.registro("   %s" % self.L("scrittura_ok"), "bene")
-            dopo, diversi, byte_diversi, coerente, md5_letto = dati
-            self.registro("   %s" % self.L("lettura_salvata", percorso=dopo))
+            self.log("   %s" % self.L("scrittura_ok"), "bene")
+            after, different, byte_diversi, coherent, md5_letto = data
+            self.log("   %s" % self.L("lettura_salvata", path=after))
 
-            if diversi:
-                self.mappa.segna_intervalli(diversi, M.DIVERSO)
-                self.msg_scrittura.mostra(
-                    "verifica_diversa_uno" if len(diversi) == 1
-                    else "verifica_diversa", ROSSO, intervalli=len(diversi),
-                    byte=A.leggibile(byte_diversi))
-                self.registro("!! %s (md5 letto %s, atteso %s)" % (
-                    self.L("verifica_diversa", intervalli=len(diversi),
-                           byte=A.leggibile(byte_diversi)),
+            if different:
+                self.chip_map.mark_spans(different, M.MISMATCH)
+                self.msg_write.show(
+                    "verifica_diversa_uno" if len(different) == 1
+                    else "verifica_diversa", RED, spans=len(different),
+                    size=A.human_size(byte_diversi))
+                self.log("!! %s (md5 letto %s, atteso %s)" % (
+                    self.L("verifica_diversa", spans=len(different),
+                           size=A.human_size(byte_diversi)),
                     md5_letto, md5_attesa), "male")
-                for inizio, fine_ in diversi[:12]:
-                    self.registro("     0x%06X-0x%06X" % (inizio, fine_), "male")
+                for start, fine_ in different[:12]:
+                    self.log("     0x%06X-0x%06X" % (start, fine_), "male")
                 return
 
-            self.mappa.segna(0, len(attesa) - 1, M.VERIFICATO)
-            self.msg_scrittura.mostra("verifica_ok", VERDE,
-                                      byte=A.leggibile(len(attesa)))
-            self.registro("   %s md5 %s" % (
-                self.L("verifica_ok", byte=A.leggibile(len(attesa))),
+            self.chip_map.mark(0, len(pending) - 1, M.VERIFIED)
+            self.msg_write.show("verifica_ok", GREEN,
+                                      size=A.human_size(len(pending)))
+            self.log("   %s md5 %s" % (
+                self.L("verifica_ok", size=A.human_size(len(pending))),
                 md5_letto), "bene")
-            self._dillo_coerenza(coerente)
+            self._dillo_coerenza(coherent)
 
-        self._avvia(lavoro, fine, "scrittura", scrittura=True)
+        self._start_job(work, end, "scrittura", scrittura=True)
 
-    def _dillo_coerenza(self, coerente):
+    def _dillo_coerenza(self, coherent):
         """La regione scritta ha ancora una struttura sensata?"""
-        if coerente["vuoto"]:
-            self.registro("!! %s" % self.L("coerenza_vuota"), "male")
-            self.msg_scrittura.mostra("coerenza_vuota", ROSSO)
+        if coherent["vuoto"]:
+            self.log("!! %s" % self.L("coerenza_vuota"), "male")
+            self.msg_write.show("coerenza_vuota", RED)
             return
-        if coerente["azzerato"]:
-            self.registro("!! %s" % self.L("coerenza_zero"), "male")
-            self.msg_scrittura.mostra("coerenza_zero", ROSSO)
+        if coherent["azzerato"]:
+            self.log("!! %s" % self.L("coerenza_zero"), "male")
+            self.msg_write.show("coerenza_zero", RED)
             return
-        pezzi = []
-        for firma, chiave, testo_it, testo_en in A.FIRME:
-            quante = coerente["firme"].get(chiave, 0)
-            if quante:
-                nome = testo_it if self.L.codice == "it" else testo_en
-                pezzi.append("%s ×%d" % (nome, quante))
-        if pezzi:
-            self.registro("   %s" % self.L("coerenza_ok", cosa=", ".join(pezzi)),
+        chunks = []
+        for sig, key, testo_it, testo_en in A.SIGNATURES:
+            count = coherent["firme"].get(key, 0)
+            if count:
+                name = testo_it if self.L.code == "it" else testo_en
+                chunks.append("%s ×%d" % (name, count))
+        if chunks:
+            self.log("   %s" % self.L("coerenza_ok", what=", ".join(chunks)),
                           "bene")
         else:
-            self.registro("   %s" % self.L("coerenza_nulla"))
+            self.log("   %s" % self.L("coerenza_nulla"))
 
     # ------------------------------------------------------------ file
-    def scegli_cartella(self):
-        scelta = filedialog.askdirectory(initialdir=self.var_cartella.get() or None)
-        if scelta:
-            self.var_cartella.set(scelta)
+    def pick_folder(self):
+        choice = filedialog.askdirectory(initialdir=self.var_folder.get() or None)
+        if choice:
+            self.var_folder.set(choice)
 
-    def _scegli_file(self, var, tipi):
-        iniziale = os.path.dirname(var.get()) or self.var_cartella.get()
-        scelta = filedialog.askopenfilename(initialdir=iniziale or None, filetypes=tipi)
-        if scelta:
-            var.set(scelta)
-        return scelta
+    def _pick_file(self, variable, tipi):
+        iniziale = os.path.dirname(variable.get()) or self.var_folder.get()
+        choice = filedialog.askopenfilename(initialdir=iniziale or None, filetypes=tipi)
+        if choice:
+            variable.set(choice)
+        return choice
 
-    def scegli_immagine(self):
-        if self._scegli_file(self.var_immagine, [("ROM", "*.rom *.bin *.fd"), ("*", "*.*")]):
-            self._aggiorna_scrittura()
+    def pick_image(self):
+        if self._pick_file(self.var_image, [("ROM", "*.rom *.bin *.fd"), ("*", "*.*")]):
+            self._update_write_state()
 
-    def scegli_layout(self):
-        if self._scegli_file(self.var_layout, [("layout", "*.txt *.layout"), ("*", "*.*")]):
-            self._ricarica_regioni()
+    def pick_layout(self):
+        if self._pick_file(self.var_layout, [("layout", "*.txt *.layout"), ("*", "*.*")]):
+            self._reload_regions()
 
-    def scegli_atteso(self):
-        self._scegli_file(self.var_atteso, [("ROM", "*.rom *.bin"), ("*", "*.*")])
+    def pick_expected(self):
+        self._pick_file(self.var_expected, [("ROM", "*.rom *.bin"), ("*", "*.*")])
 
     # --------------------------------------------------------- registro
-    def registro(self, testo, tag=None):
-        marca = datetime.now().strftime("%H:%M:%S")
-        riga = "%s  %s" % (marca, testo)
-        self.righe_registro.append(riga)
-        self.testo.configure(state="normal")
-        self.testo.insert("end", marca + "  ", ("ora",))
-        self.testo.insert("end", testo + "\n", tag or ())
-        self.testo.see("end")
-        self.testo.configure(state="disabled")
+    def log(self, text, tag=None):
+        stamp = datetime.now().strftime("%H:%M:%S")
+        line = "%s  %s" % (stamp, text)
+        self.log_lines.append(line)
+        self.text.configure(state="normal")
+        self.text.insert("end", stamp + "  ", ("ora",))
+        self.text.insert("end", text + "\n", tag or ())
+        self.text.see("end")
+        self.text.configure(state="disabled")
 
-    def pulisci_registro(self):
-        self.righe_registro = []
-        self.testo.configure(state="normal")
-        self.testo.delete("1.0", "end")
-        self.testo.configure(state="disabled")
+    def clear_log(self):
+        self.log_lines = []
+        self.text.configure(state="normal")
+        self.text.delete("1.0", "end")
+        self.text.configure(state="disabled")
 
-    def salva_registro(self):
-        percorso = filedialog.asksaveasfilename(
-            initialdir=self.var_cartella.get() or None,
-            initialfile="SPIranha-%s.log" % marca_ora(),
+    def save_log(self):
+        path = filedialog.asksaveasfilename(
+            initialdir=self.var_folder.get() or None,
+            initialfile="SPIranha-%s.log" % timestamp(),
             defaultextension=".log")
-        if not percorso:
+        if not path:
             return
         try:
-            with open(percorso, "wb") as f:
-                f.write(("\n".join(self.righe_registro) + "\n").encode("utf-8"))
+            with open(path, "wb") as f:
+                f.write(("\n".join(self.log_lines) + "\n").encode("utf-8"))
         except OSError as e:
             messagebox.showerror(self.L("titolo"), "%s" % e)
 
-    def _salva_registro_automatico(self, operazione):
-        cartella = self.var_cartella.get().strip()
-        if not cartella or not os.path.isdir(cartella):
+    def _autosave_log(self, operazione):
+        folder = self.var_folder.get().strip()
+        if not folder or not os.path.isdir(folder):
             return
         try:
-            with open(os.path.join(cartella, "SPIranha.log"), "ab") as f:
+            with open(os.path.join(folder, "SPIranha.log"), "ab") as f:
                 intestazione = "\n===== %s — %s =====\n" % (
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"), operazione)
                 f.write(intestazione.encode("utf-8"))
-                f.write(("\n".join(self.righe_registro) + "\n").encode("utf-8"))
+                f.write(("\n".join(self.log_lines) + "\n").encode("utf-8"))
         except OSError:
             pass
 
     # ------------------------------------------------------------ lavoro
-    def _riga_da_thread(self, testo):
-        self.coda.put(("riga", testo))
+    def _line_from_thread(self, text):
+        self.tail_of.put(("riga", text))
 
-    def _evento_da_thread(self, tipo, *dati):
-        self.coda.put(("evento", tipo, dati))
+    def _evento_da_thread(self, kind, *data):
+        self.tail_of.put(("evento", kind, data))
 
     # -- quello che flashrom racconta mentre lavora ------------------------
-    def _applica_evento(self, tipo, dati):
-        if tipo == "cancella":
-            self.mappa.segna(dati[0], dati[1], M.CANCELLATO)
+    def _apply_event(self, kind, data):
+        if kind == "cancella":
+            self.chip_map.mark(data[0], data[1], M.ERASED_BLOCK)
             return
-        if tipo == "scrive":
-            self.intervallo_scritto = (dati[0], dati[1])
+        if kind == "scrive":
+            self.written_span = (data[0], data[1])
             return
-        if tipo != "fase":
+        if kind != "fase":
             return
 
-        nome, percento = dati
-        if nome != self.fase:
-            self.fase = nome
-            self.inizio_fase = datetime.now()
-        self.avanzamento.configure(mode="determinate", maximum=100,
-                                   value=percento)
-        self.var_stato.set(self._testo_avanzamento(nome, percento))
+        name, percent = data
+        if name != self.phase:
+            self.phase = name
+            self.phase_start = datetime.now()
+        self.progress.configure(mode="determinate", maximum=100,
+                                   value=percent)
+        self.var_status.set(self._testo_avanzamento(name, percent))
 
-        if nome == "READ" or nome == "VERIFY":
-            inizio, fine = self.intervallo_lettura
-            stato = M.VERIFICATO if self.operazione_scrittura else M.LETTO
-            self.mappa.avanza(inizio, fine, percento, stato)
-        elif nome == "WRITE":
-            inizio, fine = self.intervallo_scritto or self.intervallo_lettura
-            self.mappa.avanza(inizio, fine, percento, M.SCRITTO)
+        if name == "READ" or name == "VERIFY":
+            start, end = self.read_span
+            state = M.VERIFIED if self.writing else M.READ
+            self.chip_map.advance(start, end, percent, state)
+        elif name == "WRITE":
+            start, end = self.written_span or self.read_span
+            self.chip_map.advance(start, end, percent, M.WRITTEN)
 
-    def _testo_avanzamento(self, nome, percento):
-        fase = self.L("fase_%s" % nome)
-        trascorso = (datetime.now() - self.inizio_fase).total_seconds() \
-            if self.inizio_fase else 0
-        if percento >= 3 and trascorso > 2:
-            resta = trascorso * (100 - percento) / float(percento)
-            return self.L("avanzamento_resta", fase=fase, percento=percento,
-                          resta=_durata(resta))
-        return self.L("avanzamento", fase=fase, percento=percento)
+    def _testo_avanzamento(self, name, percent):
+        phase = self.L("fase_%s" % name)
+        trascorso = (datetime.now() - self.phase_start).total_seconds() \
+            if self.phase_start else 0
+        if percent >= 3 and trascorso > 2:
+            left = trascorso * (100 - percent) / float(percent)
+            return self.L("avanzamento_resta", phase=phase, percent=percent,
+                          left=_durata(left))
+        return self.L("avanzamento", phase=phase, percent=percent)
 
-    def _messaggio_da_thread(self, messaggio, chiave, colore, **campi):
-        self.coda.put(("messaggio", messaggio, chiave, colore, campi))
+    def _message_from_thread(self, message, key, colour, **fields):
+        self.tail_of.put(("messaggio", message, key, colour, fields))
 
-    def _avvia(self, lavoro, al_termine, nome, scrittura=False):
-        if self.occupato:
+    def _start_job(self, work, on_finish, name, scrittura=False):
+        if self.busy:
             messagebox.showinfo(self.L("titolo"), self.L("in_corso"))
             return
-        self.occupato = True
-        self.operazione_scrittura = scrittura
-        self.fermati.clear()
-        self.fase = None
-        self.inizio_fase = None
-        self.intervallo_scritto = None
-        self._blocca(True)
-        self.avanzamento.configure(mode="indeterminate")
-        self.avanzamento.start(12)
-        self.var_stato.set(self.L("occupato"))
-        self.registro("→ %s" % nome, "io")
+        self.busy = True
+        self.writing = scrittura
+        self.stop_flag.clear()
+        self.phase = None
+        self.phase_start = None
+        self.written_span = None
+        self._set_busy(True)
+        self.progress.configure(mode="indeterminate")
+        self.progress.start(12)
+        self.var_status.set(self.L("occupato"))
+        self.log("→ %s" % name, "io")
 
-        def sfondo():
+        def background_colour():
             try:
-                risultato = lavoro()
-                self.coda.put(("fine", al_termine, risultato, nome, None))
+                outcome = work()
+                self.tail_of.put(("fine", on_finish, outcome, name, None))
             except Exception:                              # noqa: BLE001
-                self.coda.put(("fine", None, None, nome, traceback.format_exc()))
+                self.tail_of.put(("fine", None, None, name, traceback.format_exc()))
 
-        threading.Thread(target=sfondo, daemon=True).start()
+        threading.Thread(target=background_colour, daemon=True).start()
 
-    def _blocca(self, occupato):
-        for bottone in (self.b_identifica, self.b_leggi, self.b_prova,
-                        self.b_qualifica, self.b_secco, self.b_bootsel,
-                        self.b_cerca_chip,
-                        self.b_regioni,
-                        self.b_aggiorna):
-            bottone.state(["disabled"] if occupato else ["!disabled"])
-        self.b_interrompi.state(["!disabled"] if occupato else ["disabled"])
-        if occupato:
-            self.b_scrivi.state(["disabled"])
-            self.b_sblocca.state(["disabled"])
-        elif hasattr(self, "msg_protezione"):
-            self._mostra_protezione()
-        if not occupato and not self.flash:
-            for bottone in (self.b_identifica, self.b_leggi, self.b_qualifica):
+    def _set_busy(self, busy):
+        for bottone in (self.b_identify, self.b_leggi, self.b_prova,
+                        self.b_qualify, self.b_dry_run, self.b_bootsel,
+                        self.b_search_chip,
+                        self.b_regions,
+                        self.b_update):
+            bottone.state(["disabled"] if busy else ["!disabled"])
+        self.b_abort.state(["!disabled"] if busy else ["disabled"])
+        if busy:
+            self.b_write.state(["disabled"])
+            self.b_unlock.state(["disabled"])
+        elif hasattr(self, "msg_protection"):
+            self._show_protection()
+        if not busy and not self.flash:
+            for bottone in (self.b_identify, self.b_leggi, self.b_qualify):
                 bottone.state(["disabled"])
 
-    def interrompi(self):
-        if self.operazione_scrittura:
+    def abort(self):
+        if self.writing:
             messagebox.showwarning(self.L("titolo"), self.L("interruzione_vietata"))
             return
-        self.fermati.set()
+        self.stop_flag.set()
         if self.flash:
-            self.flash.interrompi()
-        self.registro("!! %s" % self.L("interrotto"), "male")
+            self.flash.abort()
+        self.log("!! %s" % self.L("interrotto"), "male")
 
-    def _pompa(self):
+    def _pump(self):
         try:
             while True:
-                voce = self.coda.get_nowait()
-                if voce[0] == "riga":
-                    self.registro("   " + voce[1])
-                elif voce[0] == "evento":
-                    self._applica_evento(voce[1], voce[2])
-                elif voce[0] == "messaggio":
-                    _, messaggio, chiave, colore, campi = voce
-                    messaggio.mostra(chiave, colore, **campi)
-                elif voce[0] == "chiamata":
+                entry = self.tail_of.get_nowait()
+                if entry[0] == "riga":
+                    self.log("   " + entry[1])
+                elif entry[0] == "evento":
+                    self._apply_event(entry[1], entry[2])
+                elif entry[0] == "messaggio":
+                    _, message, key, colour, fields = entry
+                    message.show(key, colour, **fields)
+                elif entry[0] == "chiamata":
                     # un lavoro di sfondo che non e' un'operazione sul chip:
                     # non tocca lo stato «occupato», si limita a rientrare
                     # nel thread della finestra
-                    voce[1](voce[2])
-                elif voce[0] == "fine":
-                    _, al_termine, risultato, nome, errore = voce
-                    self.occupato = False
-                    self.operazione_scrittura = False
-                    self.avanzamento.stop()
-                    self.avanzamento.configure(mode="determinate", value=0)
-                    self.var_stato.set(self.L("pronto"))
-                    self._blocca(False)
-                    if errore:
-                        self.registro(errore, "male")
-                    elif al_termine:
-                        al_termine(risultato)
-                    self._salva_registro_automatico(nome)
-                    self._aggiorna_scrittura()
-                    self._aggiorna_firmware()
-                    self._salva_config()
+                    entry[1](entry[2])
+                elif entry[0] == "fine":
+                    _, on_finish, outcome, name, error = entry
+                    self.busy = False
+                    self.writing = False
+                    self.progress.stop()
+                    self.progress.configure(mode="determinate", value=0)
+                    self.var_status.set(self.L("pronto"))
+                    self._set_busy(False)
+                    if error:
+                        self.log(error, "male")
+                    elif on_finish:
+                        on_finish(outcome)
+                    self._autosave_log(name)
+                    self._update_write_state()
+                    self._update_firmware_row()
+                    self._save_config()
         except queue.Empty:
             pass
-        self.after(60, self._pompa)
+        self.after(60, self._pump)
 
-    def _chiudi(self):
-        if self.occupato and not messagebox.askyesno(
+    def _on_close(self):
+        if self.busy and not messagebox.askyesno(
                 self.L("titolo"), self.L("chiudere_mentre_lavora")):
             return
-        self._salva_config()
+        self._save_config()
         self.destroy()
 
 
-class Messaggio(object):
+class Message(object):
     """Una riga di esito, come pillola di stato, che sa ridisegnarsi al cambio
     lingua."""
 
-    def __init__(self, app, padre):
+    def __init__(self, app, parent):
         self.app = app
-        self.chip = T.Chip(padre, app.tema)
+        self.chip = T.Chip(parent, app.theme)
         self.widget = self.chip
         self._chiave = None
         self._campi = {}
-        self._colore = GRIGIO
+        self._colore = GREY
         app._messaggi.append(self)
 
-    def mostra(self, chiave, colore=GRIGIO, **campi):
-        self._chiave, self._campi, self._colore = chiave, campi, colore
-        self.ridisegna()
+    def show(self, key, colour=GREY, **fields):
+        self._chiave, self._campi, self._colore = key, fields, colour
+        self.redraw()
 
-    def testo_grezzo(self, testo, colore=GRIGIO):
+    def raw_text(self, text, colour=GREY):
         self._chiave = None
-        fondo, bordo = FONDI.get(colore, (T.PANEL, T.PANEL))
-        self.chip.mostra(testo, colore, fondo, bordo)
+        background, border = TINTS.get(colour, (T.PANEL, T.PANEL))
+        self.chip.show(text, colour, background, border)
 
-    def pulisci(self):
+    def clean(self):
         self._chiave = None
-        self.chip.spegni()
+        self.chip.hide()
 
-    def ridisegna(self):
+    def redraw(self):
         if self._chiave is None:
             return
-        fondo, bordo = FONDI.get(self._colore, (T.PANEL, T.PANEL))
-        self.chip.mostra(self.app.L(self._chiave, **self._campi), self._colore,
-                         fondo, bordo)
+        background, border = TINTS.get(self._colore, (T.PANEL, T.PANEL))
+        self.chip.show(self.app.L(self._chiave, **self._campi), self._colore,
+                         background, border)
 
 
-class Conferma(tk.Toplevel):
+class Confirm(tk.Toplevel):
     """Non basta un «sì»: la parola va scritta a mano."""
 
-    def __init__(self, padre, L, testo, tm=None, parola=None):
-        tk.Toplevel.__init__(self, padre, background=T.INK)
-        self.confermato = False
+    def __init__(self, parent, L, text, tm=None, word=None):
+        tk.Toplevel.__init__(self, parent, background=T.INK)
+        self.confirmed = False
         self.L = L
         self.title(L("conferma_titolo"))
         self.resizable(False, False)
-        self.transient(padre)
-        tm = tm or getattr(padre, "tema", None)
+        self.transient(parent)
+        tm = tm or getattr(parent, "tema", None)
 
-        cornice = tk.Frame(self, background=T.INK, padx=18, pady=16)
-        cornice.pack(fill="both", expand=True)
+        frame = tk.Frame(self, background=T.INK, padx=18, pady=16)
+        frame.pack(fill="both", expand=True)
 
-        avviso = tk.Frame(cornice, background=T.CRIT_BG, highlightthickness=1,
+        avviso = tk.Frame(frame, background=T.CRIT_BG, highlightthickness=1,
                           highlightbackground=T.CRIT_BORDO)
         avviso.pack(fill="x")
-        tk.Label(avviso, text=testo, justify="left", anchor="w", wraplength=520,
+        tk.Label(avviso, text=text, justify="left", anchor="w", wraplength=520,
                  background=T.CRIT_BG, foreground="#F0C9CB",
-                 font=tm.f_testo if tm else None).pack(anchor="w", padx=12, pady=10)
+                 font=tm.f_text if tm else None).pack(anchor="w", padx=12, pady=10)
 
-        self.parola = parola or L("parola_conferma")
-        tk.Label(cornice, text=L("conferma_digita", parola=self.parola),
+        self.word = word or L("parola_conferma")
+        tk.Label(frame, text=L("conferma_digita", word=self.word),
                  background=T.INK, foreground=T.FG,
-                 font=tm.f_testo if tm else None).pack(anchor="w", pady=(14, 5))
-        self.var = tk.StringVar()
-        campo = ttk.Entry(cornice, textvariable=self.var, width=26,
+                 font=tm.f_text if tm else None).pack(anchor="w", pady=(14, 5))
+        self.variable = tk.StringVar()
+        field = ttk.Entry(frame, textvariable=self.variable, width=26,
                           font=tm.f_dato if tm else None)
-        campo.pack(anchor="w")
-        self.var.trace_add("write", lambda *_: self._controlla())
+        field.pack(anchor="w")
+        self.variable.trace_add("write", lambda *_: self._controlla())
 
-        bottoni = tk.Frame(cornice, background=T.INK)
-        bottoni.pack(anchor="e", pady=(16, 0))
-        ttk.Button(bottoni, text=L("annulla"), style="Secondario.TButton",
+        buttons = tk.Frame(frame, background=T.INK)
+        buttons.pack(anchor="e", pady=(16, 0))
+        ttk.Button(buttons, text=L("annulla"), style="Secondario.TButton",
                    command=self.destroy).pack(side="right")
-        self.ok = ttk.Button(bottoni, text=L("procedi"), style="Pericolo.TButton",
+        self.ok = ttk.Button(buttons, text=L("procedi"), style="Pericolo.TButton",
                              command=self._procedi)
         self.ok.pack(side="right", padx=8)
         self.ok.state(["disabled"])
 
-        T.titolo_scuro(self)
-        campo.focus_set()
+        T.dark_title_bar(self)
+        field.focus_set()
         self.grab_set()
-        padre.wait_window(self)
+        parent.wait_window(self)
 
     def _controlla(self):
-        uguale = self.var.get().strip().upper() == self.parola.upper()
+        uguale = self.variable.get().strip().upper() == self.word.upper()
         self.ok.state(["!disabled"] if uguale else ["disabled"])
 
     def _procedi(self):
-        self.confermato = True
+        self.confirmed = True
         self.destroy()
 
 

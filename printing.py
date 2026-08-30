@@ -38,35 +38,35 @@ CHROME = (
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
 )
 
-SENZA_FINESTRA = 0x08000000 if os.name == "nt" else 0
+NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 # Tk misura i caratteri in punti, il web in pixel: 96/72.
-PX_PER_PUNTO = 96.0 / 72.0
+PX_PER_POINT = 96.0 / 72.0
 
 
 # ------------------------------------------------------------------ colori
 
-def _tinta(colore):
-    if not colore:
+def _tinta(colour):
+    if not colour:
         return None
-    testo = colore.strip()
-    if not testo.startswith("#"):
+    text = colour.strip()
+    if not text.startswith("#"):
         return (0.0, 0.0, 0.0)
-    if len(testo) == 4:
-        testo = "#" + "".join(c * 2 for c in testo[1:])
+    if len(text) == 4:
+        text = "#" + "".join(c * 2 for c in text[1:])
     try:
-        return tuple(int(testo[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
+        return tuple(int(text[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
     except ValueError:
         return (0.0, 0.0, 0.0)
 
 
-def per_stampa(colore):
+def for_print(colour):
     """Rovescia la luminosita' tenendo tinta e saturazione. None = niente."""
-    rgb = _tinta(colore)
+    rgb = _tinta(colour)
     if rgb is None:
         return None
     h, l, s = colorsys.rgb_to_hls(*rgb)
-    nuova = 1.0 - l
+    newer = 1.0 - l
     # ⚠️ The threshold is deliberately high. The theme's grounds are NOT
     # grey: they are very dark blues, and with a low threshold they passed
     # for "colour" and came out
@@ -76,147 +76,147 @@ def per_stampa(colore):
         # solid colours on paper want to be deeper, or
         # diventano pastelli slavati
         s = min(1.0, s * 1.15)
-        nuova = min(nuova, 0.44)
-    elif nuova < 0.5:
-        nuova *= 0.78
-    r, g, b = colorsys.hls_to_rgb(h, nuova, s)
+        newer = min(newer, 0.44)
+    elif newer < 0.5:
+        newer *= 0.78
+    r, g, b = colorsys.hls_to_rgb(h, newer, s)
     return "#%02X%02X%02X" % (int(r * 255), int(g * 255), int(b * 255))
 
 
-def _fuggi(testo):
-    return (testo.replace("&", "&amp;").replace("<", "&lt;")
+def _escape(text):
+    return (text.replace("&", "&amp;").replace("<", "&lt;")
             .replace(">", "&gt;").replace('"', "&quot;"))
 
 
 # ------------------------------------------------- dalla tela di Tk all'SVG
 
-def _analizza_carattere(tela, oggetto):
+def _analizza_carattere(canvas, obj):
     """(famiglia, corpo in px, grassetto) dell'oggetto di testo."""
-    descrizione = tela.itemcget(oggetto, "font")
-    carattere = tkfont.Font(root=tela, font=descrizione)
-    corpo = abs(carattere.actual("size"))
-    if corpo < 40:                      # in punti: si porta in pixel
-        corpo *= PX_PER_PUNTO
-    return (carattere.actual("family"), corpo,
-            carattere.actual("weight") == "bold", carattere)
+    description = canvas.itemcget(obj, "font")
+    font = tkfont.Font(root=canvas, font=description)
+    body = abs(font.actual("size"))
+    if body < 40:                      # in punti: si porta in pixel
+        body *= PX_PER_POINT
+    return (font.actual("family"), body,
+            font.actual("weight") == "bold", font)
 
 
-def _spezza(testo, carattere, larghezza):
+def _spezza(text, font, width):
     """Manda a capo come fa Tk: avidamente, sugli spazi."""
-    if not larghezza:
-        return testo.split("\n")
-    fuori = []
-    for paragrafo in testo.split("\n"):
-        riga = ""
-        for parola in paragrafo.split(" "):
-            prova = (riga + " " + parola).strip()
-            if riga and carattere.measure(prova) > larghezza:
-                fuori.append(riga)
-                riga = parola
+    if not width:
+        return text.split("\n")
+    out = []
+    for paragrafo in text.split("\n"):
+        line = ""
+        for word in paragrafo.split(" "):
+            checks = (line + " " + word).strip()
+            if line and font.measure(checks) > width:
+                out.append(line)
+                line = word
             else:
-                riga = prova
-        fuori.append(riga)
-    return fuori
+                line = checks
+        out.append(line)
+    return out
 
 
-def svg_da_tela(tela, area, fondo="#FFFFFF"):
+def svg_from_canvas(canvas, area, background="#FFFFFF"):
     """The piece of canvas inside `area` (x0, y0, x1, y1) becomes an SVG."""
     x0, y0, x1, y1 = area
-    pezzi = []
-    for oggetto in tela.find_all():
-        tipo = tela.type(oggetto)
-        limiti = tela.bbox(oggetto)
-        if not limiti:
+    chunks = []
+    for obj in canvas.find_all():
+        kind = canvas.type(obj)
+        bounds = canvas.bbox(obj)
+        if not bounds:
             continue
-        if (limiti[2] < x0 or limiti[0] > x1 or limiti[3] < y0
-                or limiti[1] > y1):
+        if (bounds[2] < x0 or bounds[0] > x1 or bounds[3] < y0
+                or bounds[1] > y1):
             continue
-        coordinate = tela.coords(oggetto)
-        if tipo in ("line", "polygon"):
-            punti = " ".join(
-                "%.2f,%.2f" % (coordinate[i], coordinate[i + 1])
-                for i in range(0, len(coordinate) - 1, 2))
-            larghezza = float(tela.itemcget(oggetto, "width") or 1)
-            if tipo == "line":
-                tratteggio = tela.itemcget(oggetto, "dash")
-                pezzi.append(
+        coords = canvas.coords(obj)
+        if kind in ("line", "polygon"):
+            points = " ".join(
+                "%.2f,%.2f" % (coords[i], coords[i + 1])
+                for i in range(0, len(coords) - 1, 2))
+            width = float(canvas.itemcget(obj, "width") or 1)
+            if kind == "line":
+                dash = canvas.itemcget(obj, "dash")
+                chunks.append(
                     '<polyline points="%s" fill="none" stroke="%s" '
                     'stroke-width="%.2f" stroke-linecap="round" '
                     'stroke-linejoin="round"%s/>'
-                    % (punti, per_stampa(tela.itemcget(oggetto, "fill"))
-                       or "#000", larghezza,
-                       ' stroke-dasharray="2 3"' if tratteggio else ""))
+                    % (points, for_print(canvas.itemcget(obj, "fill"))
+                       or "#000", width,
+                       ' stroke-dasharray="2 3"' if dash else ""))
             else:
-                pezzi.append(
+                chunks.append(
                     '<polygon points="%s" fill="%s" stroke="%s" '
                     'stroke-width="%.2f"/>'
-                    % (punti, per_stampa(tela.itemcget(oggetto, "fill"))
+                    % (points, for_print(canvas.itemcget(obj, "fill"))
                        or "none",
-                       per_stampa(tela.itemcget(oggetto, "outline")) or "none",
-                       larghezza))
-        elif tipo == "rectangle":
-            riempi = per_stampa(tela.itemcget(oggetto, "fill"))
-            bordo = per_stampa(tela.itemcget(oggetto, "outline"))
-            tratteggio = tela.itemcget(oggetto, "dash")
-            pezzi.append(
+                       for_print(canvas.itemcget(obj, "outline")) or "none",
+                       width))
+        elif kind == "rectangle":
+            riempi = for_print(canvas.itemcget(obj, "fill"))
+            border = for_print(canvas.itemcget(obj, "outline"))
+            dash = canvas.itemcget(obj, "dash")
+            chunks.append(
                 '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" '
                 'fill="%s" stroke="%s" stroke-width="%.2f"%s/>'
-                % (coordinate[0], coordinate[1],
-                   coordinate[2] - coordinate[0], coordinate[3] - coordinate[1],
-                   riempi or "none", bordo or "none",
-                   float(tela.itemcget(oggetto, "width") or 1),
-                   ' stroke-dasharray="2 3"' if tratteggio else ""))
-        elif tipo in ("oval", "arc"):
-            cx = (coordinate[0] + coordinate[2]) / 2.0
-            cy = (coordinate[1] + coordinate[3]) / 2.0
-            rx = abs(coordinate[2] - coordinate[0]) / 2.0
-            ry = abs(coordinate[3] - coordinate[1]) / 2.0
-            riempi = per_stampa(tela.itemcget(oggetto, "fill")) or "none"
-            bordo = per_stampa(tela.itemcget(oggetto, "outline")) or "none"
-            if tipo == "oval":
-                pezzi.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" '
+                % (coords[0], coords[1],
+                   coords[2] - coords[0], coords[3] - coords[1],
+                   riempi or "none", border or "none",
+                   float(canvas.itemcget(obj, "width") or 1),
+                   ' stroke-dasharray="2 3"' if dash else ""))
+        elif kind in ("oval", "arc"):
+            cx = (coords[0] + coords[2]) / 2.0
+            cy = (coords[1] + coords[3]) / 2.0
+            rx = abs(coords[2] - coords[0]) / 2.0
+            ry = abs(coords[3] - coords[1]) / 2.0
+            riempi = for_print(canvas.itemcget(obj, "fill")) or "none"
+            border = for_print(canvas.itemcget(obj, "outline")) or "none"
+            if kind == "oval":
+                chunks.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" '
                              'fill="%s" stroke="%s"/>'
-                             % (cx, cy, rx, ry, riempi, bordo))
+                             % (cx, cy, rx, ry, riempi, border))
             else:
-                inizio = float(tela.itemcget(oggetto, "start") or 0)
-                ampiezza = float(tela.itemcget(oggetto, "extent") or 90)
-                passi = max(8, int(abs(ampiezza) / 8))
-                punti = []
+                start = float(canvas.itemcget(obj, "start") or 0)
+                amplitude = float(canvas.itemcget(obj, "extent") or 90)
+                passi = max(8, int(abs(amplitude) / 8))
+                points = []
                 for i in range(passi + 1):
-                    angolo = math.radians(inizio + ampiezza * i / float(passi))
-                    punti.append("%.2f,%.2f" % (cx + rx * math.cos(angolo),
+                    angolo = math.radians(start + amplitude * i / float(passi))
+                    points.append("%.2f,%.2f" % (cx + rx * math.cos(angolo),
                                                 cy - ry * math.sin(angolo)))
-                pezzi.append('<polygon points="%s" fill="%s" stroke="%s"/>'
-                             % (" ".join(punti), riempi, bordo))
-        elif tipo == "text":
-            contenuto = tela.itemcget(oggetto, "text")
+                chunks.append('<polygon points="%s" fill="%s" stroke="%s"/>'
+                             % (" ".join(points), riempi, border))
+        elif kind == "text":
+            contenuto = canvas.itemcget(obj, "text")
             if not contenuto.strip():
                 continue
-            famiglia, corpo, grassetto, carattere = _analizza_carattere(
-                tela, oggetto)
-            righe = _spezza(contenuto, carattere,
-                            float(tela.itemcget(oggetto, "width") or 0))
-            ancora = tela.itemcget(oggetto, "anchor") or "center"
+            family, body, grassetto, font = _analizza_carattere(
+                canvas, obj)
+            lines = _spezza(contenuto, font,
+                            float(canvas.itemcget(obj, "width") or 0))
+            anchor = canvas.itemcget(obj, "anchor") or "center"
             allinea = "start"
-            x = limiti[0]
-            if "e" in ancora and "w" not in ancora:
-                allinea, x = "end", limiti[2]
-            elif ancora in ("n", "s", "center", ""):
-                allinea, x = "middle", (limiti[0] + limiti[2]) / 2.0
-            alta = carattere.metrics("linespace")
-            base = limiti[1] + carattere.metrics("ascent")
-            for indice, riga in enumerate(righe):
-                if not riga.strip():
+            x = bounds[0]
+            if "e" in anchor and "w" not in anchor:
+                allinea, x = "end", bounds[2]
+            elif anchor in ("n", "s", "center", ""):
+                allinea, x = "middle", (bounds[0] + bounds[2]) / 2.0
+            top = font.metrics("linespace")
+            base = bounds[1] + font.metrics("ascent")
+            for index, line in enumerate(lines):
+                if not line.strip():
                     continue
-                pezzi.append(
+                chunks.append(
                     '<text x="%.2f" y="%.2f" fill="%s" font-family="%s" '
                     'font-size="%.1fpx"%s text-anchor="%s" '
                     'xml:space="preserve">%s</text>'
-                    % (x, base + indice * alta,
-                       per_stampa(tela.itemcget(oggetto, "fill")) or "#000",
-                       _fuggi(famiglia), corpo,
+                    % (x, base + index * top,
+                       for_print(canvas.itemcget(obj, "fill")) or "#000",
+                       _escape(family), body,
                        ' font-weight="bold"' if grassetto else "",
-                       allinea, _fuggi(riga)))
+                       allinea, _escape(line)))
     # ⚠️ width and height BOTH have to be attributes: with only the
     # larghezza al 100% Chrome, in stampa, calcola altezza zero e la pagina
     # it comes out empty. With both real sizes the CSS can scale it.
@@ -226,7 +226,7 @@ def svg_da_tela(tela, area, fondo="#FFFFFF"):
         '<rect x="%.0f" y="%.0f" width="%.0f" height="%.0f" fill="%s"/>\n'
         '%s\n</svg>'
         % (x0, y0, x1 - x0, y1 - y0, x1 - x0, y1 - y0,
-           x0, y0, x1 - x0, y1 - y0, fondo, "\n".join(pezzi)))
+           x0, y0, x1 - x0, y1 - y0, background, "\n".join(chunks)))
 
 
 # ------------------------------------------------------------------- pagina
@@ -270,33 +270,33 @@ tr { break-inside: avoid; }
 
 
 def _riga_tabella(celle, intestazione=False):
-    marca = "th" if intestazione else "td"
+    stamp = "th" if intestazione else "td"
     return "<tr>%s</tr>" % "".join(
-        "<%s%s>%s</%s>" % (marca, (' class="%s"' % c[1]) if len(c) > 1 else "",
-                           c[0], marca) for c in celle)
+        "<%s%s>%s</%s>" % (stamp, (' class="%s"' % c[1]) if len(c) > 1 else "",
+                           c[0], stamp) for c in celle)
 
 
-def html_adattatore(svg, L, pezzi, canali, note, gia_pronti, titolo, sotto):
+def level_shifter_html(svg, L, chunks, canali, note, gia_pronti, title, sotto):
     """La pagina: il disegno su un foglio, la distinta sull'altro."""
     righe_pezzi = [_riga_tabella([(L("ad_col_sigla"),), (L("ad_col_valore"),),
                                   (L("ad_col_modelli"),)], True)]
-    for sigla, valore, modelli in pezzi:
+    for ref, value_for, modelli in chunks:
         righe_pezzi.append(_riga_tabella([
-            (_fuggi(sigla), "sigla"), (_fuggi(valore),),
-            (_fuggi(modelli), "modelli")]))
+            (_escape(ref), "sigla"), (_escape(value_for),),
+            (_escape(modelli), "modelli")]))
 
 
     righe_canali = [_riga_tabella([(L("ad_col_segnale"),), (L("sch_col_pico"),),
                                    ("",), (L("sch_col_chip"),)], True)]
-    for segnale, pico, chip, verso in canali:
+    for signal, pico, chip, direction in canali:
         righe_canali.append(_riga_tabella([
-            (segnale, "sigla"), (pico,), ("&rarr;" if verso == "verso"
-                                          else "&larr;",), (_fuggi(chip),)]))
+            (signal, "sigla"), (pico,), ("&rarr;" if direction == "verso"
+                                          else "&larr;",), (_escape(chip),)]))
 
     blocchi_note = "\n".join(
-        '<p class="nota%s">%s</p>' % (" grave" if indice == 0 else "",
-                                      _fuggi(L(chiave)))
-        for indice, chiave in enumerate(note))
+        '<p class="nota%s">%s</p>' % (" grave" if index == 0 else "",
+                                      _escape(L(key)))
+        for index, key in enumerate(note))
 
     return """<!doctype html>
 <html lang="it"><head><meta charset="utf-8">
@@ -325,30 +325,30 @@ def html_adattatore(svg, L, pezzi, canali, note, gia_pronti, titolo, sotto):
   <p class="piede">%(piede)s</p>
 </div>
 </body></html>""" % {
-        "titolo": _fuggi(titolo), "sotto": _fuggi(sotto), "css": CSS,
+        "titolo": _escape(title), "sotto": _escape(sotto), "css": CSS,
         "svg": svg,
-        "tit_distinta": _fuggi(L("ad_distinta")),
+        "tit_distinta": _escape(L("ad_distinta")),
         "pezzi": "\n".join(righe_pezzi),
-        "gia_pronti": _fuggi(L("ad_gia_pronti")),
-        "tit_canali": _fuggi(L("ad_tabella")),
+        "gia_pronti": _escape(L("ad_gia_pronti")),
+        "tit_canali": _escape(L("ad_tabella")),
         "canali": "\n".join(righe_canali),
-        "tit_note": _fuggi(L("ad_note_titolo")), "note": blocchi_note,
-        "piede": _fuggi(L("ad_piede")),
+        "tit_note": _escape(L("ad_note_titolo")), "note": blocchi_note,
+        "piede": _escape(L("ad_piede")),
     }
 
 
 # ------------------------------------------------------------------ Chrome
 
-def trova_chrome():
-    for percorso in CHROME:
-        if os.path.isfile(percorso):
-            return percorso
+def find_chrome():
+    for path in CHROME:
+        if os.path.isfile(path):
+            return path
     return None
 
 
-def in_pdf(html, percorso_pdf, chrome=None):
+def to_pdf(html, percorso_pdf, chrome=None):
     """Scrive l'HTML e lo fa stampare in PDF da Chrome. (fatto, motivo)."""
-    eseguibile = chrome or trova_chrome()
+    eseguibile = chrome or find_chrome()
     if not eseguibile:
         return False, "chrome"
     # ⚠️ The destination file is removed FIRST. If it stays there and
@@ -360,23 +360,23 @@ def in_pdf(html, percorso_pdf, chrome=None):
             os.remove(percorso_pdf)
         except OSError as e:
             return False, "%s" % e
-    cartella = tempfile.mkdtemp(prefix="spiranha-stampa-")
-    percorso_html = os.path.join(cartella, "schema.html")
+    folder = tempfile.mkdtemp(prefix="spiranha-stampa-")
+    percorso_html = os.path.join(folder, "schema.html")
     with open(percorso_html, "wb") as f:
         f.write(html.encode("utf-8"))
-    profilo = os.path.join(cartella, "profilo")
-    comando = [
+    profile = os.path.join(folder, "profilo")
+    command = [
         eseguibile, "--headless=new", "--disable-gpu", "--no-first-run",
-        "--no-pdf-header-footer", "--user-data-dir=%s" % profilo,
+        "--no-pdf-header-footer", "--user-data-dir=%s" % profile,
         "--print-to-pdf=%s" % percorso_pdf,
         "file:///" + percorso_html.replace("\\", "/"),
     ]
     try:
-        esito = subprocess.run(comando, capture_output=True, timeout=120,
-                               creationflags=SENZA_FINESTRA)
+        result = subprocess.run(command, capture_output=True, timeout=120,
+                               creationflags=NO_WINDOW)
     except Exception as e:                                 # noqa: BLE001
         return False, "%s" % e
     if not os.path.isfile(percorso_pdf) or os.path.getsize(percorso_pdf) < 1000:
-        return False, (esito.stderr.decode("utf-8", "replace").strip()[-300:]
+        return False, (result.stderr.decode("utf-8", "replace").strip()[-300:]
                        or "il PDF non e' stato scritto")
     return True, percorso_html
