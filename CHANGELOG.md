@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/1.1.0/), and
 the project uses [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **The icon sits in the header**, to the left of the name, read out of the
+  `.ico` that already travels inside the executable rather than from a second
+  copy of the artwork.
+- **It checks for a newer release at startup and offers it.** Nothing installs
+  by itself: the download only happens when asked, the address must be GitHub
+  over https, and the installer's Authenticode signature must be *our*
+  certificate matched by thumbprint — a validly signed installer belonging to
+  anybody else is refused and not run. The sha-256 and the signer are shown
+  before anything starts. The check is a tick box and the answer is
+  remembered; a failure is silent in the window and recorded in the log.
+
+### Fixed
+- **The live chip map and the progress bar were dead.** The worker thread and
+  the window are coupled by a bare string, and the English pass renamed one
+  side only: the thread put `event` on the queue while the window still looked
+  for `evento`. Every existing check passed, because they reach the map by
+  other paths. Three checks now push a line, an erase and a phase through the
+  real queue.
+- **The hand-drawn checkbox stopped translating** for the same reason, and
+  silently: the translator swallows the error a widget raises when it cannot
+  be written to, so the label simply kept the language it was born in.
+
 ## [1.2.1] — 2026-08-30
 
 Housekeeping that turned into four fixes. The whole codebase is now in

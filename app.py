@@ -22,6 +22,7 @@ import sys
 import threading
 import time
 import traceback
+import webbrowser
 from datetime import datetime
 
 import tkinter as tk
@@ -42,6 +43,7 @@ import voltage as V
 import icon
 import serprog
 import theme as T
+import update
 from i18n import LANGUAGES, LANGUAGE_NAMES, Language
 
 APP_NAME = "SPIranha"
@@ -200,6 +202,7 @@ class App(tk.Tk):
         T.dark_title_bar(self)
         self.after(60, self._pump)
         self.after(400, self._watch_bootsel)
+        self.after(1500, self._check_for_update)
         # the model list fills itself shortly after opening: the window has
         # to appear at once, not wait for flashrom
         self.after(600, self._load_chip_list)
@@ -246,6 +249,7 @@ class App(tk.Tk):
             "profile": self.profile.key,
             "expected": self.var_expected.get(),
             "verbose": bool(self.var_verbose.get()),
+            "check_updates": bool(self.var_updates.get()),
             "boards": self.known_boards.as_list(),
         })
         try:
@@ -312,6 +316,7 @@ class App(tk.Tk):
 
         self._build_header(self.root)
         self._build_banner(self.root)
+        self._build_update_banner(self.root)
         self.boards = [
             self._make_connection_card(self.root),
             self._make_chip_card(self.root),
@@ -352,21 +357,23 @@ class App(tk.Tk):
         for index in (0, 1):
             r.columnconfigure(index, weight=1 if (two or index == 0) else 0,
                               uniform="colonne" if two else "")
-        for index in range(3, 12):
+        for index in range(4, 13):
             r.rowconfigure(index, weight=0)
 
+        # ⚠️ row 3 belongs to the update banner, which comes and goes: the
+        # cards start below it so the layout does not jump when it appears.
         pad = dict(padx=8, pady=(8, 0))
         if two:
-            self.boards[0].grid(row=3, column=0, sticky="new", **pad)
-            self.boards[1].grid(row=4, column=0, sticky="new", **pad)
-            self.boards[2].grid(row=5, column=0, sticky="new", **pad)
-            self.boards[3].grid(row=3, column=1, rowspan=3, sticky="new", **pad)
-            map_row = 6
+            self.boards[0].grid(row=4, column=0, sticky="new", **pad)
+            self.boards[1].grid(row=5, column=0, sticky="new", **pad)
+            self.boards[2].grid(row=6, column=0, sticky="new", **pad)
+            self.boards[3].grid(row=4, column=1, rowspan=3, sticky="new", **pad)
+            map_row = 7
         else:
             for index, card in enumerate(self.boards):
-                card.grid(row=3 + index, column=0, columnspan=2, sticky="new",
+                card.grid(row=4 + index, column=0, columnspan=2, sticky="new",
                             **pad)
-            map_row = 7
+            map_row = 8
         self.map_card.grid(row=map_row, column=0, columnspan=2,
                                sticky="ew", padx=8, pady=(8, 0))
         log_row = map_row + 1
@@ -471,6 +478,134 @@ class App(tk.Tk):
         self._translated(self.banner_bottone, "flashrom_locate")
         self.banner.grid(row=2, column=0, columnspan=2, sticky="ew", padx=8,
                          pady=(8, 0))
+
+    # -- a newer version ---------------------------------------------------
+    def _build_update_banner(self, parent):
+        """Shown only when there is something newer, and never on its own."""
+        self.up_banner = tk.Frame(parent, background=T.PANEL2,
+                                  highlightthickness=1,
+                                  highlightbackground=T.LINE, bd=0)
+        dot = tk.Canvas(self.up_banner, width=8, height=8, background=T.PANEL2,
+                        highlightthickness=0)
+        dot.create_oval(0, 0, 8, 8, fill=T.ACCENT, outline="")
+        dot.pack(side="left", padx=(9, 7), pady=6)
+        self.up_text = tk.Label(self.up_banner, background=T.PANEL2,
+                                foreground=T.FG, anchor="w", justify="left",
+                                wraplength=700, font=self.theme.f_text)
+        self.up_text.pack(side="left", fill="x", expand=True, pady=5)
+        self.b_up_later = self._translated(
+            ttk.Button(self.up_banner, style="Ghost.TButton",
+                       command=self._hide_update), "up_later")
+        self.b_up_later.pack(side="right", padx=(4, 7), pady=5)
+        self.b_up_page = self._translated(
+            ttk.Button(self.up_banner, style="Ghost.TButton",
+                       command=self._open_release_page), "up_page")
+        self.b_up_page.pack(side="right", padx=4, pady=5)
+        self.b_up_install = self._translated(
+            ttk.Button(self.up_banner, style="Primary.TButton",
+                       command=self.install_update), "up_install")
+        self.b_up_install.pack(side="right", padx=4, pady=5)
+        self.release = None
+
+    def _check_for_update(self):
+        """Asks GitHub once, in the background, and only if allowed.
+
+        ⚠️ Silent when it fails. A machine with no network, or GitHub being
+        slow, is not something to interrupt anybody about: the person in
+        front of this program has a dead board on the desk.
+        """
+        if not self.settings.get("check_updates", True):
+            return
+
+        def end(release):
+            self.release = release
+            if release is None or not release.ok:
+                reason = getattr(release, "error", "no answer")
+                self.log("   update check: %s" % reason, "io")
+                return
+            if not release.newer:
+                self.log("   update check: %s is the latest"
+                         % update.VERSION, "io")
+                return
+            self._show_update(release)
+
+        threading.Thread(
+            target=lambda: self.tail_of.put(("call", end, update.latest())),
+            daemon=True).start()
+
+    def _show_update(self, release):
+        self.up_text.configure(text=self.L("up_found", version=release.version,
+                                           running=update.VERSION))
+        self.b_up_install.state(["!disabled"] if release.url else ["disabled"])
+        self.up_banner.grid(row=3, column=0, columnspan=2, sticky="ew",
+                            padx=8, pady=(8, 0))
+        self.log("→ %s" % self.up_text.cget("text"), "io")
+
+    def _hide_update(self):
+        self.up_banner.grid_remove()
+
+    def _open_release_page(self):
+        page = getattr(self.release, "page", None)
+        if page:
+            webbrowser.open(page)
+
+    def install_update(self):
+        """Downloads the installer, checks whose signature it carries, asks.
+
+        ⚠️ The order matters and it is the whole point: verify BEFORE
+        running, and refuse anything not signed with our own certificate.
+        A valid signature belonging to somebody else is still a refusal.
+        """
+        release = self.release
+        if not (release and release.url) or self.busy:
+            return
+        self.b_up_install.state(["disabled"])
+        total = A.human_size(release.size) if release.size else "?"
+
+        def progress(done):
+            self.tail_of.put(("call", lambda _n: self.up_text.configure(
+                text=self.L("up_downloading", done=A.human_size(done),
+                            total=total)), None))
+
+        def work():
+            try:
+                return update.download(release.url, on_progress=progress,
+                                       stop_flag=self.stop_flag)
+            except (OSError, ValueError) as e:
+                return e
+
+        def end(outcome):
+            self.b_up_install.state(["!disabled"])
+            if isinstance(outcome, Exception):
+                self.up_text.configure(
+                    text=self.L("up_failed", reason="%s" % outcome))
+                self.log("!! %s" % self.up_text.cget("text"), "bad")
+                return
+            path, digest = outcome
+            ok, said = update.trusted(path)
+            if not ok:
+                self.up_text.configure(text=self.L("up_refused", reason=said))
+                self.log("!! %s" % self.up_text.cget("text"), "bad")
+                return
+            self.log("   sha-256 %s" % digest, "io")
+            if not messagebox.askyesno(
+                    self.L("up_confirm_title"),
+                    self.L("up_confirm", version=release.version,
+                           signer=said, hash=digest),
+                    parent=self):
+                self._show_update(release)
+                return
+            started, why = update.install(path)
+            if not started:
+                self.up_text.configure(text=self.L("up_refused", reason=why))
+                self.log("!! %s" % self.up_text.cget("text"), "bad")
+                return
+            self._save_config()
+            self.destroy()
+
+        threading.Thread(
+            target=lambda: self.tail_of.put(("call", end, work())),
+            daemon=True).start()
 
     def _card(self, parent, key):
         card, body = T.card(parent, self.L(key), self.theme)
@@ -712,7 +847,7 @@ class App(tk.Tk):
         self.checks_box.grid(row=7, column=0, columnspan=3, sticky="w")
         self.check_mains_off.pack(in_=self.checks_box, anchor="w")
         self._translated(self.check_mains_off, "tick_mains",
-                        attribute="testo")
+                        attribute="text")
 
         # ⚠️ Shown only when the chip really is 1.8 V. A box that is always
         # there gets ticked out of habit and protects nobody.
@@ -721,7 +856,7 @@ class App(tk.Tk):
             self.checks_box, self.theme, self.var_shifter,
             command=self._update_write_state, colour="#F0C9CB")
         self._translated(self.check_shifter, "check_shifter",
-                        attribute="testo")
+                        attribute="text")
 
         actions = tk.Frame(s, background=T.PANEL)
         actions.grid(row=8, column=0, columnspan=3, sticky="w", pady=(9, 0))
@@ -820,6 +955,11 @@ class App(tk.Tk):
         self._translated(ttk.Button(buttons, style="Ghost.TButton",
                                    command=self.save_log),
                         "save_log").pack(side="left")
+        self.var_updates = tk.IntVar(
+            value=0 if self.settings.get("check_updates") is False else 1)
+        self._translated(
+            T.Checkbox(buttons, self.theme, self.var_updates),
+            "up_check_at_start").pack(side="right", padx=(0, 8))
         self.var_verbose = tk.IntVar(value=1 if self.settings.get("verbose") else 0)
         T.Checkbox(buttons, self.theme, self.var_verbose, text="-V").pack(
             side="left", padx=12)

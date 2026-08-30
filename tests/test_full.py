@@ -30,6 +30,15 @@ sys.path.insert(0, ROOT_DIR)
 # whoever was using the program.
 os.environ["SPIRANHA_CONFIG"] = os.path.join(HERE, "config-for-tests")
 
+# ⚠️ And the update check is turned OFF for the tests, in the settings
+# rather than with a flag of their own: the tests must not reach the network,
+# on this machine or in CI, and the way to say so is the way a user says it.
+_config = os.environ["SPIRANHA_CONFIG"]
+if not os.path.isdir(_config):
+    os.makedirs(_config)
+with open(os.path.join(_config, "config.json"), "w") as _f:
+    _f.write('{"check_updates": false}')
+
 
 import common as common_  # noqa: E402
 

@@ -19,6 +19,15 @@ sys.path.insert(0, ROOT_DIR)
 # whoever was using the program.
 os.environ["SPIRANHA_CONFIG"] = os.path.join(HERE, "config-for-tests")
 
+# ⚠️ And the update check is turned OFF for the tests, in the settings
+# rather than with a flag of their own: the tests must not reach the network,
+# on this machine or in CI, and the way to say so is the way a user says it.
+_config = os.environ["SPIRANHA_CONFIG"]
+if not os.path.isdir(_config):
+    os.makedirs(_config)
+with open(os.path.join(_config, "config.json"), "w") as _f:
+    _f.write('{"check_updates": false}')
+
 import app as module  # noqa: E402
 
 # ⚠️ This test depends on no real image: it fabricates its own files.
@@ -68,6 +77,13 @@ def checks(window):
         sentence_en = window.L("read")
         check("language switch IT->EN", sentence_it != sentence_en,
                   "%r -> %r" % (sentence_it, sentence_en))
+        # ⚠️ The translator swallows TclError, so a widget it cannot write to
+        # simply keeps the language it was born in and says nothing. The
+        # hand-drawn checkbox is exactly that case: a Frame has no "text".
+        check("the checkbox label follows the language too",
+                  window.check_mains_off.label.cget("text")
+                  == window.L("tick_mains"),
+                  window.check_mains_off.label.cget("text"))
         check("reminder in English",
                   "unplugged" in window._labels[3][0].cget("text").lower()
                   or True)
@@ -873,6 +889,58 @@ def checks(window):
         check("search: closes after the pick",
                   not search_window.winfo_exists())
 
+
+        # 25b. the update check, without touching the network
+        # ⚠️ Everything here is fed a fabricated answer. A test that reaches
+        # GitHub tests GitHub, and fails on a train.
+        import update as _up
+        VERO = {"tag_name": "v9.9.9", "html_url": "https://github.com/x/y/z",
+                "assets": [{"name": "SPIranha-Setup-9.9.9.exe", "size": 123,
+                            "browser_download_url":
+                            "https://github.com/MTSistemi/SPIranha/releases/"
+                            "download/v9.9.9/SPIranha-Setup-9.9.9.exe"}]}
+        r = _up.from_json(VERO)
+        check("update: the tag is read and the v dropped",
+                  r.ok and r.version == "9.9.9", str(r.version))
+        check("update: a later version is seen as newer", r.newer)
+        check("update: the installer is the asset it picks",
+                  r.url.endswith("SPIranha-Setup-9.9.9.exe"), str(r.url))
+        vecchia = dict(VERO, tag_name="v0.0.1")
+        check("update: an older version is not offered",
+                  not _up.from_json(vecchia).newer)
+        uguale = dict(VERO, tag_name="v" + _up.VERSION)
+        check("update: the same version is not offered",
+                  not _up.from_json(uguale).newer)
+        check("update: a draft is ignored",
+                  not _up.from_json(dict(VERO, draft=True)).ok)
+        check("update: a pre-release is ignored",
+                  not _up.from_json(dict(VERO, prerelease=True)).ok)
+        check("update: a release with no installer offers nothing",
+                  not _up.from_json(dict(VERO, assets=[])).ok)
+        # ⚠️ the address is not taken on trust: an asset pointing elsewhere
+        # is the shape a supply-chain attack takes
+        altrove = {"tag_name": "v9.9.9", "assets": [
+            {"name": "SPIranha-Setup-9.9.9.exe", "size": 1,
+             "browser_download_url": "https://example.invalid/setup.exe"}]}
+        check("update: an asset hosted elsewhere is refused",
+                  not _up.from_json(altrove).ok)
+        check("update: http is refused",
+                  not _up._https_to_github(
+                      "http://github.com/MTSistemi/SPIranha/x.exe"))
+        check("update: a lookalike host is refused",
+                  not _up._https_to_github("https://github.com.evil.tld/x.exe"))
+        try:
+            _up.download("https://example.invalid/x.exe")
+            check("update: it will not download from elsewhere", False)
+        except ValueError:
+            check("update: it will not download from elsewhere", True)
+        # ⚠️ our own unsigned .ico stands in for "a file that is not our
+        # signed installer": it must be refused, not merely reported
+        ok_firma, perche = _up.trusted(os.path.join(ROOT_DIR, "SPIranha.ico"))
+        check("update: an unsigned file is refused", not ok_firma, str(perche))
+        check("update: the check can be turned off",
+                  window.settings.get("check_updates") is False)
+        check("update: with it off, no banner", not window.up_banner.winfo_ismapped())
 
         # 26. the page to print: colours flipped and the drawing inside
         import printing as _st

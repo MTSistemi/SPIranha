@@ -297,8 +297,13 @@ class Checkbox(tk.Frame):
         self.redraw()
 
     def configure(self, cnf=None, **kw):
-        """Also accepts `testo=`, so the translator treats it like the others."""
-        text = kw.pop("testo", None)
+        """Also accepts `text=`, so the translator treats it like the others.
+
+        ⚠️ A Frame has no `text`, so without this the translator would
+        raise TclError -- which it swallows, leaving the label in the
+        language it was born in and nothing to show for it.
+        """
+        text = kw.pop("text", None)
         if text is not None:
             self.label.configure(text=text)
         if cnf or kw:

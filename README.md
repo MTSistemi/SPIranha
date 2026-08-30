@@ -74,6 +74,29 @@ the parts you actually look at to orient it — USB, the BOOTSEL button, the
 RP2040 square with its pin-1 dot, the debug pads — because pin numbers alone do
 not tell you which way up the board is, and upside down they are mirrored.
 
+## Updating itself, without taking your word for it
+
+At startup SPIranha asks GitHub once whether a newer release exists, and if
+there is one it says so in a strip under the header. **Nothing installs by
+itself.** Pressing *Update* downloads the installer and then, before running
+anything:
+
+- the address must be `https` and must point at GitHub — an asset pointing
+  anywhere else is refused, which is the shape this kind of attack takes;
+- the installer's Authenticode signature must be **our** certificate, matched
+  by thumbprint. "Validly signed" is not enough: anybody can buy a certificate
+  and sign anything with it;
+- the sha-256 is shown, along with who signed it, and you confirm.
+
+If any of that fails the file is not run and the reason is said out loud. A
+failed check — no network, GitHub slow — is silent in the interface and
+recorded in the log: someone with a dead board on the desk does not need a
+dialog about it.
+
+The check is a tick box next to the log, and turning it off is remembered.
+A tool used on an isolated bench should not be talking to the internet
+behind your back.
+
 ## Turning a bare RP2040 into the programmer
 
 You do not need to find a UF2 and drag it around yourself. Hold **BOOTSEL**,
@@ -322,7 +345,7 @@ for it in the saved setting, inside itself, next to the executable, in
 ## Tests
 
 ```bash
-python tests\test_gui.py     # 167 checks, no hardware needed
+python tests\test_gui.py     # 186 checks, no hardware needed
 python tests\test_full.py    # 44 checks, needs flashrom built with 'dummy'
 ```
 

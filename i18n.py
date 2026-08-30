@@ -27,6 +27,49 @@ T = {
     },
     "language": {"it": "Lingua", "en": "Language"},
 
+    # --- a newer version --------------------------------------------------
+    "up_found": {
+        "it": "C'è la versione {version} (questa è la {running}).",
+        "en": "Version {version} is out (this one is {running}).",
+    },
+    "up_install": {"it": "Aggiorna", "en": "Update"},
+    "up_page": {"it": "Vedi le novità", "en": "What changed"},
+    "up_later": {"it": "Non ora", "en": "Not now"},
+    "up_downloading": {
+        "it": "Scarico l'aggiornamento… {done} di {total}",
+        "en": "Downloading the update… {done} of {total}",
+    },
+    "up_checking": {"it": "Controllo aggiornamenti…", "en": "Checking for updates…"},
+    "up_confirm_title": {"it": "Aggiornare SPIranha", "en": "Update SPIranha"},
+    "up_confirm": {
+        "it": "Scaricata la versione {version}.\n\nFirma verificata: {signer}\n"
+              "sha-256: {hash}\n\nParte l'installatore e questa finestra si "
+              "chiude. Nessuna operazione dev'essere in corso.\n\nProcedere?",
+        "en": "Version {version} downloaded.\n\nSignature checked: {signer}\n"
+              "sha-256: {hash}\n\nThe installer will start and this window "
+              "will close. Nothing must be running.\n\nGo ahead?",
+    },
+    "up_refused": {
+        "it": "Aggiornamento rifiutato: {reason}. Il file NON è stato eseguito.",
+        "en": "Update refused: {reason}. The file was NOT run.",
+    },
+    "up_failed": {
+        "it": "Non sono riuscito a scaricare l'aggiornamento: {reason}",
+        "en": "Could not download the update: {reason}",
+    },
+    "up_check_at_start": {
+        "it": "Cerca aggiornamenti all'avvio",
+        "en": "Check for updates at startup",
+    },
+    "up_check_nota": {
+        "it": "Una richiesta a GitHub all'apertura. Niente si installa da solo: "
+              "l'installatore parte solo se glielo dici, e solo se è firmato "
+              "con il nostro certificato.",
+        "en": "One request to GitHub when the program opens. Nothing installs "
+              "by itself: the installer runs only if you say so, and only if "
+              "it carries our signature.",
+    },
+
     # --- flashrom missing ----------------------------------------------
     "flashrom_missing": {
         "it": "flashrom.exe non trovato. Senza, il chip non è raggiungibile.",
