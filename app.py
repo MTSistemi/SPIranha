@@ -257,6 +257,7 @@ class App(tk.Tk):
             with open(os.path.join(config_folder(), "config.json"), "wb") as f:
                 f.write(json.dumps(self.settings, indent=2).encode("utf-8"))
         except OSError:
+            # settings that cannot be saved still hold for this session
             pass
 
     # ------------------------------------------------- costruzione grafica
@@ -274,6 +275,7 @@ class App(tk.Tk):
             try:
                 widget.configure(**{attribute: text})
             except tk.TclError:
+                # the widget was destroyed while the language changed
                 pass
         for message in self._messages:
             message.redraw()
@@ -1876,6 +1878,7 @@ class App(tk.Tk):
             try:
                 os.remove(second)
             except OSError:
+                # the second read's temporary file is already gone
                 pass
             self.msg_read.show("read_ok", GREEN, md5=a)
             self.log("   %s" % self.L("read_saved", path=first), "good")
@@ -2027,6 +2030,7 @@ class App(tk.Tk):
                 try:
                     os.remove(path)
                 except OSError:
+                    # a temporary file that is already gone
                     pass
             if state == "ok":
                 self.var_speed.set(speed)
@@ -2437,6 +2441,7 @@ class App(tk.Tk):
                 f.write(heading.encode("utf-8"))
                 f.write(("\n".join(self.log_lines) + "\n").encode("utf-8"))
         except OSError:
+            # the log file cannot be written: the log is still on screen
             pass
 
     # -------------------------------------------------------------- work

@@ -129,7 +129,7 @@ class ChipMap(tk.Canvas):
 
     def _under_the_mouse(self, event):
         if not self.on_position or not self.blocks:
-            return
+            return None
         column = int((event.x - 3) // PITCH)
         line = int((event.y - 3) // PITCH)
         if column < 0 or line < 0 or column >= self.columns or line >= self.lines:
@@ -137,6 +137,7 @@ class ChipMap(tk.Canvas):
         index = line * self.columns + column
         if 0 <= index < self.blocks:
             self.on_position(int(index * self._bytes_per_block()))
+        return None
 
     # ------------------------------------------------------------- comandi
     def set_size(self, total_size=None, regions=None):
@@ -168,6 +169,7 @@ class ChipMap(tk.Canvas):
         try:
             self.itemconfigure(self._id[index], fill=COLOURS[state])
         except (tk.TclError, IndexError):
+            # the map is being rebuilt or torn down: the next paint catches up
             pass
 
     def mark(self, start, end, state):

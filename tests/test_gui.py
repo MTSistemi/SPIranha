@@ -821,22 +821,22 @@ def checks(window):
             "",
             "Supported flash chips (total: 4):",
             "",
-            "Vendor                       Device                               "
-            "Test   Known   Size   Type",
-            "                                                                  "
-            "OK     Broken  [kB]",
+            ("Vendor                       Device                               "
+             "Test   Known   Size   Type"),
+            ("                                                                  "
+             "OK     Broken  [kB]"),
             "",
             "(P = PROBE, R = READ, E = ERASE, W = WRITE, B = block-protect)",
             "",
-            "AMD                          Am29F010                             "
-            "                    128  Parallel",
-            "Macronix                     MX25L12835F/                         "
-            "PREW            16384  SPI",
+            ("AMD                          Am29F010                             "
+             "                    128  Parallel"),
+            ("Macronix                     MX25L12835F/                         "
+             "PREW            16384  SPI"),
             "                             MX25L12873F",
-            "Winbond                      W25Q128.JW.DTR                       "
-            "PREW            16384  SPI",
-            "Winbond                      W25Q64.V                             "
-            "PREW             8192  SPI",
+            ("Winbond                      W25Q128.JW.DTR                       "
+             "PREW            16384  SPI"),
+            ("Winbond                      W25Q64.V                             "
+             "PREW             8192  SPI"),
         ]
         listing = module.fr.parse_chip_list(FAKE_L)
         check("listing: four chips read", len(listing) == 4, str(len(listing)))

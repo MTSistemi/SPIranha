@@ -62,7 +62,8 @@ def check(name, condition, extra=""):
 
 
 def md5(path):
-    return hashlib.md5(open(path, "rb").read()).hexdigest()
+    with open(path, "rb") as f:
+        return hashlib.md5(f.read()).hexdigest()
 
 
 def pump_until_idle(window, seconds=300):

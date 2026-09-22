@@ -145,6 +145,7 @@ def boards_in_bootsel():
         try:
             free_bytes = shutil.disk_usage(drive).free
         except OSError:
+            # a drive that cannot be measured is listed with 0 bytes free
             pass
         found.append(Board(drive, model, board_id, free_bytes,
                               serial=serial_of_drive(drive)))

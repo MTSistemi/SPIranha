@@ -139,6 +139,7 @@ class CompareWindow(tk.Toplevel):
             self._fill(A.signatures(data_b))
         finally:
             self.configure(cursor="")
+        return None
 
     def _say(self, text, colour=T.MUT):
         self.outcome_text.configure(text=text, foreground=colour)

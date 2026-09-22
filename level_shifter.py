@@ -397,7 +397,7 @@ class LevelShifter(wiring.Diagram):
             bounds = self.canvas.bbox(board_id)
             line = (bounds[3] / self.k) + 11 if bounds else line + 24
 
-        board_id = self._text(x + 15, line + 2, self.L("ls_ready_made"),
+        self._text(x + 15, line + 2, self.L("ls_ready_made"),
                                      "#8FC2E3", self._font(6.5), anchor="nw",
                                      width=wiring.COL_WIDTH - 30,
                                      tag="bom")

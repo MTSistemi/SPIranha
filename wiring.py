@@ -200,7 +200,8 @@ class Diagram(tk.Toplevel):
         """A font to scale, never below what can be read."""
         family = self.theme.mono if mono else self.theme.ui
         size_text = max(6, int(round(points * self.k)))
-        return (family, size_text, "bold") if bold else (family, size_text)
+        # always three fields: Tk reads "normal" as no style
+        return (family, size_text, "bold" if bold else "normal")
 
     # ------------------------------------------------------------ pennelli
     def _text(self, x, y, text, colour=T.FG, font=None, anchor="w",
@@ -288,7 +289,6 @@ class Diagram(tk.Toplevel):
 
     # -- the Pico ---------------------------------------------------------
     def _draw_pico(self):
-        t = self.canvas
         x1, y1 = PICO_X + PICO_W, PICO_Y + PICO_H
 
         self._text(PICO_X, TITLE_Y, T.micro(self.L("sch_pico")), T.MUT,
